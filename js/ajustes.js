@@ -22,7 +22,8 @@ const AJUSTES = (() => {
     generar: document.getElementById('btn-generar-token'),
     probar: document.getElementById('btn-probar'),
     guardar: document.getElementById('btn-guardar-ajustes'),
-    estado: document.getElementById('estado-ajustes')
+    estado: document.getElementById('estado-ajustes'),
+    version: document.getElementById('version-app')
   };
 
   function leer() {
@@ -66,7 +67,27 @@ const AJUSTES = (() => {
     el.endpoint.value = a.endpoint;
     el.token.value = a.token;
     estado('');
+    mostrarVersion();
     el.pantalla.hidden = false;
+  }
+
+  /** Le pregunta al service worker qué versión está sirviendo. Si no contesta
+   *  es que no hay ninguno al mando: la app va directa a la red, sin caché. */
+  function mostrarVersion() {
+    const sw = navigator.serviceWorker;
+    if (!sw || !sw.controller) {
+      el.version.textContent = 'sin service worker (siempre desde la red)';
+      return;
+    }
+    el.version.textContent = 'consultando…';
+    const canal = evento => {
+      if (evento.data && evento.data.version) {
+        el.version.textContent = evento.data.version;
+        sw.removeEventListener('message', canal);
+      }
+    };
+    sw.addEventListener('message', canal);
+    sw.controller.postMessage('version');
   }
 
   function cerrar() {

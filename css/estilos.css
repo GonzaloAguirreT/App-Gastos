@@ -511,3 +511,13 @@ body {
   .input-importe { font-size: 52px; }
   .btn-alto { min-height: 84px; }
 }
+
+/* Versión que sirve el service worker, en Ajustes. Deliberadamente discreta:
+   no es información de uso diario, es para diagnosticar. */
+.version-app {
+  margin: 0;
+  font-size: 13px;
+  color: #6B7482;
+}
+
+.version-app span { font-variant-numeric: tabular-nums; }
