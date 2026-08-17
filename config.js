@@ -27,12 +27,14 @@ const CONFIG = {
   // IMPORTANTE: estos textos deben coincidir palabra por palabra con las listas
   // de la hoja de configuración del Excel. Si aquí pone "Tarjeta de crédito" y
   // allí "Tarjeta crédito", el SUMIFS del panel devuelve cero y no te enteras.
+  // Escritas tal cual me las dictaste. Si un día cambias una, cámbiala también
+  // en la hoja de configuración del Excel: los SUMIFS comparan texto exacto.
   CUENTAS: [
-    "Efectivo",
-    "Cuenta corriente",
-    "Tarjeta de crédito",
+    "Cuenta Corriente",
+    "Tarjeta Credito",
+    "Bizum",
     "Ahorro",
-    "PayPal"
+    "Efectivo"
   ],
 
   CATEGORIAS_GASTO: [
