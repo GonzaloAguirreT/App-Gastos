@@ -1,0 +1,11 @@
+# config.js SÍ va versionado: GitHub Pages sirve lo que hay en el repositorio y
+# sin él la app se queda sin cuentas ni categorías. Lo que nunca debe entrar es
+# el token, y por eso ENDPOINT y TOKEN se introducen desde la propia app.
+#
+# Si necesitas una copia con el token puesto para trabajar en local, llámala
+# config.local.js y quedará fuera de git.
+config.local.js
+
+.DS_Store
+Thumbs.db
+*.log
