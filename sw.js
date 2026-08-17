@@ -12,7 +12,7 @@
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v4';
+const CACHE = 'gastos-v5';
 
 const ESENCIALES = [
   './',
@@ -45,6 +45,16 @@ self.addEventListener('activate', evento => {
       ))
       .then(() => self.clients.claim())
   );
+});
+
+/* La app pregunta qué versión está sirviendo para enseñarla en Ajustes. Sin
+   esto no hay forma de saber, mirando el móvil, si tiene la última versión o
+   una cacheada de hace tres despliegues, y eso ha costado ya un buen rato de
+   diagnósticos a ciegas. */
+self.addEventListener('message', evento => {
+  if (evento.data === 'version' && evento.source) {
+    evento.source.postMessage({ version: CACHE });
+  }
 });
 
 self.addEventListener('fetch', evento => {
