@@ -18,7 +18,16 @@ const HOJA_MOVIMIENTOS = 'Movimientos';
    Query y puede colarse en la tabla del Excel. Mejor no tocar esa hoja. */
 const HOJA_UUIDS = '_uuids';
 
-const CABECERAS = ['Fecha', 'Concepto', 'Importe', 'Cuenta', 'Tipo', 'Categoría'];
+/* La séptima columna, Usuario, se añadió después. Va al final a propósito: así
+   ninguna de las seis originales cambia de sitio y nada de lo que ya apuntaba a
+   ellas se rompe. */
+const CABECERAS = ['Fecha', 'Concepto', 'Importe', 'Cuenta', 'Tipo', 'Categoría', 'Usuario'];
+
+/* Quién puede gastar. Tiene que decir exactamente lo mismo que CONFIG.USUARIOS
+   en config.js: de aquí salen las columnas del panel. */
+const USUARIOS = ['Gonzalo Aguirre', 'Camila Wells'];
+
+const HOJA_PANEL = 'Panel';
 const TIPOS_VALIDOS = ['Ingreso', 'Gasto'];
 
 /* Los traspasos entre cuentas propias no son ni ingreso ni gasto: el dinero no
@@ -63,12 +72,21 @@ function instalar() {
     movimientos.getRange(2, 3, ultima - 1, 1).setNumberFormat('0.00');
   }
 
+  /* La columna Usuario llegó después de las seis primeras. Si la hoja es de
+     antes, se le pone la cabecera que falta. Las filas viejas se quedan con la
+     celda vacía: rellenarlas a ciegas sería inventarse quién gastó. */
+  if (movimientos.getRange(1, 7).getValue() !== 'Usuario') {
+    movimientos.getRange(1, 7).setValue('Usuario').setFontWeight('bold');
+  }
+
   let uuids = libro.getSheetByName(HOJA_UUIDS);
   if (!uuids) {
     uuids = libro.insertSheet(HOJA_UUIDS);
     uuids.appendRow(['UUID', 'Recibido']);
     uuids.hideSheet();
   }
+
+  crearPanel(libro);
 
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
   const aviso = token
@@ -77,6 +95,118 @@ function instalar() {
 
   Logger.log('Hojas preparadas. ' + aviso);
   return aviso;
+}
+
+/**
+ * Crea (o rehace) la hoja Panel: gasto por persona y mes, y un gráfico de torta
+ * con el reparto del mes en curso.
+ *
+ * Todo son fórmulas, no valores volcados. Es lo que hace que sea dinámico: cada
+ * fila nueva que escribe la app recalcula la tabla y el gráfico sin que nadie
+ * ejecute nada. Un volcado con datos habría que refrescarlo a mano, y el día que
+ * se te olvidara estarías mirando un panel viejo sin saberlo.
+ *
+ * Volver a ejecutar instalar() rehace las fórmulas pero no toca Movimientos.
+ */
+function crearPanel(libro) {
+  const MESES_MOSTRADOS = 12;
+  const FILA_CABECERA = 4;
+  const COL_USUARIO_1 = 2;                                  // columna B
+  const colTotal = COL_USUARIO_1 + USUARIOS.length;
+  const colGrafico = colTotal + 2;                          // deja una columna de aire
+
+  let panel = libro.getSheetByName(HOJA_PANEL);
+  if (!panel) panel = libro.insertSheet(HOJA_PANEL);
+  panel.clear();
+  panel.getCharts().forEach(g => panel.removeChart(g));     // si no, se apilan
+
+  panel.getRange(1, 1).setValue('Gastos por persona').setFontSize(14).setFontWeight('bold');
+  panel.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
+       .setFontColor('#888888');
+
+  // Cabecera: Mes | usuario 1 | usuario 2 | … | Total
+  panel.getRange(FILA_CABECERA, 1).setValue('Mes');
+  USUARIOS.forEach((nombre, i) => panel.getRange(FILA_CABECERA, COL_USUARIO_1 + i).setValue(nombre));
+  panel.getRange(FILA_CABECERA, colTotal).setValue('Total');
+  panel.getRange(FILA_CABECERA, 1, 1, colTotal).setFontWeight('bold');
+
+  /* Los meses se calculan hacia atrás desde el actual, así que la tabla se
+     desplaza sola con el calendario y nunca hay que añadir filas a mano. */
+  const filaPrimerMes = FILA_CABECERA + 1;
+  panel.getRange(filaPrimerMes, 1).setFormula('=EOMONTH(TODAY(),-1)+1');
+  for (var i = 1; i < MESES_MOSTRADOS; i++) {
+    panel.getRange(filaPrimerMes + i, 1).setFormula('=EDATE(A' + (filaPrimerMes + i - 1) + ',-1)');
+  }
+  panel.getRange(filaPrimerMes, 1, MESES_MOSTRADOS, 1).setNumberFormat('yyyy-mm');
+
+  for (var f = 0; f < MESES_MOSTRADOS; f++) {
+    const fila = filaPrimerMes + f;
+    USUARIOS.forEach((nombre, u) => {
+      panel.getRange(fila, COL_USUARIO_1 + u).setFormula(formulaGasto('$A' + fila, letra(COL_USUARIO_1 + u) + '$' + FILA_CABECERA));
+    });
+    panel.getRange(fila, colTotal).setFormula(
+      '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+  }
+  panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, USUARIOS.length + 1)
+       .setNumberFormat('#,##0.00 €');
+
+  // Bloque que alimenta el gráfico: solo el mes en curso.
+  panel.getRange(FILA_CABECERA, colGrafico).setValue('Persona');
+  panel.getRange(FILA_CABECERA, colGrafico + 1).setValue('Gasto del mes');
+  panel.getRange(FILA_CABECERA, colGrafico, 1, 2).setFontWeight('bold');
+
+  USUARIOS.forEach((nombre, i) => {
+    const fila = FILA_CABECERA + 1 + i;
+    panel.getRange(fila, colGrafico).setValue(nombre);
+    panel.getRange(fila, colGrafico + 1).setFormula(
+      formulaGasto('$A$' + filaPrimerMes, letra(colGrafico) + fila));
+  });
+  panel.getRange(FILA_CABECERA + 1, colGrafico + 1, USUARIOS.length, 1).setNumberFormat('#,##0.00 €');
+
+  const grafico = panel.newChart()
+    .setChartType(Charts.ChartType.PIE)
+    .addRange(panel.getRange(FILA_CABECERA, colGrafico, USUARIOS.length + 1, 2))
+    .setPosition(FILA_CABECERA + USUARIOS.length + 2, colGrafico, 0, 0)
+    .setOption('title', 'Reparto del gasto este mes')
+    .setOption('pieSliceText', 'percentage')
+    .setOption('legend', { position: 'right' })
+    .build();
+  panel.insertChart(grafico);
+
+  panel.setColumnWidth(1, 90);
+  return panel;
+}
+
+/**
+ * Suma los gastos de una persona en un mes.
+ *
+ * Excluye los traspasos: mover dinero de una cuenta propia a otra no es gasto
+ * de nadie, y sin esta condición cada traspaso de 300 € aparecería como 300 €
+ * gastados por quien lo hizo.
+ *
+ * @param {string} celdaMes celda con el día 1 del mes (referencia A1)
+ * @param {string} celdaUsuario celda con el nombre de la persona
+ */
+function formulaGasto(celdaMes, celdaUsuario) {
+  return '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C,' +
+         HOJA_MOVIMIENTOS + '!$E:$E,"Gasto",' +
+         HOJA_MOVIMIENTOS + '!$F:$F,"<>' + CATEGORIA_TRASPASO + '",' +
+         HOJA_MOVIMIENTOS + '!$G:$G,' + celdaUsuario + ',' +
+         HOJA_MOVIMIENTOS + '!$A:$A,">="&' + celdaMes + ',' +
+         HOJA_MOVIMIENTOS + '!$A:$A,"<"&EDATE(' + celdaMes + ',1))';
+}
+
+/** Número de columna a letra: 2 → B. Hace falta porque las fórmulas se escriben
+ *  en notación A1 y las columnas dependen de cuántos usuarios haya. */
+function letra(columna) {
+  var nombre = '';
+  var n = columna;
+  while (n > 0) {
+    const resto = (n - 1) % 26;
+    nombre = String.fromCharCode(65 + resto) + nombre;
+    n = Math.floor((n - resto - 1) / 26);
+  }
+  return nombre;
 }
 
 /* ========================================================================
@@ -171,7 +301,8 @@ function escribirMovimiento(m) {
     Number(m.importe),   // número de verdad, no texto: los SUMIFS lo necesitan
     m.cuenta,
     m.tipo,
-    m.categoria
+    m.categoria,
+    m.usuario || ''
   ]);
 
   /* El formato se fija en la fila recién escrita, no solo en la columna.
@@ -267,7 +398,8 @@ function resumenDelMes(cuantosPedidos) {
       importe: Number(fila[2]) || 0,
       cuenta: String(fila[3] || ''),
       tipo: String(fila[4] || ''),
-      categoria: String(fila[5] || '')
+      categoria: String(fila[5] || ''),
+      usuario: String(fila[6] || '')
     }));
 
     return { ok: true, mes: totales, ultimos: ultimos };
@@ -302,6 +434,8 @@ function validar(m) {
   if (!m.cuenta) return 'Falta la cuenta';
   if (!m.categoria) return 'Falta la categoría';
   if (!m.uuid) return 'Falta el uuid';
+  // El usuario no se exige: las filas anteriores a esta columna no lo tienen, y
+  // rechazarlas ahora rompería la cola de un móvil sin actualizar.
   return null;
 }
 

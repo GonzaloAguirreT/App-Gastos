@@ -7,6 +7,8 @@ const UI = (() => {
   const el = {
     migas: document.getElementById('migas'),
     btnFecha: document.getElementById('btn-fecha'),
+    btnUsuario: document.getElementById('btn-usuario'),
+    txtUsuario: document.getElementById('txt-usuario'),
     txtFecha: document.getElementById('txt-fecha'),
     inputFecha: document.getElementById('input-fecha'),
     pasos: document.querySelectorAll('.paso'),
@@ -51,6 +53,16 @@ const UI = (() => {
     el.txtFecha.textContent = formatearFecha(iso);
     el.btnFecha.classList.toggle('fecha-cambiada', iso !== hoyISO());
     el.inputFecha.value = iso;
+  }
+
+  /** En la cabecera solo cabe la inicial, y con dos personas basta para saber
+   *  quién es. El nombre entero va en el aria-label y en el resumen. */
+  function pintarUsuario(nombre, esElDefecto) {
+    el.txtUsuario.textContent = (nombre || '?').trim().charAt(0).toUpperCase();
+    el.btnUsuario.setAttribute('aria-label', 'Gasta ' + (nombre || 'nadie') + '. Tocar para cambiar');
+    // Se resalta solo cuando NO es el dueño del teléfono: así el caso raro
+    // —anotar algo del otro— se ve, y el habitual no mete ruido.
+    el.btnUsuario.classList.toggle('ajeno', !esElDefecto);
   }
 
   function pintarMigas(indiceActual, total) {
@@ -163,7 +175,7 @@ const UI = (() => {
 
   return {
     el, hoyISO, formatearFecha, formatearImporte, pintarFecha, pintarMigas,
-    mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes,
+    mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes, pintarUsuario,
     toast, ocultarToast, vibrar
   };
 })();

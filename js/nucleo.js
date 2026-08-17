@@ -63,14 +63,17 @@ const NUCLEO = (() => {
     const a = guardados || {};
     return {
       endpoint: a.endpoint || CONFIG.ENDPOINT || '',
-      token: a.token || CONFIG.TOKEN || ''
+      token: a.token || CONFIG.TOKEN || '',
+      // Quién usa este teléfono. Por defecto, el primero de la lista.
+      usuario: a.usuario || CONFIG.USUARIOS[0] || ''
     };
   }
 
   function guardarAjustes(ajustes) {
     return conTienda(AJUSTES, 'readwrite', t => t.put({
       endpoint: (ajustes.endpoint || '').trim(),
-      token: (ajustes.token || '').trim()
+      token: (ajustes.token || '').trim(),
+      usuario: (ajustes.usuario || '').trim()
     }, 'config'));
   }
 

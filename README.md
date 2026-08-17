@@ -33,9 +33,13 @@ Lo que va a crear:
 
 - Una hoja **`Movimientos`** con estas seis columnas, en este orden:
 
-  | Fecha | Concepto | Importe | Cuenta | Tipo | Categoría |
-  |---|---|---|---|---|---|
-  | `yyyy-mm-dd` | texto libre | número positivo | texto | `Ingreso` o `Gasto` | texto |
+  | Fecha | Concepto | Importe | Cuenta | Tipo | Categoría | Usuario |
+  |---|---|---|---|---|---|---|
+  | `yyyy-mm-dd` | texto libre | número positivo | texto | `Ingreso` o `Gasto` | texto | texto |
+
+- Una hoja **`Panel`** con el gasto por persona y mes, y un gráfico de torta del
+  mes en curso. Son fórmulas, no datos volcados: se recalcula sola con cada fila
+  que entra. No escribas nada en ella.
 
 - Una hoja **`_uuids`**, oculta, donde se apuntan los identificadores de cada
   movimiento para rechazar duplicados. No la borres ni la toques.
@@ -241,6 +245,19 @@ envío: existe para no machacar, no para retrasar.
 
 > El último de esos cuatro caminos, Background Sync, solo lo tiene Chromium. En
 > Firefox la cola se vacía igual, pero hay que abrir la app.
+
+### Quién gasta
+
+La columna `Usuario` no es un sexto paso. Cada teléfono se configura una vez en
+Ajustes —Gonzalo en el suyo, Camila en el suyo— y a partir de ahí se estampa
+solo en cada movimiento. Los cinco toques siguen siendo cinco.
+
+Para anotar algo del otro, un toque en el círculo de la cabecera lo cambia. Se
+resalta en verde mientras no seas tú, y vuelve al dueño del teléfono en cuanto
+guardas: lo raro tiene que verse, y no debe quedarse pegado.
+
+La lista de usuarios está en `config.js` y **tiene que decir lo mismo** que la
+constante `USUARIOS` de `Codigo.gs`: de ahí salen las columnas del panel.
 
 ### Traspasos entre cuentas
 

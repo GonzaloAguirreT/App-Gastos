@@ -23,6 +23,7 @@ const AJUSTES = (() => {
     generar: document.getElementById('btn-generar-token'),
     probar: document.getElementById('btn-probar'),
     guardar: document.getElementById('btn-guardar-ajustes'),
+    usuario: document.getElementById('select-usuario'),
     estado: document.getElementById('estado-ajustes'),
     version: document.getElementById('version-app')
   };
@@ -72,6 +73,17 @@ const AJUSTES = (() => {
     const a = await leer();
     el.endpoint.value = a.endpoint;
     el.token.value = a.token;
+    el.usuario.value = a.usuario;
+  }
+
+  function pintarUsuarios() {
+    el.usuario.innerHTML = '';
+    CONFIG.USUARIOS.forEach(nombre => {
+      const opcion = document.createElement('option');
+      opcion.value = nombre;
+      opcion.textContent = nombre;
+      el.usuario.appendChild(opcion);
+    });
   }
 
   /** Le pregunta al service worker qué versión está sirviendo. Si no contesta
@@ -103,7 +115,11 @@ const AJUSTES = (() => {
   }
 
   function valores() {
-    return { endpoint: el.endpoint.value.trim(), token: el.token.value.trim() };
+    return {
+      endpoint: el.endpoint.value.trim(),
+      token: el.token.value.trim(),
+      usuario: el.usuario.value
+    };
   }
 
   /** Lo que impide guardar: sin esto no hay nada que intentar. */
@@ -160,6 +176,7 @@ const AJUSTES = (() => {
   }
 
   async function iniciar() {
+    pintarUsuarios();
     el.cerrar.addEventListener('click', cerrar);
     el.generar.addEventListener('click', () => {
       el.token.value = generarToken();
