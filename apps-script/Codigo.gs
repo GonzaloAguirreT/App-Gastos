@@ -24,8 +24,22 @@ const HOJA_UUIDS = '_uuids';
 const CABECERAS = ['Fecha', 'Concepto', 'Importe', 'Cuenta', 'Tipo', 'Categoría', 'Usuario'];
 
 /* Quién puede gastar. Tiene que decir exactamente lo mismo que CONFIG.USUARIOS
-   en config.js: de aquí salen las columnas del panel. */
-const USUARIOS = ['Gonzalo Aguirre', 'Camila Wells'];
+   en config.js: de aquí salen las columnas del panel y la lista desplegable de
+   la columna Usuario. */
+const USUARIOS = ['Gonzalo', 'Camila'];
+
+/* Las categorías de gasto, para las filas del panel y la torta. Tienen que
+   decir lo mismo que CONFIG.CATEGORIAS_GASTO en config.js.
+
+   Se listan aquí en vez de sacarlas de la hoja con UNIQUE a propósito: así el
+   panel enseña las doce SIEMPRE, también las que este mes están a cero, y de un
+   vistazo se ve en qué no has gastado. Con UNIQUE aparecerían y desaparecerían
+   filas según el mes, y el gráfico cambiaría de colores cada vez. */
+const CATEGORIAS_GASTO = [
+  'Alimentación', 'Restaurantes', 'Transporte', 'Vivienda',
+  'Suministros', 'Salud', 'Ocio', 'Compras',
+  'Suscripciones', 'Deudas', 'Viajes', 'Otros'
+];
 
 const HOJA_PANEL = 'Panel';
 const TIPOS_VALIDOS = ['Ingreso', 'Gasto'];
@@ -79,6 +93,9 @@ function instalar() {
     movimientos.getRange(1, 7).setValue('Usuario').setFontWeight('bold');
   }
 
+  normalizarUsuarios(movimientos);
+  ponerListaDeUsuarios(movimientos);
+
   let uuids = libro.getSheetByName(HOJA_UUIDS);
   if (!uuids) {
     uuids = libro.insertSheet(HOJA_UUIDS);
@@ -123,7 +140,7 @@ function crearPanel(libro) {
   // Con qué separar los argumentos de las fórmulas en ESTA hoja. Ver la función.
   const sep = separadorDeFormulas(panel);
 
-  panel.getRange(1, 1).setValue('Gastos por persona').setFontSize(14).setFontWeight('bold');
+  panel.getRange(1, 1).setValue('Gastos').setFontSize(14).setFontWeight('bold');
   panel.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
        .setFontColor('#888888');
 
@@ -155,30 +172,54 @@ function crearPanel(libro) {
   panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, USUARIOS.length + 1)
        .setNumberFormat('#,##0.00 €');
 
-  // Bloque que alimenta el gráfico: solo el mes en curso.
-  panel.getRange(FILA_CABECERA, colGrafico).setValue('Persona');
-  panel.getRange(FILA_CABECERA, colGrafico + 1).setValue('Gasto del mes');
-  panel.getRange(FILA_CABECERA, colGrafico, 1, 2).setFontWeight('bold');
+  /* -------- Segunda tabla: en qué se va el dinero este mes --------
+     La de arriba dice cuánto gasta cada uno; esta dice en qué. Es la que
+     responde a la pregunta que de verdad se hace uno mirando un panel. */
+  const filaCabCategorias = filaPrimerMes + MESES_MOSTRADOS + 2;
+  const filaPrimerCategoria = filaCabCategorias + 1;
 
-  USUARIOS.forEach((nombre, i) => {
-    const fila = FILA_CABECERA + 1 + i;
-    panel.getRange(fila, colGrafico).setValue(nombre);
-    panel.getRange(fila, colGrafico + 1).setFormula(
-      formulaGasto('$A$' + filaPrimerMes, letra(colGrafico) + fila, sep));
+  panel.getRange(filaCabCategorias, 1).setValue('Categoría (este mes)');
+  USUARIOS.forEach((nombre, i) =>
+    panel.getRange(filaCabCategorias, COL_USUARIO_1 + i).setValue(nombre));
+  panel.getRange(filaCabCategorias, colTotal).setValue('Total');
+  panel.getRange(filaCabCategorias, 1, 1, colTotal).setFontWeight('bold');
+
+  CATEGORIAS_GASTO.forEach((categoria, i) => {
+    const fila = filaPrimerCategoria + i;
+    panel.getRange(fila, 1).setValue(categoria);
+    USUARIOS.forEach((nombre, u) => {
+      panel.getRange(fila, COL_USUARIO_1 + u).setFormula(
+        formulaGastoCategoria('$A$' + filaPrimerMes,
+                              letra(COL_USUARIO_1 + u) + '$' + filaCabCategorias,
+                              '$A' + fila, sep));
+    });
+    panel.getRange(fila, colTotal).setFormula(
+      '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
   });
-  panel.getRange(FILA_CABECERA + 1, colGrafico + 1, USUARIOS.length, 1).setNumberFormat('#,##0.00 €');
+  panel.getRange(filaPrimerCategoria, COL_USUARIO_1, CATEGORIAS_GASTO.length, USUARIOS.length + 1)
+       .setNumberFormat('#,##0.00 €');
 
+  /* La torta va sobre las categorías y no sobre las personas: saber que te has
+     gastado 400 € entre los dos no dice nada; saber que 250 fueron en
+     restaurantes, sí.
+
+     Se le pasan dos rangos sueltos —los nombres de categoría y la columna de
+     totales— porque entre medias están las columnas de cada persona y no
+     interesan aquí. */
   const grafico = panel.newChart()
     .setChartType(Charts.ChartType.PIE)
-    .addRange(panel.getRange(FILA_CABECERA, colGrafico, USUARIOS.length + 1, 2))
-    .setPosition(FILA_CABECERA + USUARIOS.length + 2, colGrafico, 0, 0)
-    .setOption('title', 'Reparto del gasto este mes')
+    .addRange(panel.getRange(filaCabCategorias, 1, CATEGORIAS_GASTO.length + 1, 1))
+    .addRange(panel.getRange(filaCabCategorias, colTotal, CATEGORIAS_GASTO.length + 1, 1))
+    .setPosition(FILA_CABECERA, colGrafico, 0, 0)
+    .setOption('title', 'En qué se va el dinero este mes')
     .setOption('pieSliceText', 'percentage')
     .setOption('legend', { position: 'right' })
+    .setOption('width', 480)
+    .setOption('height', 320)
     .build();
   panel.insertChart(grafico);
 
-  panel.setColumnWidth(1, 90);
+  panel.setColumnWidth(1, 160);
   return panel;
 }
 
@@ -222,6 +263,64 @@ function formulaGasto(celdaMes, celdaUsuario, sep) {
          HOJA_MOVIMIENTOS + '!$G:$G' + sep + celdaUsuario + sep +
          HOJA_MOVIMIENTOS + '!$A:$A' + sep + '">="&' + celdaMes + sep +
          HOJA_MOVIMIENTOS + '!$A:$A' + sep + '"<"&EDATE(' + celdaMes + sep + '1))';
+}
+
+/**
+ * Como formulaGasto, pero además filtrando por categoría. Es la que alimenta la
+ * tabla de "en qué se va el dinero" y, con ella, el gráfico de torta.
+ */
+function formulaGastoCategoria(celdaMes, celdaUsuario, celdaCategoria, sep) {
+  return '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C' + sep +
+         HOJA_MOVIMIENTOS + '!$E:$E' + sep + '"Gasto"' + sep +
+         HOJA_MOVIMIENTOS + '!$F:$F' + sep + celdaCategoria + sep +
+         HOJA_MOVIMIENTOS + '!$G:$G' + sep + celdaUsuario + sep +
+         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '">="&' + celdaMes + sep +
+         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '"<"&EDATE(' + celdaMes + sep + '1))';
+}
+
+/**
+ * Deja la columna Usuario con los nombres actuales.
+ *
+ * Los nombres pasaron de "Gonzalo Aguirre" a "Gonzalo", y las filas ya escritas
+ * se habrían quedado fuera de todas las sumas del panel sin que nada avisara:
+ * los SUMIFS comparan texto exacto y simplemente no habrían encontrado nada.
+ * Se emparejan por el nombre de pila, que es lo único que cambió.
+ */
+function normalizarUsuarios(hoja) {
+  const ultima = hoja.getLastRow();
+  if (ultima < 2) return 0;
+
+  const rango = hoja.getRange(2, 7, ultima - 1, 1);
+  const valores = rango.getValues();
+  var cambiadas = 0;
+
+  for (var i = 0; i < valores.length; i++) {
+    const actual = String(valores[i][0] || '').trim();
+    if (!actual || USUARIOS.indexOf(actual) !== -1) continue;
+
+    const pila = actual.split(' ')[0];
+    for (var u = 0; u < USUARIOS.length; u++) {
+      if (USUARIOS[u].split(' ')[0] === pila) {
+        valores[i][0] = USUARIOS[u];
+        cambiadas++;
+        break;
+      }
+    }
+  }
+
+  if (cambiadas) rango.setValues(valores);
+  return cambiadas;
+}
+
+/** Lista desplegable en la columna Usuario, para cuando edites la hoja a mano y
+ *  no tengas que acordarte de cómo se escribe exactamente cada nombre. */
+function ponerListaDeUsuarios(hoja) {
+  const regla = SpreadsheetApp.newDataValidation()
+    .requireValueInList(USUARIOS, true)
+    .setAllowInvalid(true)     // no bloquea: una fila vieja con otro nombre no debe dar error
+    .setHelpText('Elige quién gastó')
+    .build();
+  hoja.getRange('G2:G').setDataValidation(regla);
 }
 
 /** Número de columna a letra: 2 → B. Hace falta porque las fórmulas se escriben

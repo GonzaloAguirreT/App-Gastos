@@ -39,8 +39,8 @@ const CONFIG = {
      estampa solo en cada movimiento.
      Estos textos también tienen que coincidir con Codigo.gs y con el Excel. */
   USUARIOS: [
-    "Gonzalo Aguirre",
-    "Camila Wells"
+    "Gonzalo",
+    "Camila"
   ],
 
   // Escritas tal cual me las dictaste. Si un día cambias una, cámbiala también
