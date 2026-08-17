@@ -1,9 +1,16 @@
 /**
- * Orquestador: máquina de estados de los 5 pasos y guardado.
+ * Orquestador: máquina de estados de los pasos y guardado.
  *
  * El flujo es deliberadamente rígido —importe, tipo, categoría, cuenta,
  * concepto— porque el objetivo no es la flexibilidad sino no tener que pensar:
  * siempre los mismos gestos en los mismos sitios.
+ *
+ * La única bifurcación está en el primer paso, y es de fondo, no de forma: un
+ * PUNTUAL es una fila y se acabó; un FRECUENTE es una regla que seguirá
+ * escribiendo filas sola cada mes. Preguntarlo con el importe recién tecleado
+ * evita el error caro —anotar el alquiler como gasto suelto y repetirlo doce
+ * veces— sin costar ningún toque de más: los dos botones ocupan el sitio del
+ * antiguo "Siguiente".
  */
 (() => {
 
@@ -41,35 +48,26 @@
       cuenta: '',
       tipo: '',
       categoria: '',
-      cuentaDestino: '',  // solo se usa en los traspasos
-      frecuencia: '',     // solo en suscripciones
+      frecuente: false,   // lo decide el primer paso
+      frecuencia: '',     // solo en los frecuentes
       duracion: null,     // {etiqueta, meses}; meses null = indefinida
       usuario: usuarioDelTelefono
     };
   }
 
-  /* Un traspaso reutiliza los mismos cinco pasos, pero los dos del medio
-     cambian de significado: en vez de categoría y cuenta, preguntan por la
-     cuenta de origen y la de destino. Así el gesto sigue siendo el mismo y no
-     hay una segunda pantalla que aprender. */
-  function esTraspaso() {
-    return movimiento.tipo === 'Traspaso';
-  }
-
-  /* Una suscripción no es un gasto de hoy: es un gasto que se repetirá. Por eso
+  /* Un frecuente no es el movimiento de hoy: es uno que se repetirá. Por eso
      pregunta dos cosas más, y por eso lo que se envía no es una fila sino una
-     definición que el backend usará para escribir cada cobro cuando toque. */
-  function esSuscripcion() {
-    return movimiento.tipo === 'Gasto' &&
-           movimiento.categoria === CONFIG.CATEGORIA_SUSCRIPCIONES;
+     definición que el backend usa para escribir cada cobro cuando toque. */
+  function esFrecuente() {
+    return movimiento.frecuente === true;
   }
 
   /* La lista de pasos no es fija: crece cuando el movimiento lo pide. Las dos
-     preguntas de la suscripción se intercalan justo después de la categoría,
-     que es donde se decide que hay suscripción. */
+     preguntas del frecuente se intercalan tras la categoría, que es donde ya se
+     sabe de qué se trata. */
   function pasos() {
     const lista = PASOS_BASE.slice();
-    if (esSuscripcion()) lista.splice(3, 0, 'frecuencia', 'duracion');
+    if (esFrecuente()) lista.splice(3, 0, 'frecuencia', 'duracion');
     return lista;
   }
 
@@ -103,7 +101,7 @@
     movimiento = movimientoVacio();
     UI.el.inputImporte.value = '';
     UI.el.inputConcepto.value = '';
-    UI.el.btnImporteSiguiente.disabled = true;
+    UI.habilitarRamas(false);
     UI.pintarFecha(movimiento.fecha);
     irA(0);
   }
@@ -131,12 +129,26 @@
     if (partes.length === 2) valor = partes[0] + ',' + partes[1].slice(0, 2);
     campo.value = valor;
 
-    UI.el.btnImporteSiguiente.disabled = normalizarImporte(valor) === null;
+    UI.habilitarRamas(normalizarImporte(valor) !== null);
   }
 
-  function confirmarImporte() {
+  /**
+   * Los dos botones del primer paso: confirman el importe y eligen la rama.
+   *
+   * @param {boolean} frecuente true = se repetirá solo; false = solo esta vez.
+   */
+  function confirmarImporte(frecuente) {
     const importe = normalizarImporte(UI.el.inputImporte.value);
     if (importe === null) return;
+
+    // Cambiar de rama invalida lo contestado: las listas de categorías son
+    // distintas y las dos preguntas del frecuente dejan de existir.
+    if (movimiento.frecuente !== frecuente) {
+      movimiento.categoria = '';
+      movimiento.frecuencia = '';
+      movimiento.duracion = null;
+    }
+    movimiento.frecuente = frecuente;
     movimiento.importe = importe;
     UI.el.inputImporte.blur(); // cierra el teclado antes de mostrar las rejillas
     siguiente();
@@ -145,43 +157,32 @@
   /* --------------------------------------------------- tipo, categoría, cuenta */
 
   function elegirTipo(tipo) {
-    // Al cambiar de tipo, lo elegido después deja de valer: las listas de gasto
-    // e ingreso son distintas, y un traspaso ni siquiera usa categorías.
-    if (movimiento.tipo !== tipo) {
-      movimiento.categoria = '';
-      movimiento.cuenta = '';
-      movimiento.cuentaDestino = '';
-    }
+    // Al cambiar de tipo, la categoría elegida deja de valer: las listas de
+    // gasto e ingreso no tienen nada que ver.
+    if (movimiento.tipo !== tipo) movimiento.categoria = '';
     movimiento.tipo = tipo;
     siguiente();
   }
 
-  /** Paso 3: categoría, o cuenta de origen si es traspaso. */
+  /** Paso 3: categoría. Cuatro listas posibles, según rama y tipo. */
   function pintarCategorias() {
-    if (esTraspaso()) {
-      UI.el.preguntaCategoria.textContent = 'Desde qué cuenta';
-      UI.pintarOpciones(UI.el.rejillaCategorias, CONFIG.CUENTAS, cuenta => {
-        // Cambiar el origen puede dejar el destino igual al origen; se limpia.
-        if (movimiento.cuentaDestino === cuenta) movimiento.cuentaDestino = '';
-        movimiento.cuenta = cuenta;
-        siguiente();
-      }, movimiento.cuenta);
-      return;
-    }
+    UI.el.preguntaCategoria.textContent = esFrecuente()
+      ? (movimiento.tipo === 'Ingreso' ? 'Ingreso frecuente' : 'Gasto frecuente')
+      : 'Categoría';
 
-    UI.el.preguntaCategoria.textContent = 'Categoría';
-    const lista = movimiento.tipo === 'Ingreso'
-      ? CONFIG.CATEGORIAS_INGRESO
-      : CONFIG.CATEGORIAS_GASTO;
-    UI.pintarOpciones(UI.el.rejillaCategorias, lista, categoria => {
-      // Al dejar de ser suscripción, lo contestado antes deja de tener sentido.
-      if (categoria !== CONFIG.CATEGORIA_SUSCRIPCIONES) {
-        movimiento.frecuencia = '';
-        movimiento.duracion = null;
-      }
+    UI.pintarOpciones(UI.el.rejillaCategorias, categoriasDe(movimiento), categoria => {
       movimiento.categoria = categoria;
       siguiente();
     }, movimiento.categoria);
+  }
+
+  function categoriasDe(m) {
+    if (m.frecuente) {
+      return m.tipo === 'Ingreso'
+        ? CONFIG.CATEGORIAS_FRECUENTES_INGRESO
+        : CONFIG.CATEGORIAS_FRECUENTES_GASTO;
+    }
+    return m.tipo === 'Ingreso' ? CONFIG.CATEGORIAS_INGRESO : CONFIG.CATEGORIAS_GASTO;
   }
 
   function pintarFrecuencias() {
@@ -199,19 +200,8 @@
     }, movimiento.duracion ? movimiento.duracion.etiqueta : null);
   }
 
-  /** Paso 4: cuenta, o cuenta de destino si es traspaso. */
+  /** Paso 4: cuenta. */
   function pintarCuentas() {
-    if (esTraspaso()) {
-      UI.el.preguntaCuenta.textContent = 'A qué cuenta';
-      // Se quita la de origen: un traspaso a la misma cuenta no significa nada.
-      const destinos = CONFIG.CUENTAS.filter(c => c !== movimiento.cuenta);
-      UI.pintarOpciones(UI.el.rejillaCuentas, destinos, cuenta => {
-        movimiento.cuentaDestino = cuenta;
-        siguiente();
-      }, movimiento.cuentaDestino);
-      return;
-    }
-
     UI.el.preguntaCuenta.textContent = 'Cuenta';
     const ultima = localStorage.getItem(CLAVE_ULTIMA_CUENTA);
     UI.pintarOpciones(UI.el.rejillaCuentas, CONFIG.CUENTAS, cuenta => {
@@ -223,46 +213,28 @@
 
   /* --------------------------------------------------------------- guardado */
 
-  /**
-   * Convierte lo capturado en las filas que van a la hoja.
-   *
-   * Un movimiento normal es una fila. Un traspaso son DOS: un Gasto en la
-   * cuenta de origen y un Ingreso en la de destino, ambos con la categoría de
-   * traspaso. De esa forma el saldo de cada cuenta sale bien y el backend puede
-   * descontarlos de los totales del mes, que es donde falseaban las cuentas.
-   */
+  /** Convierte lo capturado en la fila que va a la hoja. */
   function filasDe(m) {
-    const base = {
+    return [{
       fecha: m.fecha,
       concepto: m.concepto,
       importe: m.importe,
-      usuario: m.usuario
-    };
-
-    if (m.tipo !== 'Traspaso') {
-      return [{ ...base, cuenta: m.cuenta, tipo: m.tipo,
-                categoria: m.categoria, uuid: API.uuid() }];
-    }
-
-    // Dos UUID distintos: el backend desduplica fila a fila, y las dos filas
-    // son movimientos diferentes aunque procedan del mismo gesto.
-    return [
-      { ...base, cuenta: m.cuenta, tipo: 'Gasto',
-        categoria: CONFIG.CATEGORIA_TRASPASO, uuid: API.uuid() },
-      { ...base, cuenta: m.cuentaDestino, tipo: 'Ingreso',
-        categoria: CONFIG.CATEGORIA_TRASPASO, uuid: API.uuid() }
-    ];
+      usuario: m.usuario,
+      cuenta: m.cuenta,
+      tipo: m.tipo,
+      categoria: m.categoria,
+      uuid: API.uuid()
+    }];
   }
 
   function faltaAlgo() {
     if (!movimiento.importe || !movimiento.tipo) return true;
-    if (esTraspaso()) return !movimiento.cuenta || !movimiento.cuentaDestino;
-    if (esSuscripcion() && (!movimiento.frecuencia || !movimiento.duracion)) return true;
+    if (esFrecuente() && (!movimiento.frecuencia || !movimiento.duracion)) return true;
     return !movimiento.categoria || !movimiento.cuenta;
   }
 
-  /** Lo que se envía de una suscripción: la definición, no un gasto. El backend
-   *  calcula la fecha de fin y escribe cada cobro el día que toca. */
+  /** Lo que se envía de un frecuente: la definición, no un movimiento. El
+   *  backend calcula la fecha de fin y escribe cada cobro el día que toca. */
   function suscripcionDe(m) {
     return {
       uuid: API.uuid(),
@@ -271,6 +243,10 @@
       cuenta: m.cuenta,
       categoria: m.categoria,
       usuario: m.usuario,
+      // Va el tipo porque un frecuente también puede ser un ingreso —la nómina,
+      // un piso alquilado—, y de él depende el signo de cada cobro que escriba
+      // el disparador. Sin esto todos entrarían como gasto.
+      tipo: m.tipo,
       frecuencia: m.frecuencia,
       inicio: m.fecha,
       duracionMeses: m.duracion ? m.duracion.meses : null
@@ -284,8 +260,8 @@
     }
 
     movimiento.concepto = UI.el.inputConcepto.value.trim();
-    const accion = esSuscripcion() ? 'suscripcion' : 'movimientos';
-    const filas = esSuscripcion() ? [suscripcionDe(movimiento)] : filasDe(movimiento);
+    const accion = esFrecuente() ? 'suscripcion' : 'movimientos';
+    const filas = esFrecuente() ? [suscripcionDe(movimiento)] : filasDe(movimiento);
     const grupo = filas[0].uuid;   // el uuid de la primera fila identifica al lote
 
     /* A disco ANTES de nada. Este es el punto en el que el movimiento deja de
@@ -309,8 +285,8 @@
     UI.vibrar(20);
     const importeMostrado = UI.formatearImporte(movimiento.importe, CONFIG.MONEDA);
     const CADA = { Mensual: 'al mes', Trimestral: 'cada trimestre', Anual: 'al año' };
-    const texto = esTraspaso() ? `Traspaso de ${importeMostrado}`
-      : esSuscripcion() ? `Suscripción de ${importeMostrado} ${CADA[movimiento.frecuencia] || ''}`.trim()
+    const texto = esFrecuente()
+      ? `${movimiento.categoria} de ${importeMostrado} ${CADA[movimiento.frecuencia] || ''}`.trim()
       : `Guardado ${importeMostrado}`;
     UI.toast(texto, { ms: MS_DESHACER, alDeshacer: deshacer });
 
@@ -340,7 +316,7 @@
     movimiento = { ...descartado.origen };
     UI.el.inputImporte.value = movimiento.importe.replace('.', ',');
     UI.el.inputConcepto.value = movimiento.concepto;
-    UI.el.btnImporteSiguiente.disabled = false;
+    UI.habilitarRamas(true);
     UI.pintarFecha(movimiento.fecha);
     irA(pasos().indexOf('concepto'), true);
     UI.toast('Movimiento recuperado');
@@ -360,10 +336,14 @@
 
   function conectarEventos() {
     UI.el.inputImporte.addEventListener('input', alEscribirImporte);
+    /* Enter en el teclado va por "Puntuales": es la rama de todos los días, y
+       la que no tiene consecuencias si te equivocas —una fila suelta, no una
+       regla que sigue cobrando sola—. */
     UI.el.inputImporte.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); confirmarImporte(); }
+      if (e.key === 'Enter') { e.preventDefault(); confirmarImporte(false); }
     });
-    UI.el.btnImporteSiguiente.addEventListener('click', confirmarImporte);
+    UI.el.btnFrecuentes.addEventListener('click', () => confirmarImporte(true));
+    UI.el.btnPuntuales.addEventListener('click', () => confirmarImporte(false));
 
     document.querySelectorAll('[data-tipo]').forEach(boton => {
       boton.addEventListener('click', () => elegirTipo(boton.dataset.tipo));

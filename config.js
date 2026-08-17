@@ -24,11 +24,6 @@ const CONFIG = {
 
   MONEDA: "€",
 
-  /* Al elegir esta categoría, la app pregunta cada cuánto se cobra y hasta
-     cuándo, y en vez de un gasto suelto crea una suscripción. Los cobros los
-     escribe el Apps Script el día que tocan. */
-  CATEGORIA_SUSCRIPCIONES: "Suscripciones",
-
   FRECUENCIAS: ["Mensual", "Trimestral", "Anual"],
 
   /* Duraciones ofrecidas. `meses: null` es "indefinida": sigue cobrando hasta
@@ -42,11 +37,12 @@ const CONFIG = {
     { etiqueta: "Indefinida", meses: null }
   ],
 
-  /* Categoría con la que se marcan los traspasos entre cuentas propias. Mover
-     dinero de la corriente al ahorro no es ni ingreso ni gasto, así que se
-     guarda como dos filas con esta categoría y los totales del mes la
-     descuentan. Si cambias el texto, cámbialo también en Codigo.gs y en la
-     hoja de configuración del Excel. */
+  /* Categoría de los traspasos entre cuentas propias. La app ya no los captura
+     —se quitaron a propósito—, pero el texto sigue aquí por dos motivos: el
+     resumen tiene que saber pintarlos si alguna vez escribes uno a mano en la
+     hoja, y los totales del mes los descuentan. Mover dinero de la corriente al
+     ahorro no es ni ingreso ni gasto: el dinero no entra ni sale, cambia de
+     sitio. Si cambias el texto, cámbialo también en Codigo.gs. */
   CATEGORIA_TRASPASO: "Traspaso",
 
   // IMPORTANTE: estos textos deben coincidir palabra por palabra con las listas
@@ -71,24 +67,47 @@ const CONFIG = {
     "Efectivo"
   ],
 
-  /* Doce categorías de gasto, y son doce por un motivo: en dos columnas caben
-     seis filas en la mitad inferior de la pantalla sin obligar a desplazar. Si
-     añades más, la rejilla empieza a hacer scroll y el paso deja de ser un solo
-     toque. Antes de añadir una, plantéate si no cabe en "Otros".
+  /* ------------------------------------------------------------ categorías
 
-     Los grupos vienen de la plantilla de presupuesto que ya tenías (facturas,
-     suscripciones, deudas), para que el día que montes el panel cuadren. */
+     Todo se parte en dos desde el primer paso, y la división no es estética:
+     un movimiento PUNTUAL es una fila y se acabó; uno FRECUENTE es una regla
+     que sigue escribiendo filas sola cada mes. Preguntarlo al principio evita
+     el error caro —anotar el alquiler como gasto suelto y tener que repetirlo
+     los doce meses— y ahorra un paso, porque un frecuente no necesita que le
+     digas si es gasto o ingreso hasta después.
+
+     El límite práctico de cada lista es lo que cabe en dos columnas en la
+     mitad inferior de la pantalla sin desplazar: unas nueve. Antes de añadir
+     una categoría, plantéate si no cabe en "Otros". */
+
+  // Lo que se repite solo hasta que lo canceles. Al elegir una de estas, la app
+  // pregunta cada cuánto y hasta cuándo, y crea una regla en vez de un gasto.
+  CATEGORIAS_FRECUENTES_GASTO: [
+    "Suscripciones",   // Netflix, Spotify, gimnasio, iCloud
+    "Arriendo",        // alquiler o hipoteca
+    "Suministros",     // luz, agua, gas, internet, móvil
+    "Seguros",         // coche, hogar, salud, vida
+    "Préstamos",       // cuota del coche, crédito al consumo
+    "Cuotas"           // colegio, comunidad, colegios profesionales
+  ],
+
+  CATEGORIAS_FRECUENTES_INGRESO: [
+    "Nómina",
+    "Arriendo",        // un piso que alquilas tú
+    "Inversiones",
+    "Pensión",
+    "Otros"
+  ],
+
+  // El gasto de hoy, que no se repite. Nueve entran sin scroll.
   CATEGORIAS_GASTO: [
     "Alimentación",
     "Restaurantes",
     "Transporte",
-    "Vivienda",
-    "Suministros",
+    "Hogar",           // una reparación, un mueble, la ferretería
     "Salud",
     "Ocio",
     "Compras",
-    "Suscripciones",
-    "Deudas",
     "Viajes",
     "Otros"
   ],

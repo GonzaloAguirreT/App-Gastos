@@ -11,7 +11,8 @@ const UI = (() => {
     inputFecha: document.getElementById('input-fecha'),
     pasos: document.querySelectorAll('.paso'),
     inputImporte: document.getElementById('input-importe'),
-    btnImporteSiguiente: document.getElementById('btn-importe-siguiente'),
+    btnFrecuentes: document.getElementById('btn-frecuentes'),
+    btnPuntuales: document.getElementById('btn-puntuales'),
     moneda: document.getElementById('moneda'),
     preguntaCategoria: document.getElementById('pregunta-categoria'),
     preguntaCuenta: document.getElementById('pregunta-cuenta'),
@@ -82,6 +83,13 @@ const UI = (() => {
     el.btnAtras.classList.toggle('hueco', nombre === 'importe');
   }
 
+  /** Los dos botones del primer paso solo sirven con un importe válido escrito:
+   *  avanzar sin importe dejaría un movimiento a medias que hay que abandonar. */
+  function habilitarRamas(activos) {
+    el.btnFrecuentes.disabled = !activos;
+    el.btnPuntuales.disabled = !activos;
+  }
+
   /** Rellena una rejilla de opciones. Devuelve el contenedor por comodidad. */
   function pintarOpciones(contenedor, valores, alElegir, sugerido = null) {
     contenedor.innerHTML = '';
@@ -105,21 +113,13 @@ const UI = (() => {
   }
 
   function pintarResumen(movimiento, moneda) {
-    // En un traspaso el signo sobra: no se gana ni se pierde nada, solo se
-    // mueve. Se enseña el recorrido entre cuentas en su lugar.
-    if (movimiento.tipo === 'Traspaso') {
-      el.resumenMovimiento.innerHTML =
-        formatearImporte(movimiento.importe, moneda) +
-        `<span class="detalle">${movimiento.cuenta} → ${movimiento.cuentaDestino}</span>`;
-      return;
-    }
-
     const signo = movimiento.tipo === 'Gasto' ? '−' : '+';
 
-    /* En una suscripción lo que importa no es el gasto de hoy sino el
-       compromiso: cada cuánto y hasta cuándo. El importe suelto engaña. */
-    const detalle = movimiento.frecuencia
-      ? `${movimiento.frecuencia} · ${movimiento.duracion ? movimiento.duracion.etiqueta : ''} · ${movimiento.cuenta}`
+    /* En un frecuente lo que importa no es el importe de hoy sino el
+       compromiso: qué es, cada cuánto y hasta cuándo. El importe suelto
+       engaña —10,99 € no dice lo mismo que 10,99 € al mes durante dos años—. */
+    const detalle = movimiento.frecuente
+      ? `${movimiento.categoria} · ${movimiento.frecuencia} · ${movimiento.duracion ? movimiento.duracion.etiqueta : ''}`
       : `${movimiento.categoria} · ${movimiento.cuenta}`;
 
     el.resumenMovimiento.innerHTML =
@@ -172,7 +172,7 @@ const UI = (() => {
 
   return {
     el, hoyISO, formatearFecha, formatearImporte, pintarFecha, pintarMigas,
-    mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes,
+    mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes, habilitarRamas,
     toast, ocultarToast, vibrar
   };
 })();

@@ -280,16 +280,22 @@ body {
   color: var(--texto-suave);
 }
 
-/* Más bajo que Gasto e Ingreso a propósito: se usa una vez al mes, y la altura
-   es lo que dice cuál es el camino principal. */
-.btn-traspaso {
-  margin-top: 10px;
-  width: 100%;
-  font-size: 17px;
+/* Los dos botones del primer paso. La línea pequeña de debajo dice qué
+   significa cada uno: "Frecuentes" y "Puntuales" son claros una vez lo sabes,
+   pero la primera vez no, y esa duda es justo lo que no queremos a las nueve
+   de la noche en la cola del supermercado. */
+.btn-rama .ayuda {
+  font-size: 13px;
+  font-weight: 400;
   color: var(--texto-suave);
+  line-height: 1.2;
 }
 
-.btn-traspaso .signo { font-size: 19px; }
+/* Deshabilitados hasta que hay importe: sin esto parecen pulsables y no hacen
+   nada, que es peor que verlos apagados. */
+.btn-rama:disabled {
+  opacity: 0.45;
+}
 
 /* Última cuenta usada: se marca, pero no se salta el paso. Saltarlo llevaba a
    registrar movimientos en la cuenta equivocada sin darse cuenta. */

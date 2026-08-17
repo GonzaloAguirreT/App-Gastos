@@ -60,8 +60,21 @@
           <span class="moneda" id="moneda">€</span>
         </div>
       </div>
+      <!-- Los dos botones sustituyen al antiguo "Siguiente" y de paso preguntan
+           lo único que cambia el resto del recorrido: si esto pasa una vez o si
+           se repetirá solo. Preguntarlo aquí, con el importe recién tecleado y
+           el pulgar ya abajo, no cuesta ningún toque de más. -->
       <div class="paso-acciones">
-        <button type="button" class="btn btn-primario" id="btn-importe-siguiente" disabled>Siguiente</button>
+        <div class="rejilla rejilla-2">
+          <button type="button" class="btn btn-opcion btn-alto btn-rama" id="btn-frecuentes" disabled>
+            <span class="signo">↻</span>Frecuentes
+            <span class="ayuda">se repite solo</span>
+          </button>
+          <button type="button" class="btn btn-opcion btn-alto btn-rama" id="btn-puntuales" disabled>
+            <span class="signo">1×</span>Puntuales
+            <span class="ayuda">solo esta vez</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -79,15 +92,10 @@
             <span class="signo">+</span>Ingreso
           </button>
         </div>
-        <!-- Traspaso va debajo y más bajo: es el caso raro, y no debe competir
-             por el pulgar con los dos que se usan a diario. -->
-        <button type="button" class="btn btn-opcion btn-traspaso" data-tipo="Traspaso">
-          <span class="signo">⇄</span> Traspaso entre cuentas
-        </button>
       </div>
     </section>
 
-    <!-- Paso 3: categoría, o cuenta de origen si es un traspaso. -->
+    <!-- Paso 3: categoría. La lista depende de la rama y del tipo. -->
     <section class="paso" id="paso-categoria" data-paso="3" aria-label="Categoría">
       <div class="paso-cuerpo">
         <p class="pregunta" id="pregunta-categoria">Categoría</p>
@@ -97,11 +105,11 @@
       </div>
     </section>
 
-    <!-- Solo en suscripciones: cada cuánto se cobra y hasta cuándo. Se
-         intercalan aquí porque son propiedades del gasto, no del pago. -->
+    <!-- Solo en los frecuentes: cada cuánto y hasta cuándo. Se intercalan aquí
+         porque son propiedades del movimiento, no del pago. -->
     <section class="paso" id="paso-frecuencia" data-paso="s1" aria-label="Frecuencia">
       <div class="paso-cuerpo">
-        <p class="pregunta">¿Cada cuánto se cobra?</p>
+        <p class="pregunta">¿Cada cuánto se repite?</p>
       </div>
       <div class="paso-acciones">
         <div class="rejilla rejilla-2" id="rejilla-frecuencias"></div>
@@ -117,7 +125,7 @@
       </div>
     </section>
 
-    <!-- Paso 4: cuenta, o cuenta de destino si es un traspaso. -->
+    <!-- Paso 4: cuenta. -->
     <section class="paso" id="paso-cuenta" data-paso="4" aria-label="Cuenta">
       <div class="paso-cuerpo">
         <p class="pregunta" id="pregunta-cuenta">Cuenta</p>
