@@ -120,6 +120,9 @@ function crearPanel(libro) {
   panel.clear();
   panel.getCharts().forEach(g => panel.removeChart(g));     // si no, se apilan
 
+  // Con qué separar los argumentos de las fórmulas en ESTA hoja. Ver la función.
+  const sep = separadorDeFormulas(panel);
+
   panel.getRange(1, 1).setValue('Gastos por persona').setFontSize(14).setFontWeight('bold');
   panel.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
        .setFontColor('#888888');
@@ -133,16 +136,18 @@ function crearPanel(libro) {
   /* Los meses se calculan hacia atrás desde el actual, así que la tabla se
      desplaza sola con el calendario y nunca hay que añadir filas a mano. */
   const filaPrimerMes = FILA_CABECERA + 1;
-  panel.getRange(filaPrimerMes, 1).setFormula('=EOMONTH(TODAY(),-1)+1');
+  panel.getRange(filaPrimerMes, 1).setFormula('=EOMONTH(TODAY()' + sep + '-1)+1');
   for (var i = 1; i < MESES_MOSTRADOS; i++) {
-    panel.getRange(filaPrimerMes + i, 1).setFormula('=EDATE(A' + (filaPrimerMes + i - 1) + ',-1)');
+    panel.getRange(filaPrimerMes + i, 1)
+         .setFormula('=EDATE(A' + (filaPrimerMes + i - 1) + sep + '-1)');
   }
   panel.getRange(filaPrimerMes, 1, MESES_MOSTRADOS, 1).setNumberFormat('yyyy-mm');
 
   for (var f = 0; f < MESES_MOSTRADOS; f++) {
     const fila = filaPrimerMes + f;
     USUARIOS.forEach((nombre, u) => {
-      panel.getRange(fila, COL_USUARIO_1 + u).setFormula(formulaGasto('$A' + fila, letra(COL_USUARIO_1 + u) + '$' + FILA_CABECERA));
+      panel.getRange(fila, COL_USUARIO_1 + u).setFormula(
+        formulaGasto('$A' + fila, letra(COL_USUARIO_1 + u) + '$' + FILA_CABECERA, sep));
     });
     panel.getRange(fila, colTotal).setFormula(
       '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
@@ -159,7 +164,7 @@ function crearPanel(libro) {
     const fila = FILA_CABECERA + 1 + i;
     panel.getRange(fila, colGrafico).setValue(nombre);
     panel.getRange(fila, colGrafico + 1).setFormula(
-      formulaGasto('$A$' + filaPrimerMes, letra(colGrafico) + fila));
+      formulaGasto('$A$' + filaPrimerMes, letra(colGrafico) + fila, sep));
   });
   panel.getRange(FILA_CABECERA + 1, colGrafico + 1, USUARIOS.length, 1).setNumberFormat('#,##0.00 €');
 
@@ -178,6 +183,28 @@ function crearPanel(libro) {
 }
 
 /**
+ * Averigua si esta hoja separa los argumentos de una fórmula con coma o con
+ * punto y coma.
+ *
+ * Hace falta porque setFormula() escribe la cadena tal cual, y una hoja en
+ * español espera ';': ahí la coma es el separador decimal, así que
+ * =EOMONTH(TODAY(),-1) no es "el mes anterior" sino un error de sintaxis. Este
+ * panel salió entero con #ERROR! por eso.
+ *
+ * Se comprueba en vez de deducirlo del idioma: =SUM(1,1) da 2 donde la coma
+ * separa argumentos, y 1,1 donde es el decimal. Así funciona con cualquier
+ * configuración, incluidas las que no se me ocurran.
+ */
+function separadorDeFormulas(hoja) {
+  const sonda = hoja.getRange(100, 20);
+  sonda.setFormula('=SUM(1,1)');
+  SpreadsheetApp.flush();
+  const resultado = sonda.getValue();
+  sonda.clear();
+  return resultado === 2 ? ',' : ';';
+}
+
+/**
  * Suma los gastos de una persona en un mes.
  *
  * Excluye los traspasos: mover dinero de una cuenta propia a otra no es gasto
@@ -186,14 +213,15 @@ function crearPanel(libro) {
  *
  * @param {string} celdaMes celda con el día 1 del mes (referencia A1)
  * @param {string} celdaUsuario celda con el nombre de la persona
+ * @param {string} sep separador de argumentos de esta hoja
  */
-function formulaGasto(celdaMes, celdaUsuario) {
-  return '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C,' +
-         HOJA_MOVIMIENTOS + '!$E:$E,"Gasto",' +
-         HOJA_MOVIMIENTOS + '!$F:$F,"<>' + CATEGORIA_TRASPASO + '",' +
-         HOJA_MOVIMIENTOS + '!$G:$G,' + celdaUsuario + ',' +
-         HOJA_MOVIMIENTOS + '!$A:$A,">="&' + celdaMes + ',' +
-         HOJA_MOVIMIENTOS + '!$A:$A,"<"&EDATE(' + celdaMes + ',1))';
+function formulaGasto(celdaMes, celdaUsuario, sep) {
+  return '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C' + sep +
+         HOJA_MOVIMIENTOS + '!$E:$E' + sep + '"Gasto"' + sep +
+         HOJA_MOVIMIENTOS + '!$F:$F' + sep + '"<>' + CATEGORIA_TRASPASO + '"' + sep +
+         HOJA_MOVIMIENTOS + '!$G:$G' + sep + celdaUsuario + sep +
+         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '">="&' + celdaMes + sep +
+         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '"<"&EDATE(' + celdaMes + sep + '1))';
 }
 
 /** Número de columna a letra: 2 → B. Hace falta porque las fórmulas se escriben
