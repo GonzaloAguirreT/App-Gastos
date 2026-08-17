@@ -64,9 +64,34 @@ const NUCLEO = (() => {
     return {
       endpoint: a.endpoint || CONFIG.ENDPOINT || '',
       token: a.token || CONFIG.TOKEN || '',
-      // Quién usa este teléfono. Por defecto, el primero de la lista.
-      usuario: a.usuario || CONFIG.USUARIOS[0] || ''
+      usuario: usuarioValido(a.usuario)
     };
+  }
+
+  /**
+   * Devuelve un nombre que exista de verdad en la lista de usuarios.
+   *
+   * Hace falta porque el nombre guardado sobrevive a los cambios de config.js.
+   * Cuando "Gonzalo Aguirre" pasó a ser "Gonzalo", los teléfonos siguieron
+   * estampando el nombre viejo: el valor guardado ganaba a la lista nueva, y las
+   * filas se escribían con un usuario que ya no existía. En la hoja se veían
+   * bien; en el panel, sumaban cero.
+   *
+   * Se intenta emparejar por el nombre de pila antes de rendirse al primero de
+   * la lista, porque es el tipo de cambio más probable.
+   */
+  function usuarioValido(guardado) {
+    const lista = CONFIG.USUARIOS || [];
+    const nombre = String(guardado || '').trim();
+
+    if (!nombre) return lista[0] || '';
+    if (lista.indexOf(nombre) !== -1) return nombre;
+
+    const pila = nombre.split(' ')[0];
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].split(' ')[0] === pila) return lista[i];
+    }
+    return lista[0] || '';
   }
 
   function guardarAjustes(ajustes) {
