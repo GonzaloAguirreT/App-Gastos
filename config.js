@@ -37,6 +37,13 @@ const CONFIG = {
     "Efectivo"
   ],
 
+  /* Doce categorías de gasto, y son doce por un motivo: en dos columnas caben
+     seis filas en la mitad inferior de la pantalla sin obligar a desplazar. Si
+     añades más, la rejilla empieza a hacer scroll y el paso deja de ser un solo
+     toque. Antes de añadir una, plantéate si no cabe en "Otros".
+
+     Los grupos vienen de la plantilla de presupuesto que ya tenías (facturas,
+     suscripciones, deudas), para que el día que montes el panel cuadren. */
   CATEGORIAS_GASTO: [
     "Alimentación",
     "Restaurantes",
@@ -47,8 +54,8 @@ const CONFIG = {
     "Ocio",
     "Compras",
     "Suscripciones",
-    "Educación",
-    "Regalos",
+    "Deudas",
+    "Viajes",
     "Otros"
   ],
 
