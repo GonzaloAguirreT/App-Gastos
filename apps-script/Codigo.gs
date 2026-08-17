@@ -444,12 +444,95 @@ function prepararSuscripciones(libro) {
   }
   formatoSeguro(hoja.getRange('I2:J'), 'yyyy-mm-dd');
   formatoSeguro(hoja.getRange('D2:D'), '0.00');
-
-  /* Para cancelar una suscripción se pone Activa en FALSO. Una casilla evita
-     tener que acordarse de si se escribe "no", "NO" o "false". */
-  const casilla = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-  hoja.getRange('K2:K').setDataValidation(casilla);
+  ordenarSuscripciones(hoja);
   return hoja;
+}
+
+/* Para cancelar una suscripción se pone Activa en FALSO. Una casilla evita
+   tener que acordarse de si se escribe "no", "NO" o "false". */
+function casillaActiva() {
+  return SpreadsheetApp.newDataValidation().requireCheckbox().build();
+}
+
+/**
+ * Deja las suscripciones juntas desde la fila 2, sin repetidas, y con la
+ * casilla solo donde hay algo.
+ *
+ * Nace de un fallo que costó encontrar: la casilla de "Activa" se ponía en la
+ * columna K entera, y para Sheets una casilla es contenido aunque no esté
+ * marcada. Con eso la hoja "terminaba" en la fila 1000, appendRow escribía cada
+ * alta ahí abajo, y la hoja parecía vacía aunque la suscripción existiera y se
+ * cobrara. Tenerlo ordenado no es cosmética: es lo que hace que se vea.
+ *
+ * Las repetidas salen de dos peticiones simultáneas del mismo alta —pasó de
+ * verdad, con un segundo de diferencia—. Se quedan con la primera.
+ */
+function ordenarSuscripciones(hoja) {
+  const ancho = CABECERAS_SUSCRIPCIONES.length;
+  const filas = hoja.getMaxRows();
+  if (filas < 2) return;
+
+  /* Esto se ejecuta en cada alta, así que primero se mira solo la columna del
+     UUID: si ya están seguidas desde la fila 2 y sin repetir, no hay nada que
+     hacer y nos ahorramos leer y reescribir la hoja entera. */
+  const columnaUuid = hoja.getRange(2, 1, filas - 1, 1).getValues();
+  var seguidas = true, cuantas = 0, hueco = false;
+  const yaVistos = {};
+  columnaUuid.forEach(function (f) {
+    const uuid = String(f[0]).trim();
+    if (!uuid) { hueco = true; return; }
+    if (hueco || yaVistos[uuid]) seguidas = false;
+    yaVistos[uuid] = true;
+    cuantas++;
+  });
+  if (seguidas) {
+    // Aun estando en su sitio, la casilla tiene que existir donde hay datos y
+    // no existir donde no los hay: es lo que descolocaba las altas.
+    if (cuantas) hoja.getRange(2, 11, cuantas, 1).setDataValidation(casillaActiva());
+    if (cuantas + 2 <= filas) {
+      hoja.getRange(cuantas + 2, 1, filas - cuantas - 1, ancho).clearDataValidations();
+    }
+    return;
+  }
+
+  const datos = hoja.getRange(2, 1, filas - 1, ancho).getValues();
+  const vistos = {};
+  const reales = [];
+  datos.forEach(function (f) {
+    const uuid = String(f[0]).trim();
+    if (!uuid || vistos[uuid]) return;
+    vistos[uuid] = true;
+    reales.push(f);
+  });
+
+  // Se limpia todo el área y se reescribe compactado. Hay que quitar también
+  // las validaciones: si no, las casillas sueltas siguen contando como
+  // contenido y el problema vuelve en la siguiente alta.
+  const area = hoja.getRange(2, 1, filas - 1, ancho);
+  area.clearContent();
+  area.clearDataValidations();
+
+  if (!reales.length) return;
+  hoja.getRange(2, 1, reales.length, ancho).setValues(reales);
+  hoja.getRange(2, 11, reales.length, 1).setDataValidation(casillaActiva());
+  formatoSeguro(hoja.getRange(2, 9, reales.length, 2), 'yyyy-mm-dd');
+  formatoSeguro(hoja.getRange(2, 4, reales.length, 1), '0.00');
+}
+
+/**
+ * Primera fila libre de verdad, mirando la columna del UUID.
+ *
+ * No se usa appendRow por lo dicho arriba: cuenta como ocupada cualquier fila
+ * con una casilla, y basta una para mandar el alta al fondo de la hoja.
+ */
+function primeraFilaLibre(hoja) {
+  const filas = hoja.getMaxRows();
+  if (filas < 2) return 2;
+  const uuids = hoja.getRange(2, 1, filas - 1, 1).getValues();
+  for (var i = uuids.length - 1; i >= 0; i--) {
+    if (String(uuids[i][0]).trim()) return i + 3;
+  }
+  return 2;
 }
 
 /**
@@ -468,29 +551,54 @@ function instalarDisparadorDiario() {
 }
 
 function altaSuscripcion(s) {
-  const libro = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja = prepararSuscripciones(libro);
-
   const problema = validarSuscripcion(s);
   if (problema) return { ok: false, error: problema };
 
-  if (uuidYaRegistrado('alta-' + s.uuid)) return { ok: true, duplicado: true };
+  /* El mismo bloqueo que las escrituras de movimientos, y por lo mismo. Sin él
+     dos peticiones simultáneas del mismo alta comprueban el UUID antes de que
+     ninguna lo haya registrado, las dos concluyen que es nueva y la suscripción
+     entra por duplicado. No es hipotético: pasó, con un segundo de diferencia,
+     porque la página y el service worker vaciaron la cola a la vez. */
+  const bloqueo = LockService.getScriptLock();
+  if (!bloqueo.tryLock(20000)) {
+    return { ok: false, error: 'El script está ocupado, reinténtalo' };
+  }
 
-  const inicio = fechaDesdeISO(s.inicio);
-  /* El fin se calcula aquí y no en el móvil: sumar meses tiene trampas —el 31
-     de enero más un mes no existe— y prefiero una sola implementación. Se resta
-     un día para que "3 meses" sean exactamente 3 cobros mensuales y no 4. */
-  const fin = s.duracionMeses
-    ? new Date(sumarMeses(inicio, Number(s.duracionMeses)).getTime() - 86400000)
-    : '';
+  try {
+    if (uuidYaRegistrado('alta-' + s.uuid)) return { ok: true, duplicado: true };
 
-  hoja.appendRow([
-    s.uuid, new Date(), s.concepto || '', Number(s.importe), s.cuenta,
-    s.categoria, s.usuario || '', s.frecuencia, inicio, fin, true, ''
-  ]);
-  registrarUuid('alta-' + s.uuid);
+    const libro = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = prepararSuscripciones(libro);
 
-  // Se cobra ya lo que corresponda, para que el primer cargo no espere a mañana.
+    const inicio = fechaDesdeISO(s.inicio);
+    /* El fin se calcula aquí y no en el móvil: sumar meses tiene trampas —el 31
+       de enero más un mes no existe— y prefiero una sola implementación. Se resta
+       un día para que "3 meses" sean exactamente 3 cobros mensuales y no 4. */
+    const fin = s.duracionMeses
+      ? new Date(sumarMeses(inicio, Number(s.duracionMeses)).getTime() - 86400000)
+      : '';
+
+    const fila = primeraFilaLibre(hoja);
+    /* appendRow creaba la fila si hacía falta; setValues no, y peta si se sale
+       de la hoja. Con la hoja compactada esto no llega a pasar nunca, pero una
+       suscripción perdida por un borde no compensa la línea que ahorra. */
+    if (fila > hoja.getMaxRows()) hoja.insertRowsAfter(hoja.getMaxRows(), 10);
+
+    hoja.getRange(fila, 1, 1, CABECERAS_SUSCRIPCIONES.length).setValues([[
+      s.uuid, new Date(), s.concepto || '', Number(s.importe), s.cuenta,
+      s.categoria, s.usuario || '', s.frecuencia, inicio, fin, true, ''
+    ]]);
+    hoja.getRange(fila, 11).setDataValidation(casillaActiva());
+    formatoSeguro(hoja.getRange(fila, 9, 1, 2), 'yyyy-mm-dd');
+    formatoSeguro(hoja.getRange(fila, 4), '0.00');
+    registrarUuid('alta-' + s.uuid);
+  } finally {
+    bloqueo.releaseLock();
+  }
+
+  /* El cobro va fuera del bloqueo: procesarSuscripciones coge el suyo, y pedir
+     dos veces el mismo candado desde la misma ejecución no está garantizado.
+     Se hace aquí para que el primer cargo no espere al disparador de mañana. */
   const escritos = procesarSuscripciones();
   return { ok: true, cobrosEscritos: escritos };
 }
