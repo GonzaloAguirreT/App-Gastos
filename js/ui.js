@@ -17,6 +17,8 @@ const UI = (() => {
     preguntaCuenta: document.getElementById('pregunta-cuenta'),
     rejillaCategorias: document.getElementById('rejilla-categorias'),
     rejillaCuentas: document.getElementById('rejilla-cuentas'),
+    rejillaFrecuencias: document.getElementById('rejilla-frecuencias'),
+    rejillaDuraciones: document.getElementById('rejilla-duraciones'),
     resumenMovimiento: document.getElementById('resumen-movimiento'),
     inputConcepto: document.getElementById('input-concepto'),
     btnGuardar: document.getElementById('btn-guardar'),
@@ -113,9 +115,16 @@ const UI = (() => {
     }
 
     const signo = movimiento.tipo === 'Gasto' ? '−' : '+';
+
+    /* En una suscripción lo que importa no es el gasto de hoy sino el
+       compromiso: cada cuánto y hasta cuándo. El importe suelto engaña. */
+    const detalle = movimiento.frecuencia
+      ? `${movimiento.frecuencia} · ${movimiento.duracion ? movimiento.duracion.etiqueta : ''} · ${movimiento.cuenta}`
+      : `${movimiento.categoria} · ${movimiento.cuenta}`;
+
     el.resumenMovimiento.innerHTML =
       `${signo}${formatearImporte(movimiento.importe, moneda)}` +
-      `<span class="detalle">${movimiento.categoria} · ${movimiento.cuenta}</span>`;
+      `<span class="detalle">${detalle}</span>`;
   }
 
   /** El contador de pendientes solo existe cuando hay algo pendiente. Un "0"

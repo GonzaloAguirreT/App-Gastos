@@ -124,12 +124,17 @@ const NUCLEO = (() => {
    * a salvo en disco desde el primer instante, pero no sale hasta que pasan los
    * cinco segundos. Si cierras la app en ese rato, el movimiento no se pierde.
    */
-  async function encolar(filas, grupo, esperarDeshacer = true) {
+  async function encolar(filas, grupo, accion, esperarDeshacer = true) {
     const ahora = Date.now();
     const registros = filas.map(fila => ({
       uuid: fila.uuid,
       fila: fila,
       grupo: grupo,
+      /* Qué hay que hacer con esto al enviarlo: escribir movimientos o dar de
+         alta una suscripción. Va en cada registro y no en una cola aparte para
+         que los reintentos, el backoff y el Background Sync valgan para ambos
+         sin duplicar nada. */
+      accion: accion || 'movimientos',
       creado: ahora,
       /* Dos esperas distintas y separadas a propósito:
          - listoEn: la ventana de deshacer. Se fija una vez y no se mueve.
@@ -168,7 +173,7 @@ const NUCLEO = (() => {
 
   /* -------------------------------------------------------------- envío */
 
-  async function enviar(filas, ajustes) {
+  async function enviar(filas, ajustes, accion) {
     if (CONFIG.MODO_PRUEBA) {
       console.log('[MODO_PRUEBA] no se envía nada. Filas:', filas);
       return { ok: true, prueba: true };
@@ -182,7 +187,9 @@ const NUCLEO = (() => {
     const respuesta = await fetch(config.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: config.token, movimientos: filas }),
+      body: JSON.stringify(accion === 'suscripcion'
+        ? { token: config.token, accion: 'suscripcion', suscripcion: filas[0] }
+        : { token: config.token, movimientos: filas }),
       redirect: 'follow'
     });
 
@@ -259,7 +266,8 @@ const NUCLEO = (() => {
 
     for (const registrosDelGrupo of grupos.values()) {
       try {
-        await enviar(registrosDelGrupo.map(r => r.fila), ajustes);
+        await enviar(registrosDelGrupo.map(r => r.fila), ajustes,
+                     registrosDelGrupo[0].accion);
         // El backend responde ok también cuando el uuid ya estaba registrado,
         // así que un reintento de algo ya guardado también limpia la cola.
         for (const r of registrosDelGrupo) await borrar(r.uuid);

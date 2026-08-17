@@ -37,9 +37,14 @@ Lo que va a crear:
   |---|---|---|---|---|---|---|
   | `yyyy-mm-dd` | texto libre | número positivo | texto | `Ingreso` o `Gasto` | texto | texto |
 
-- Una hoja **`Panel`** con el gasto por persona y mes, y un gráfico de torta del
-  mes en curso. Son fórmulas, no datos volcados: se recalcula sola con cada fila
-  que entra. No escribas nada en ella.
+- Tres hojas de panel: **`Panel`** con todos, y **`Panel Gonzalo`** y **`Panel
+  Camila`** con cada uno por separado. Cada una lleva el gasto por mes, el gasto
+  por categoría del mes en curso y su propio gráfico de torta. Son fórmulas, no
+  datos volcados: se recalculan solas con cada fila que entra. No escribas nada
+  en ellas.
+
+- Una hoja **`Suscripciones`** con los gastos recurrentes dados de alta. Ver
+  abajo.
 
 - Una hoja **`_uuids`**, oculta, donde se apuntan los identificadores de cada
   movimiento para rechazar duplicados. No la borres ni la toques.
@@ -265,6 +270,32 @@ constante `USUARIOS` de `Codigo.gs`: de ahí salen las columnas del panel.
 > `instalar()` hace lo propio con las filas ya escritas en la hoja. Sin eso, los
 > movimientos se seguirían escribiendo con un usuario que ya no está en la lista
 > y el panel los sumaría como cero sin dar ningún error.
+
+### Suscripciones
+
+Al elegir la categoría `Suscripciones`, la app pregunta dos cosas más: **cada
+cuánto se cobra** (mensual, trimestral o anual) y **durante cuánto tiempo** (de
+3 meses a 3 años, o indefinida).
+
+Lo que se guarda **no es un gasto**, es una definición en la hoja
+`Suscripciones`. Un disparador diario del Apps Script escribe el cobro el día
+que toca, y el primero se escribe en el acto al darla de alta.
+
+Se hace así y no escribiendo todos los cobros por adelantado por dos motivos:
+con duración indefinida no hay un número de filas que escribir, y si cancelas la
+suscripción te quedarían meses de gastos fantasma que borrar a mano.
+
+**Para cancelar una suscripción**, desmarca su casilla `Activa` en la hoja. Deja
+de cobrar a partir de ese momento y los cobros ya escritos se quedan como están,
+que es lo correcto: ocurrieron.
+
+Cada cobro lleva un identificador derivado de la suscripción y de su fecha, así
+que el disparador puede ejecutarse mil veces sin duplicar nada.
+
+> Las fechas se calculan siempre desde el día de inicio, nunca sumando un mes al
+> cobro anterior. Encadenar sumas desvía la fecha —31 de enero pasa a 28 de
+> febrero y de ahí a 28 de marzo— y a los dos años estarías cobrando el día que
+> no es.
 
 ### Traspasos entre cuentas
 

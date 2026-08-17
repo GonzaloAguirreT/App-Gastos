@@ -42,6 +42,10 @@ const CATEGORIAS_GASTO = [
 ];
 
 const HOJA_PANEL = 'Panel';
+
+/* Además del panel global hay uno por persona. Se llaman "Panel Gonzalo" y
+   "Panel Camila": el prefijo los agrupa al ordenar las pestañas. */
+function nombrePanelDe(usuario) { return HOJA_PANEL + ' ' + usuario; }
 const TIPOS_VALIDOS = ['Ingreso', 'Gasto'];
 
 /* Los traspasos entre cuentas propias no son ni ingreso ni gasto: el dinero no
@@ -51,6 +55,21 @@ const TIPOS_VALIDOS = ['Ingreso', 'Gasto'];
    totales del mes las descuentan. Si cambias este texto, cámbialo también en
    config.js y en la hoja de configuración del Excel. */
 const CATEGORIA_TRASPASO = 'Traspaso';
+
+/* Las suscripciones no se guardan como gastos futuros sino como definiciones.
+   Un disparador diario escribe el cobro el día que toca.
+
+   La alternativa —escribir de golpe todos los cobros al darla de alta— no vale:
+   con duración indefinida no hay un número de filas que escribir, y si la
+   cancelas te quedan meses de gastos fantasma que hay que borrar a mano. */
+const HOJA_SUSCRIPCIONES = 'Suscripciones';
+
+const CABECERAS_SUSCRIPCIONES = [
+  'UUID', 'Alta', 'Concepto', 'Importe', 'Cuenta', 'Categoría',
+  'Usuario', 'Frecuencia', 'Inicio', 'Fin', 'Activa', 'Último cobro'
+];
+
+const MESES_POR_FRECUENCIA = { 'Mensual': 1, 'Trimestral': 3, 'Anual': 12 };
 
 /* ========================================================================
    Instalación
@@ -103,6 +122,8 @@ function instalar() {
     uuids.hideSheet();
   }
 
+  prepararSuscripciones(libro);
+  instalarDisparadorDiario();
   crearPanel(libro);
 
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
@@ -126,29 +147,51 @@ function instalar() {
  * Volver a ejecutar instalar() rehace las fórmulas pero no toca Movimientos.
  */
 function crearPanel(libro) {
+  crearHojaPanel(libro, HOJA_PANEL, USUARIOS, 'Gastos');
+  USUARIOS.forEach(function (usuario) {
+    crearHojaPanel(libro, nombrePanelDe(usuario), [usuario], 'Gastos de ' + usuario);
+  });
+}
+
+/**
+ * Pinta una hoja de panel para las personas que se le pasen.
+ *
+ * La misma función sirve para el panel global —con todos— y para el de cada
+ * uno —con uno solo—, en vez de tener tres copias que se desincronicen a la
+ * primera de cambio.
+ *
+ * @param {string} titulo cabecera de la hoja
+ * @param {string[]} personas columnas de las tablas
+ */
+function crearHojaPanel(libro, nombreHoja, personas, titulo) {
   const MESES_MOSTRADOS = 12;
   const FILA_CABECERA = 4;
-  const COL_USUARIO_1 = 2;                                  // columna B
-  const colTotal = COL_USUARIO_1 + USUARIOS.length;
-  const colGrafico = colTotal + 2;                          // deja una columna de aire
+  const COL_USUARIO_1 = 2;
+  /* Con una sola persona la columna Total repetiría la anterior, así que no se
+     pone: una cifra duplicada al lado de sí misma solo hace dudar. */
+  const hayTotal = personas.length > 1;
+  const colTotal = COL_USUARIO_1 + personas.length;
+  const colUltima = hayTotal ? colTotal : colTotal - 1;
+  const colGrafico = colUltima + 2;
 
-  let panel = libro.getSheetByName(HOJA_PANEL);
-  if (!panel) panel = libro.insertSheet(HOJA_PANEL);
+  let panel = libro.getSheetByName(nombreHoja);
+  if (!panel) panel = libro.insertSheet(nombreHoja);
   panel.clear();
-  panel.getCharts().forEach(g => panel.removeChart(g));     // si no, se apilan
+  panel.getCharts().forEach(function (g) { panel.removeChart(g); });
 
-  // Con qué separar los argumentos de las fórmulas en ESTA hoja. Ver la función.
   const sep = separadorDeFormulas(panel);
 
-  panel.getRange(1, 1).setValue('Gastos').setFontSize(14).setFontWeight('bold');
+  panel.getRange(1, 1).setValue(titulo).setFontSize(14).setFontWeight('bold');
   panel.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
        .setFontColor('#888888');
 
-  // Cabecera: Mes | usuario 1 | usuario 2 | … | Total
+  // ---- Tabla 1: cuánto se gasta cada mes
   panel.getRange(FILA_CABECERA, 1).setValue('Mes');
-  USUARIOS.forEach((nombre, i) => panel.getRange(FILA_CABECERA, COL_USUARIO_1 + i).setValue(nombre));
-  panel.getRange(FILA_CABECERA, colTotal).setValue('Total');
-  panel.getRange(FILA_CABECERA, 1, 1, colTotal).setFontWeight('bold');
+  personas.forEach(function (nombre, i) {
+    panel.getRange(FILA_CABECERA, COL_USUARIO_1 + i).setValue(nombre);
+  });
+  if (hayTotal) panel.getRange(FILA_CABECERA, colTotal).setValue('Total');
+  panel.getRange(FILA_CABECERA, 1, 1, colUltima).setFontWeight('bold');
 
   /* Los meses se calculan hacia atrás desde el actual, así que la tabla se
      desplaza sola con el calendario y nunca hay que añadir filas a mano. */
@@ -162,54 +205,55 @@ function crearPanel(libro) {
 
   for (var f = 0; f < MESES_MOSTRADOS; f++) {
     const fila = filaPrimerMes + f;
-    USUARIOS.forEach((nombre, u) => {
+    personas.forEach(function (nombre, u) {
       panel.getRange(fila, COL_USUARIO_1 + u).setFormula(
         formulaGasto('$A' + fila, letra(COL_USUARIO_1 + u) + '$' + FILA_CABECERA, sep));
     });
-    panel.getRange(fila, colTotal).setFormula(
-      '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+    if (hayTotal) {
+      panel.getRange(fila, colTotal).setFormula(
+        '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+    }
   }
-  panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, USUARIOS.length + 1)
-       .setNumberFormat('#,##0.00 €');
+  panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, colUltima - COL_USUARIO_1 + 1)
+       .setNumberFormat('#,##0.00 \u20ac');
 
-  /* -------- Segunda tabla: en qué se va el dinero este mes --------
-     La de arriba dice cuánto gasta cada uno; esta dice en qué. Es la que
-     responde a la pregunta que de verdad se hace uno mirando un panel. */
+  // ---- Tabla 2: en qué se va el dinero este mes
   const filaCabCategorias = filaPrimerMes + MESES_MOSTRADOS + 2;
   const filaPrimerCategoria = filaCabCategorias + 1;
 
   panel.getRange(filaCabCategorias, 1).setValue('Categoría (este mes)');
-  USUARIOS.forEach((nombre, i) =>
-    panel.getRange(filaCabCategorias, COL_USUARIO_1 + i).setValue(nombre));
-  panel.getRange(filaCabCategorias, colTotal).setValue('Total');
-  panel.getRange(filaCabCategorias, 1, 1, colTotal).setFontWeight('bold');
+  personas.forEach(function (nombre, i) {
+    panel.getRange(filaCabCategorias, COL_USUARIO_1 + i).setValue(nombre);
+  });
+  if (hayTotal) panel.getRange(filaCabCategorias, colTotal).setValue('Total');
+  panel.getRange(filaCabCategorias, 1, 1, colUltima).setFontWeight('bold');
 
-  CATEGORIAS_GASTO.forEach((categoria, i) => {
+  CATEGORIAS_GASTO.forEach(function (categoria, i) {
     const fila = filaPrimerCategoria + i;
     panel.getRange(fila, 1).setValue(categoria);
-    USUARIOS.forEach((nombre, u) => {
+    personas.forEach(function (nombre, u) {
       panel.getRange(fila, COL_USUARIO_1 + u).setFormula(
         formulaGastoCategoria('$A$' + filaPrimerMes,
                               letra(COL_USUARIO_1 + u) + '$' + filaCabCategorias,
                               '$A' + fila, sep));
     });
-    panel.getRange(fila, colTotal).setFormula(
-      '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+    if (hayTotal) {
+      panel.getRange(fila, colTotal).setFormula(
+        '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+    }
   });
-  panel.getRange(filaPrimerCategoria, COL_USUARIO_1, CATEGORIAS_GASTO.length, USUARIOS.length + 1)
-       .setNumberFormat('#,##0.00 €');
+  panel.getRange(filaPrimerCategoria, COL_USUARIO_1, CATEGORIAS_GASTO.length,
+                 colUltima - COL_USUARIO_1 + 1).setNumberFormat('#,##0.00 \u20ac');
 
   /* La torta va sobre las categorías y no sobre las personas: saber que te has
-     gastado 400 € entre los dos no dice nada; saber que 250 fueron en
-     restaurantes, sí.
+     gastado 400 € no dice nada; saber que 250 fueron en restaurantes, sí.
 
-     Se le pasan dos rangos sueltos —los nombres de categoría y la columna de
-     totales— porque entre medias están las columnas de cada persona y no
-     interesan aquí. */
+     Se le pasan dos rangos sueltos —los nombres y la columna de importes—
+     porque en el panel global hay columnas de cada persona entre medias. */
   const grafico = panel.newChart()
     .setChartType(Charts.ChartType.PIE)
     .addRange(panel.getRange(filaCabCategorias, 1, CATEGORIAS_GASTO.length + 1, 1))
-    .addRange(panel.getRange(filaCabCategorias, colTotal, CATEGORIAS_GASTO.length + 1, 1))
+    .addRange(panel.getRange(filaCabCategorias, colUltima, CATEGORIAS_GASTO.length + 1, 1))
     .setPosition(FILA_CABECERA, colGrafico, 0, 0)
     .setOption('title', 'En qué se va el dinero este mes')
     .setOption('pieSliceText', 'percentage')
@@ -337,6 +381,162 @@ function letra(columna) {
 }
 
 /* ========================================================================
+   Suscripciones
+   ======================================================================== */
+
+function prepararSuscripciones(libro) {
+  let hoja = libro.getSheetByName(HOJA_SUSCRIPCIONES);
+  if (!hoja) {
+    hoja = libro.insertSheet(HOJA_SUSCRIPCIONES);
+    hoja.appendRow(CABECERAS_SUSCRIPCIONES);
+    hoja.getRange(1, 1, 1, CABECERAS_SUSCRIPCIONES.length).setFontWeight('bold');
+    hoja.setFrozenRows(1);
+  }
+  hoja.getRange('I2:J').setNumberFormat('yyyy-mm-dd');
+  hoja.getRange('D2:D').setNumberFormat('0.00');
+
+  /* Para cancelar una suscripción se pone Activa en FALSO. Una casilla evita
+     tener que acordarse de si se escribe "no", "NO" o "false". */
+  const casilla = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+  hoja.getRange('K2:K').setDataValidation(casilla);
+  return hoja;
+}
+
+/**
+ * Disparador diario que escribe los cobros que toquen.
+ *
+ * Sin él las suscripciones no se cobran solas, que es todo el sentido de esto.
+ * Se borran los que hubiera antes para que ejecutar instalar() varias veces no
+ * acabe con cinco disparadores escribiendo lo mismo.
+ */
+function instalarDisparadorDiario() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'procesarSuscripciones') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('procesarSuscripciones')
+    .timeBased().everyDays(1).atHour(4).create();
+}
+
+function altaSuscripcion(s) {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = prepararSuscripciones(libro);
+
+  const problema = validarSuscripcion(s);
+  if (problema) return { ok: false, error: problema };
+
+  if (uuidYaRegistrado('alta-' + s.uuid)) return { ok: true, duplicado: true };
+
+  const inicio = fechaDesdeISO(s.inicio);
+  /* El fin se calcula aquí y no en el móvil: sumar meses tiene trampas —el 31
+     de enero más un mes no existe— y prefiero una sola implementación. Se resta
+     un día para que "3 meses" sean exactamente 3 cobros mensuales y no 4. */
+  const fin = s.duracionMeses
+    ? new Date(sumarMeses(inicio, Number(s.duracionMeses)).getTime() - 86400000)
+    : '';
+
+  hoja.appendRow([
+    s.uuid, new Date(), s.concepto || '', Number(s.importe), s.cuenta,
+    s.categoria, s.usuario || '', s.frecuencia, inicio, fin, true, ''
+  ]);
+  registrarUuid('alta-' + s.uuid);
+
+  // Se cobra ya lo que corresponda, para que el primer cargo no espere a mañana.
+  const escritos = procesarSuscripciones();
+  return { ok: true, cobrosEscritos: escritos };
+}
+
+function validarSuscripcion(s) {
+  if (!s || typeof s !== 'object') return 'Suscripción ausente';
+  if (!s.uuid) return 'Falta el uuid';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s.inicio))) return 'Fecha de inicio incorrecta';
+  const importe = Number(s.importe);
+  if (!isFinite(importe) || importe <= 0) return 'Importe no válido';
+  if (!MESES_POR_FRECUENCIA[s.frecuencia]) return 'Frecuencia no válida';
+  if (!s.cuenta) return 'Falta la cuenta';
+  if (!s.categoria) return 'Falta la categoría';
+  return null;
+}
+
+/**
+ * Escribe los cobros pendientes de todas las suscripciones activas.
+ *
+ * Cada cobro lleva un UUID derivado de la suscripción y de su fecha, así que
+ * ejecutar esto dos veces el mismo día no duplica nada: el segundo pasa por el
+ * mismo control de duplicados que los movimientos normales.
+ */
+function procesarSuscripciones() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = libro.getSheetByName(HOJA_SUSCRIPCIONES);
+  if (!hoja || hoja.getLastRow() < 2) return 0;
+
+  const bloqueo = LockService.getScriptLock();
+  if (!bloqueo.tryLock(30000)) return 0;
+
+  var escritos = 0;
+  try {
+    const filas = hoja.getRange(2, 1, hoja.getLastRow() - 1,
+                                CABECERAS_SUSCRIPCIONES.length).getValues();
+    const hoy = new Date();
+    hoy.setHours(23, 59, 59, 999);
+
+    for (var i = 0; i < filas.length; i++) {
+      const f = filas[i];
+      if (f[10] !== true) continue;                 // Activa desmarcada
+      const paso = MESES_POR_FRECUENCIA[f[7]];
+      if (!paso || !(f[8] instanceof Date)) continue;
+
+      const inicio = f[8];
+      const fin = f[9] instanceof Date ? f[9] : null;
+      var ultimo = '';
+      var terminada = false;
+
+      /* Cada fecha se calcula desde el inicio, no sumando meses a la anterior.
+         Encadenar sumas desvía la fecha: 31 de enero pasa a 28 de febrero y de
+         ahí a 28 de marzo, y a los dos años cobras el día que no es. */
+      for (var n = 0; n < 600; n++) {
+        const fecha = sumarMeses(inicio, paso * n);
+
+        /* El fin se mira ANTES que hoy: pasado el fin ya no habrá más cobros
+           nunca, y es lo que permite desactivarla. Al revés, una suscripción
+           acabada se recorrería entera todos los días para nada. */
+        if (fin && fecha > fin) { terminada = true; break; }
+        if (fecha > hoy) break;
+
+        const iso = formatearISO(fecha);
+        const uuid = 'sub-' + f[0] + '-' + iso;
+        if (!uuidYaRegistrado(uuid)) {
+          escribirMovimiento({
+            fecha: iso, concepto: f[2], importe: f[3], cuenta: f[4],
+            tipo: 'Gasto', categoria: f[5], usuario: f[6], uuid: uuid
+          });
+          registrarUuid(uuid);
+          escritos++;
+        }
+        ultimo = iso;
+      }
+
+      if (ultimo) hoja.getRange(i + 2, 12).setValue(ultimo);
+      if (terminada) hoja.getRange(i + 2, 11).setValue(false);
+    }
+  } finally {
+    bloqueo.releaseLock();
+  }
+
+  Logger.log('Cobros de suscripción escritos: ' + escritos);
+  return escritos;
+}
+
+/** Suma meses respetando los meses cortos: 31 de enero + 1 mes es 28 de
+ *  febrero, no el 3 de marzo. */
+function sumarMeses(fecha, meses) {
+  const dia = fecha.getDate();
+  const destino = new Date(fecha.getFullYear(), fecha.getMonth() + meses, 1);
+  const ultimoDiaDelMes = new Date(destino.getFullYear(), destino.getMonth() + 1, 0).getDate();
+  destino.setDate(Math.min(dia, ultimoDiaDelMes));
+  return destino;
+}
+
+/* ========================================================================
    Escritura
    ======================================================================== */
 
@@ -367,6 +567,10 @@ function doPost(e) {
        El POST con Content-Type text/plain sí funciona, porque el navegador lo
        trata como petición simple. Así que la lectura viaja como POST. doGet se
        queda solo para comprobar a mano desde el navegador. */
+    if (peticion.accion === 'suscripcion') {
+      return responder(altaSuscripcion(peticion.suscripcion));
+    }
+
     if (peticion.accion === 'resumen') {
       return responder(resumenDelMes(Number(peticion.n) || 10));
     }
