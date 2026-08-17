@@ -67,10 +67,15 @@ const RESUMEN = (() => {
         ? (m.tipo === 'Gasto' ? 'sale de ' : 'entra en ') + m.cuenta
         : m.cuenta;
 
+      /* Solo el nombre de pila: en una línea de detalle no cabe "Gonzalo
+         Aguirre" además de la fecha y la cuenta, y con dos personas el nombre
+         basta para saber de quién es. */
+      const quien = m.usuario ? ' · ' + escapar(String(m.usuario).split(' ')[0]) : '';
+
       fila.innerHTML =
         `<span class="mov-texto">` +
           `<span class="mov-principal">${escapar(principal)}</span>` +
-          `<span class="mov-detalle">${UI.formatearFecha(m.fecha)} · ${escapar(cuenta)}</span>` +
+          `<span class="mov-detalle">${UI.formatearFecha(m.fecha)} · ${escapar(cuenta)}${quien}</span>` +
         `</span>` +
         `<span class="mov-importe ${esTraspaso ? 'traspaso' : (m.tipo === 'Gasto' ? 'gasto' : 'ingreso')}">` +
           `${signo}${dinero(m.importe)}</span>`;

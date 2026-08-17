@@ -667,3 +667,26 @@ body {
 }
 
 .pantalla-acciones-resumen .btn-texto { align-self: center; }
+
+/* Círculo con la inicial de quién gasta, junto a la fecha. */
+.btn-usuario {
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  color: var(--texto-suave);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+}
+
+/* Solo se resalta cuando el movimiento NO es del dueño del teléfono: el caso
+   raro tiene que verse, y el de todos los días no debe meter ruido. */
+.btn-usuario.ajeno {
+  color: var(--acento);
+  border-color: var(--acento);
+}
+
+select.campo-input { appearance: none; }

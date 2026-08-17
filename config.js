@@ -34,6 +34,15 @@ const CONFIG = {
   // IMPORTANTE: estos textos deben coincidir palabra por palabra con las listas
   // de la hoja de configuración del Excel. Si aquí pone "Tarjeta de crédito" y
   // allí "Tarjeta crédito", el SUMIFS del panel devuelve cero y no te enteras.
+  /* Quién puede gastar. El primero es el valor por defecto de un teléfono
+     recién configurado; cada uno elige el suyo en Ajustes y a partir de ahí se
+     estampa solo en cada movimiento.
+     Estos textos también tienen que coincidir con Codigo.gs y con el Excel. */
+  USUARIOS: [
+    "Gonzalo Aguirre",
+    "Camila Wells"
+  ],
+
   // Escritas tal cual me las dictaste. Si un día cambias una, cámbiala también
   // en la hoja de configuración del Excel: los SUMIFS comparan texto exacto.
   CUENTAS: [
