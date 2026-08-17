@@ -15,7 +15,7 @@ sirven tal cual desde GitHub Pages o desde `python3 -m http.server`.
 | 1 | Captura completa en local con `MODO_PRUEBA` | ✅ hecha |
 | 2 | Apps Script, token y envío real | ✅ hecha |
 | 3 | Offline, cola en IndexedDB y reintentos | ✅ hecha |
-| 4 | Pantalla de resumen y pulido | ⬜ pendiente |
+| 4 | Pantalla de resumen y pulido | ✅ hecha |
 
 ---
 
@@ -82,7 +82,8 @@ Esa URL acaba en `/exec`. Es la que necesitas.
 El token sustituye a la autenticación: sin él, cualquiera que diera con tu URL
 podría escribir en tu hoja.
 
-1. Abre la app (ver más abajo) y entra en **Ajustes** con el engranaje.
+1. Abre la app (ver más abajo), toca el icono de barras de la cabecera y,
+   abajo del resumen, **Ajustes**.
 2. Pulsa **Generar un token nuevo** y **copia** lo que sale.
 3. En el editor de Apps Script: **Configuración del proyecto** (el engranaje de
    la izquierda) → abajo del todo, **Propiedades del script** → *Añadir
@@ -194,6 +195,22 @@ en todos los pasos menos el primero.
 
 Al guardar hay 5 segundos para deshacer. Si sales de la app durante esa ventana,
 el movimiento se envía en vez de perderse.
+
+### Resumen del mes
+
+El icono de barras de la cabecera abre el resumen: ingresos, gastos y ahorro del
+mes en curso, y los diez últimos movimientos. Nunca se pone por delante de la
+captura — la app siempre arranca en el paso del importe.
+
+Los traspasos no cuentan en los totales, y en la lista se distingue cuál sale y
+cuál entra: sin eso, las dos filas de una misma transferencia se leen idénticas.
+
+**Sin conexión enseña lo último que recibió, y lo dice**: *"Sin conexión. Datos
+de hace 2 h, puede que desactualizados."* Un resumen viejo sin avisar es peor
+que no enseñar nada, porque se toman decisiones con él.
+
+Si hay movimientos en la cola aparece un botón para reintentar el envío, y desde
+aquí se entra a los Ajustes.
 
 ### Sin cobertura
 
@@ -321,6 +338,7 @@ js/ui.js                DOM, transiciones, toast
 js/api.js               lo que solo necesita la página
 js/cola.js              reintentos, indicador de pendientes
 js/ajustes.js           endpoint, token y su pantalla
+js/resumen.js           totales del mes y últimos movimientos
 js/app.js               máquina de estados de los 5 pasos
 iconos/                 SVG, PNG y el generador
 apps-script/Codigo.gs   backend: doPost, doGet e instalar()

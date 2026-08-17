@@ -331,6 +331,7 @@
     // configuración y pospondría todo sin motivo.
     await AJUSTES.iniciar();
     COLA.iniciar();
+    RESUMEN.iniciar();
 
     if (CONFIG.MODO_PRUEBA) {
       console.info('MODO_PRUEBA activo: nada se envía, todo va a la consola.');

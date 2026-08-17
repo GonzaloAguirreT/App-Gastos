@@ -32,12 +32,15 @@
       <span id="num-pendientes">0</span><span class="flecha" aria-hidden="true">↑</span>
     </button>
 
-    <button type="button" id="btn-ajustes" class="btn-icono" aria-label="Ajustes">
-      <!-- Un engranaje dibujado a mano: seis dientes y un agujero. Cargar una
-           tipografía de iconos por un solo símbolo no compensa. -->
+    <!-- El resumen ocupa el hueco de la cabecera y los ajustes pasan a estar
+         dentro de él: los ajustes se tocan una vez en la vida y el resumen cada
+         pocos días. Quien más se usa, más cerca. -->
+    <button type="button" id="btn-resumen" class="btn-icono" aria-label="Resumen del mes">
+      <!-- Tres barras, las mismas del icono de la app. -->
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <path fill="currentColor" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm0 5.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
-        <path fill="currentColor" d="M19.4 12c0-.5-.05-.98-.14-1.44l1.86-1.4-1.9-3.29-2.2.85a7.5 7.5 0 0 0-2.5-1.45L14.2 3h-3.8l-.32 2.27a7.5 7.5 0 0 0-2.5 1.45l-2.2-.85-1.9 3.29 1.86 1.4a7.6 7.6 0 0 0 0 2.88l-1.86 1.4 1.9 3.29 2.2-.85c.74.63 1.58 1.12 2.5 1.45L10.4 21h3.8l.32-2.27a7.5 7.5 0 0 0 2.5-1.45l2.2.85 1.9-3.29-1.86-1.4c.09-.46.14-.94.14-1.44zm-1.66 1.05.2.95 1.35 1.02-.6 1.03-1.6-.62-.73.63c-.6.51-1.28.9-2.03 1.17l-.9.33-.24 1.64h-1.18l-.24-1.64-.9-.33a6 6 0 0 1-2.03-1.17l-.73-.63-1.6.62-.6-1.03 1.35-1.02.2-.95a6.1 6.1 0 0 1 0-2.1l-.2-.95L4.96 8.98l.6-1.03 1.6.62.73-.63c.6-.51 1.28-.9 2.03-1.17l.9-.33.24-1.64h1.18l.24 1.64.9.33c.75.27 1.43.66 2.03 1.17l.73.63 1.6-.62.6 1.03-1.35 1.02-.2.95c.14.7.14 1.4 0 2.1z"/>
+        <rect x="4"  y="13" width="4" height="7"  rx="1.5" fill="currentColor"/>
+        <rect x="10" y="9"  width="4" height="11" rx="1.5" fill="currentColor"/>
+        <rect x="16" y="4"  width="4" height="16" rx="1.5" fill="currentColor"/>
       </svg>
     </button>
   </header>
@@ -121,6 +124,42 @@
   <!-- Un único botón "Atrás" que la app mueve al paso activo. -->
   <button type="button" class="btn-atras hueco" id="btn-atras">Atrás</button>
 
+  <!-- Resumen del mes. Se alimenta del backend y guarda lo último que recibió,
+       para poder enseñar algo cuando no hay red. -->
+  <section class="pantalla" id="pantalla-resumen" aria-label="Resumen" hidden>
+    <header class="cabecera">
+      <h1 class="titulo" id="titulo-resumen">Resumen</h1>
+      <button type="button" id="btn-cerrar-resumen" class="btn-texto">Cerrar</button>
+    </header>
+
+    <div class="pantalla-cuerpo">
+      <p class="aviso-cache" id="aviso-cache" hidden></p>
+
+      <div class="totales">
+        <div class="total">
+          <span class="total-etiqueta">Ingresos</span>
+          <span class="total-cifra" id="total-ingresos">—</span>
+        </div>
+        <div class="total">
+          <span class="total-etiqueta">Gastos</span>
+          <span class="total-cifra" id="total-gastos">—</span>
+        </div>
+        <div class="total total-ahorro">
+          <span class="total-etiqueta">Ahorro</span>
+          <span class="total-cifra" id="total-ahorro">—</span>
+        </div>
+      </div>
+
+      <h2 class="subtitulo">Últimos movimientos</h2>
+      <ul class="lista-movimientos" id="lista-movimientos"></ul>
+    </div>
+
+    <div class="pantalla-acciones pantalla-acciones-resumen">
+      <button type="button" id="btn-reintentar" class="btn" hidden>Reintentar envío</button>
+      <button type="button" id="btn-abrir-ajustes" class="btn-texto">Ajustes</button>
+    </div>
+  </section>
+
   <!-- Ajustes: tapa la captura entera mientras está abierta. Solo se entra a
        propósito, y en el primer arranque si aún no hay endpoint ni token. -->
   <section class="pantalla" id="pantalla-ajustes" aria-label="Ajustes" hidden>
@@ -176,6 +215,7 @@
   <script src="js/api.js"></script>
   <script src="js/cola.js"></script>
   <script src="js/ajustes.js"></script>
+  <script src="js/resumen.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -74,6 +74,17 @@ const NUCLEO = (() => {
     }, 'config'));
   }
 
+  /* El último resumen recibido se guarda para poder enseñar algo sin red. Va en
+     la misma tienda que los ajustes porque es lo mismo: un dato suelto que
+     sobrevive entre sesiones y no forma parte de la cola. */
+  function guardarResumen(datos) {
+    return conTienda(AJUSTES, 'readwrite', t => t.put({ datos, recibido: Date.now() }, 'resumen'));
+  }
+
+  function leerResumen() {
+    return conTienda(AJUSTES, 'readonly', t => t.get('resumen'));
+  }
+
   /* --------------------------------------------------------------- cola */
 
   /**
@@ -248,7 +259,7 @@ const NUCLEO = (() => {
 
   return {
     MS_DESHACER,
-    leerAjustes, guardarAjustes,
+    leerAjustes, guardarAjustes, guardarResumen, leerResumen,
     encolar, todos, contar, borrar, borrarGrupo,
     enviar, consultar, procesar
   };
