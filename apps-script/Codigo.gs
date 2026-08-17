@@ -21,6 +21,14 @@ const HOJA_UUIDS = '_uuids';
 const CABECERAS = ['Fecha', 'Concepto', 'Importe', 'Cuenta', 'Tipo', 'Categoría'];
 const TIPOS_VALIDOS = ['Ingreso', 'Gasto'];
 
+/* Los traspasos entre cuentas propias no son ni ingreso ni gasto: el dinero no
+   entra ni sale de tu patrimonio, solo cambia de sitio. Se guardan como DOS
+   filas —una de Gasto en la cuenta de origen y una de Ingreso en la de destino,
+   ambas con esta categoría— para que los saldos por cuenta salgan bien, y los
+   totales del mes las descuentan. Si cambias este texto, cámbialo también en
+   config.js y en la hoja de configuración del Excel. */
+const CATEGORIA_TRASPASO = 'Traspaso';
+
 /* ========================================================================
    Instalación
    ======================================================================== */
@@ -84,10 +92,20 @@ function doPost(e) {
       return responder({ ok: false, error: 'Token no válido' });
     }
 
-    const movimiento = peticion.movimiento;
-    const problema = validar(movimiento);
-    if (problema) {
-      return responder({ ok: false, error: problema });
+    /* Se acepta un movimiento suelto o una lista. La lista existe por los
+       traspasos, que son dos filas que tienen que entrar juntas o no entrar:
+       media transferencia escrita descuadra los saldos de las dos cuentas. */
+    const movimientos = peticion.movimientos ||
+                        (peticion.movimiento ? [peticion.movimiento] : []);
+
+    if (!movimientos.length) {
+      return responder({ ok: false, error: 'Petición sin movimientos' });
+    }
+
+    // Se valida todo antes de escribir nada, por lo mismo.
+    for (var i = 0; i < movimientos.length; i++) {
+      const problema = validar(movimientos[i]);
+      if (problema) return responder({ ok: false, error: problema });
     }
 
     /* Sin bloqueo, dos reintentos que lleguen a la vez pueden comprobar el UUID
@@ -98,19 +116,22 @@ function doPost(e) {
       return responder({ ok: false, error: 'El script está ocupado, reinténtalo' });
     }
 
+    var escritos = 0, duplicados = 0;
     try {
-      if (uuidYaRegistrado(movimiento.uuid)) {
-        // No es un error: es un reintento de algo que ya se guardó. La app
-        // necesita que le digamos que todo va bien para sacarlo de la cola.
-        return responder({ ok: true, duplicado: true });
+      for (var j = 0; j < movimientos.length; j++) {
+        const m = movimientos[j];
+        // Un UUID ya visto no es un error: es un reintento de algo guardado. La
+        // app necesita un ok para poder sacarlo de la cola.
+        if (uuidYaRegistrado(m.uuid)) { duplicados++; continue; }
+        escribirMovimiento(m);
+        registrarUuid(m.uuid);
+        escritos++;
       }
-      escribirMovimiento(movimiento);
-      registrarUuid(movimiento.uuid);
     } finally {
       bloqueo.releaseLock();
     }
 
-    return responder({ ok: true });
+    return responder({ ok: true, escritos: escritos, duplicados: duplicados });
 
   } catch (error) {
     return responder({ ok: false, error: String(error) });
@@ -179,6 +200,12 @@ function doGet(e) {
       const fecha = fila[0];
       if (!(fecha instanceof Date)) return;
       if (fecha.getMonth() !== mes || fecha.getFullYear() !== anio) return;
+
+      /* Los traspasos se saltan: mover 200 € de la corriente al ahorro no es un
+         gasto de 200 € ni un ingreso de 200 €. Sus dos filas siguen contando
+         para el saldo de cada cuenta, pero no para lo que has ganado o gastado
+         este mes. Sin esto, un traspaso te infla ingresos y gastos a la vez. */
+      if (fila[5] === CATEGORIA_TRASPASO) return;
 
       const importe = Number(fila[2]) || 0;
       if (fila[4] === 'Ingreso') totales.ingresos += importe;

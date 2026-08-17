@@ -68,23 +68,28 @@
             <span class="signo">+</span>Ingreso
           </button>
         </div>
+        <!-- Traspaso va debajo y más bajo: es el caso raro, y no debe competir
+             por el pulgar con los dos que se usan a diario. -->
+        <button type="button" class="btn btn-opcion btn-traspaso" data-tipo="Traspaso">
+          <span class="signo">⇄</span> Traspaso entre cuentas
+        </button>
       </div>
     </section>
 
-    <!-- Paso 3: categoría. La rejilla se rellena desde config.js según el tipo. -->
+    <!-- Paso 3: categoría, o cuenta de origen si es un traspaso. -->
     <section class="paso" id="paso-categoria" data-paso="3" aria-label="Categoría">
       <div class="paso-cuerpo">
-        <p class="pregunta">Categoría</p>
+        <p class="pregunta" id="pregunta-categoria">Categoría</p>
       </div>
       <div class="paso-acciones">
         <div class="rejilla rejilla-2 rejilla-scroll" id="rejilla-categorias"></div>
       </div>
     </section>
 
-    <!-- Paso 4: cuenta. -->
+    <!-- Paso 4: cuenta, o cuenta de destino si es un traspaso. -->
     <section class="paso" id="paso-cuenta" data-paso="4" aria-label="Cuenta">
       <div class="paso-cuerpo">
-        <p class="pregunta">Cuenta</p>
+        <p class="pregunta" id="pregunta-cuenta">Cuenta</p>
       </div>
       <div class="paso-acciones">
         <div class="rejilla rejilla-2 rejilla-scroll" id="rejilla-cuentas"></div>

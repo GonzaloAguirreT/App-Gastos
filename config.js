@@ -24,6 +24,13 @@ const CONFIG = {
 
   MONEDA: "€",
 
+  /* Categoría con la que se marcan los traspasos entre cuentas propias. Mover
+     dinero de la corriente al ahorro no es ni ingreso ni gasto, así que se
+     guarda como dos filas con esta categoría y los totales del mes la
+     descuentan. Si cambias el texto, cámbialo también en Codigo.gs y en la
+     hoja de configuración del Excel. */
+  CATEGORIA_TRASPASO: "Traspaso",
+
   // IMPORTANTE: estos textos deben coincidir palabra por palabra con las listas
   // de la hoja de configuración del Excel. Si aquí pone "Tarjeta de crédito" y
   // allí "Tarjeta crédito", el SUMIFS del panel devuelve cero y no te enteras.

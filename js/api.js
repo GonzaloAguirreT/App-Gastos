@@ -24,13 +24,19 @@ const API = (() => {
   }
 
   /**
-   * Envía un movimiento. Lanza excepción si falla, para que quien llama decida
-   * si encolarlo (fase 3) o avisar al usuario.
+   * Envía una o varias filas. Lanza excepción si falla, para que quien llama
+   * decida si encolarlas (fase 3) o avisar al usuario.
+   *
+   * Va una lista y no un movimiento suelto porque un traspaso son dos filas que
+   * tienen que entrar juntas: media transferencia escrita descuadra el saldo de
+   * las dos cuentas. El backend las mete bajo un mismo bloqueo.
    */
-  async function enviar(movimiento) {
+  async function enviar(filas) {
+    const movimientos = Array.isArray(filas) ? filas : [filas];
+
     if (CONFIG.MODO_PRUEBA) {
-      console.log('[MODO_PRUEBA] no se envía nada. Movimiento:', movimiento);
-      console.table([movimiento]);
+      console.log('[MODO_PRUEBA] no se envía nada. Filas:', movimientos);
+      console.table(movimientos);
       return { ok: true, prueba: true };
     }
 
@@ -57,7 +63,7 @@ const API = (() => {
     const respuesta = await fetch(ajustes.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: ajustes.token, movimiento }),
+      body: JSON.stringify({ token: ajustes.token, movimientos }),
       // Apps Script contesta con un redirect a script.googleusercontent.com.
       // Hay que seguirlo; es el comportamiento por defecto, se deja explícito
       // para que nadie lo cambie por error.

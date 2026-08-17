@@ -262,6 +262,17 @@ body {
   color: var(--texto-suave);
 }
 
+/* Más bajo que Gasto e Ingreso a propósito: se usa una vez al mes, y la altura
+   es lo que dice cuál es el camino principal. */
+.btn-traspaso {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 17px;
+  color: var(--texto-suave);
+}
+
+.btn-traspaso .signo { font-size: 19px; }
+
 /* Última cuenta usada: se marca, pero no se salta el paso. Saltarlo llevaba a
    registrar movimientos en la cuenta equivocada sin darse cuenta. */
 .btn-opcion.sugerido {

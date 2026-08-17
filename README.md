@@ -193,6 +193,33 @@ en todos los pasos menos el primero.
 Al guardar hay 5 segundos para deshacer. Si sales de la app durante esa ventana,
 el movimiento se envía en vez de perderse.
 
+### Traspasos entre cuentas
+
+Debajo de Gasto e Ingreso hay un tercer botón, **Traspaso entre cuentas**, para
+cuando mueves dinero de un sitio tuyo a otro sitio tuyo.
+
+Mover 200 € de la corriente al ahorro no es un gasto ni un ingreso: ese dinero
+no ha entrado ni salido de tu patrimonio, solo ha cambiado de sitio. Anotarlo
+como gasto te haría el mes 200 € más caro de lo que fue.
+
+El flujo son los mismos cinco pasos, pero los dos del medio preguntan otra cosa:
+
+| | Movimiento normal | Traspaso |
+|---|---|---|
+| Paso 3 | Categoría | **Desde qué cuenta** |
+| Paso 4 | Cuenta | **A qué cuenta** (sin la de origen) |
+
+Se guarda como **dos filas**: un `Gasto` en la cuenta de origen y un `Ingreso`
+en la de destino, ambas con la categoría `Traspaso`. Así el saldo de cada cuenta
+sale bien, y los totales del mes que devuelve `doGet` descuentan esa categoría.
+
+Las dos filas viajan en la misma petición y se escriben bajo el mismo bloqueo:
+media transferencia escrita descuadraría las dos cuentas a la vez.
+
+> Si montas el panel en el Excel, acuérdate de excluir la categoría `Traspaso`
+> de los SUMIFS de ingresos y gastos. Para los saldos por cuenta, en cambio,
+> tiene que contar.
+
 ---
 
 ## Detalles que conviene no romper

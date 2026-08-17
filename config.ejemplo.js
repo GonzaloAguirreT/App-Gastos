@@ -23,6 +23,11 @@ const CONFIG = {
   // Símbolo que se muestra junto al importe. No afecta a lo que se guarda.
   MONEDA: "€",
 
+  // Categoría con la que se marcan los traspasos entre cuentas propias, para
+  // que los totales del mes puedan descontarlos. Tiene que decir lo mismo aquí,
+  // en Codigo.gs y en la hoja de configuración del Excel.
+  CATEGORIA_TRASPASO: "Traspaso",
+
   // Listas cerradas. Deben coincidir literalmente con las del Excel.
   CUENTAS: ["Efectivo", "Cuenta corriente"],
   CATEGORIAS_GASTO: ["Alimentación", "Transporte"],
