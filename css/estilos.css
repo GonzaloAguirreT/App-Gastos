@@ -1,0 +1,386 @@
+/* =========================================================================
+   Estilos de la app. Oscuro por defecto, alto contraste, un solo acento.
+   La regla que manda sobre todas las demás: todo lo que se toca vive en la
+   mitad inferior de la pantalla y mide 56px o más. La densidad de información
+   se sacrifica sin pena.
+   ========================================================================= */
+
+:root {
+  --fondo: #0E1013;
+  --superficie: #171A1F;
+  --superficie-alta: #21262E;
+  --borde: #2E353F;
+  --texto: #F4F6F8;
+  --texto-suave: #98A2B0;
+  --acento: #4ADE80;
+  --acento-oscuro: #0C2A18;
+
+  --radio: 14px;
+  --toque-min: 56px;
+  /* 150ms: lo justo para que se note el cambio de paso sin que estorbe al
+     encadenar toques rápido. Cualquier cosa por encima se siente lenta. */
+  --transicion: 150ms;
+}
+
+/* Respeta a quien tenga reducido el movimiento en el sistema. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --transicion: 0ms; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* 100dvh y no 100vh: en Chrome Android la barra de direcciones aparece y
+     desaparece al hacer scroll, y con vh el botón de guardar se salía. */
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Cabecera ---------- */
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  flex: 0 0 auto;
+}
+
+.btn-fecha {
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  color: var(--texto-suave);
+  font: inherit;
+  font-size: 15px;
+  padding: 8px 14px;
+  min-height: 48px;
+}
+
+.btn-fecha.fecha-cambiada {
+  color: var(--acento);
+  border-color: var(--acento);
+}
+
+/* El input de fecha existe solo para invocar el selector nativo del sistema.
+   No se puede usar display:none porque entonces showPicker() falla. */
+.input-fecha-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+}
+
+.migas {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.migas li {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--borde);
+  transition: background var(--transicion) ease;
+}
+
+.migas li.hecho { background: var(--texto-suave); }
+.migas li.actual { background: var(--acento); }
+
+/* ---------- Pasos ---------- */
+
+.pasos {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.paso {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 12px;
+  opacity: 0;
+  transform: translateX(12px);
+  pointer-events: none;
+  /* visibility, y no solo opacity: un paso a opacidad 0 sigue siendo alcanzable
+     con el tabulador y sigue existiendo para un lector de pantalla. La
+     transición de visibility se retrasa el tiempo del fundido para que la
+     salida se siga viendo. */
+  visibility: hidden;
+  transition: opacity var(--transicion) ease,
+              transform var(--transicion) ease,
+              visibility 0s linear var(--transicion);
+}
+
+.paso.activo {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity var(--transicion) ease,
+              transform var(--transicion) ease,
+              visibility 0s;
+}
+
+/* Al retroceder, la entrada viene del lado contrario. */
+.paso.atras { transform: translateX(-12px); }
+
+/* Mitad superior: contexto. Mitad inferior: cosas que se tocan.
+   El contenido se pega a la parte de abajo para que la pregunta quede junto a
+   las opciones que responde, en vez de flotando en mitad del hueco. */
+.paso-cuerpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 18px;
+  gap: 14px;
+}
+
+/* El importe es la excepción: es el protagonista del paso y va centrado. */
+#paso-importe .paso-cuerpo { justify-content: center; }
+
+.paso-acciones {
+  flex: 0 0 auto;
+  max-height: 62%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.pregunta {
+  margin: 0;
+  font-size: 20px;
+  color: var(--texto-suave);
+}
+
+/* ---------- Paso 1: importe ---------- */
+
+.campo-importe {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.moneda {
+  font-size: 32px;
+  color: var(--texto-suave);
+}
+
+.input-importe {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--texto);
+  font-family: inherit;
+  font-size: 64px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  width: 100%;
+  max-width: 6ch;
+  padding: 0;
+  /* Alineado a la derecha, con el símbolo de moneda detrás: así el número crece
+     hacia la izquierda como en una calculadora y el € no se mueve de sitio. */
+  text-align: right;
+}
+
+.input-importe::placeholder { color: #39414C; }
+
+/* ---------- Botones ---------- */
+
+.btn {
+  font: inherit;
+  font-size: 17px;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  min-height: var(--toque-min);
+  padding: 12px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--transicion) ease, border-color var(--transicion) ease;
+}
+
+.btn:active { background: var(--superficie-alta); }
+
+.btn-primario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #06210F;
+  font-weight: 650;
+  font-size: 19px;
+  width: 100%;
+}
+
+.btn-primario:disabled {
+  background: var(--superficie);
+  border-color: var(--borde);
+  color: #4C5563;
+}
+
+.btn-guardar { min-height: 64px; }
+
+.btn-alto {
+  min-height: 96px;
+  font-size: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.signo {
+  font-size: 28px;
+  line-height: 1;
+  color: var(--texto-suave);
+}
+
+/* Última cuenta usada: se marca, pero no se salta el paso. Saltarlo llevaba a
+   registrar movimientos en la cuenta equivocada sin darse cuenta. */
+.btn-opcion.sugerido {
+  border-color: var(--acento);
+  color: var(--acento);
+}
+
+.rejilla {
+  display: grid;
+  gap: 10px;
+}
+
+.rejilla-2 { grid-template-columns: 1fr 1fr; }
+
+.rejilla-scroll {
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.rejilla-scroll::-webkit-scrollbar { display: none; }
+
+/* ---------- Paso 5: concepto ---------- */
+
+.resumen-movimiento {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.resumen-movimiento .detalle {
+  display: block;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--texto-suave);
+  margin-top: 6px;
+}
+
+.input-concepto {
+  width: 100%;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  color: var(--texto);
+  font: inherit;
+  font-size: 18px;
+  min-height: var(--toque-min);
+  padding: 12px 14px;
+  outline: none;
+}
+
+.input-concepto:focus { border-color: var(--acento); }
+.input-concepto::placeholder { color: #5A6472; }
+
+/* ---------- Atrás ---------- */
+
+/* "Atrás" vive dentro del bloque de acciones, siempre en el mismo sitio.
+   Estuvo fijo en la esquina inferior izquierda y se solapaba con los botones de
+   Gasto y de Guardar, que ocupan justo esa zona. */
+.btn-atras {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--texto-suave);
+  font: inherit;
+  font-size: 16px;
+  padding: 12px 10px 12px 2px;
+  min-height: 48px;
+  margin-bottom: 2px;
+}
+
+/* En el primer paso no hay a dónde volver, pero se reserva su hueco para que
+   el botón principal no baile de sitio entre pasos. */
+.btn-atras.hueco {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ---------- Toast ---------- */
+
+.toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--superficie-alta);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 12px 12px 12px 16px;
+  font-size: 16px;
+  z-index: 10;
+  animation: entra-toast var(--transicion) ease;
+}
+
+.toast[hidden] { display: none; }
+
+.toast-accion {
+  background: transparent;
+  border: none;
+  color: var(--acento);
+  font: inherit;
+  font-weight: 650;
+  font-size: 16px;
+  padding: 10px 12px;
+  min-height: 48px;
+}
+
+@keyframes entra-toast {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Pantallas pequeñas: baja el tamaño del importe antes de que se desborde. */
+@media (max-height: 640px) {
+  .input-importe { font-size: 52px; }
+  .btn-alto { min-height: 84px; }
+}

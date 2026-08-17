@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover + los safe-area-inset del CSS: sin esto, en móviles con
+       gesto de navegación el botón de guardar queda debajo de la barra del sistema. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0E1013">
+  <meta name="color-scheme" content="dark">
+  <title>Gastos</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="iconos/icono-192.png">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+  <header class="cabecera">
+    <!-- La fecha no es un paso del flujo: se asume hoy y se cambia tocándola. -->
+    <button type="button" id="btn-fecha" class="btn-fecha" aria-label="Cambiar fecha">
+      <span id="txt-fecha">hoy</span>
+    </button>
+    <!-- Input real de fecha, invisible: solo existe para abrir el selector nativo. -->
+    <input type="date" id="input-fecha" class="input-fecha-oculto" tabindex="-1" aria-hidden="true">
+
+    <ol class="migas" id="migas" aria-label="Progreso"></ol>
+  </header>
+
+  <main class="pasos" id="pasos">
+
+    <!-- Paso 1: importe. Va primero porque es lo único que siempre hay que teclear. -->
+    <section class="paso" id="paso-importe" data-paso="1" aria-label="Importe">
+      <div class="paso-cuerpo">
+        <div class="campo-importe">
+          <!-- type="text" en vez de type="number": number no deja controlar la coma
+               decimal en Android y además muestra flechitas inútiles. -->
+          <input type="text" id="input-importe" class="input-importe"
+                 inputmode="decimal" enterkeyhint="next" autocomplete="off"
+                 placeholder="0,00" aria-label="Importe">
+          <span class="moneda" id="moneda">€</span>
+        </div>
+      </div>
+      <div class="paso-acciones">
+        <button type="button" class="btn btn-primario" id="btn-importe-siguiente" disabled>Siguiente</button>
+      </div>
+    </section>
+
+    <!-- Paso 2: tipo. Un toque y avanza. -->
+    <section class="paso" id="paso-tipo" data-paso="2" aria-label="Tipo">
+      <div class="paso-cuerpo">
+        <p class="pregunta">¿Gasto o ingreso?</p>
+      </div>
+      <div class="paso-acciones">
+        <div class="rejilla rejilla-2">
+          <button type="button" class="btn btn-opcion btn-alto" data-tipo="Gasto">
+            <span class="signo">−</span>Gasto
+          </button>
+          <button type="button" class="btn btn-opcion btn-alto" data-tipo="Ingreso">
+            <span class="signo">+</span>Ingreso
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Paso 3: categoría. La rejilla se rellena desde config.js según el tipo. -->
+    <section class="paso" id="paso-categoria" data-paso="3" aria-label="Categoría">
+      <div class="paso-cuerpo">
+        <p class="pregunta">Categoría</p>
+      </div>
+      <div class="paso-acciones">
+        <div class="rejilla rejilla-2 rejilla-scroll" id="rejilla-categorias"></div>
+      </div>
+    </section>
+
+    <!-- Paso 4: cuenta. -->
+    <section class="paso" id="paso-cuenta" data-paso="4" aria-label="Cuenta">
+      <div class="paso-cuerpo">
+        <p class="pregunta">Cuenta</p>
+      </div>
+      <div class="paso-acciones">
+        <div class="rejilla rejilla-2 rejilla-scroll" id="rejilla-cuentas"></div>
+      </div>
+    </section>
+
+    <!-- Paso 5: concepto, opcional. Enter también guarda. -->
+    <section class="paso" id="paso-concepto" data-paso="5" aria-label="Concepto">
+      <div class="paso-cuerpo">
+        <p class="resumen-movimiento" id="resumen-movimiento"></p>
+        <input type="text" id="input-concepto" class="input-concepto"
+               enterkeyhint="done" autocomplete="off" placeholder="Concepto (opcional)"
+               aria-label="Concepto">
+      </div>
+      <div class="paso-acciones">
+        <button type="button" class="btn btn-primario btn-guardar" id="btn-guardar">Guardar</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Un único botón "Atrás" que la app mueve al paso activo. -->
+  <button type="button" class="btn-atras hueco" id="btn-atras">Atrás</button>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span class="toast-texto" id="toast-texto"></span>
+    <button type="button" class="toast-accion" id="toast-deshacer" hidden>Deshacer</button>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
