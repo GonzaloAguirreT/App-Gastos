@@ -55,10 +55,12 @@ const UI = (() => {
     el.inputFecha.value = iso;
   }
 
-  /** En la cabecera solo cabe la inicial, y con dos personas basta para saber
-   *  quién es. El nombre entero va en el aria-label y en el resumen. */
+  /** Con nombres cortos cabe el nombre entero, y un nombre se lee sin pensar
+   *  mientras que una inicial hay que descifrarla. Si algún día son largos, se
+   *  recorta a la inicial antes que romper la cabecera. */
   function pintarUsuario(nombre, esElDefecto) {
-    el.txtUsuario.textContent = (nombre || '?').trim().charAt(0).toUpperCase();
+    const texto = (nombre || '?').trim();
+    el.txtUsuario.textContent = texto.length <= 8 ? texto : texto.charAt(0).toUpperCase();
     el.btnUsuario.setAttribute('aria-label', 'Gasta ' + (nombre || 'nadie') + '. Tocar para cambiar');
     // Se resalta solo cuando NO es el dueño del teléfono: así el caso raro
     // —anotar algo del otro— se ve, y el habitual no mete ruido.

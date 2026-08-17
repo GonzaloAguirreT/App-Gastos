@@ -669,17 +669,20 @@ body {
 .pantalla-acciones-resumen .btn-texto { align-self: center; }
 
 /* Círculo con la inicial de quién gasta, junto a la fecha. */
+/* Píldora, no círculo: con "Gonzalo" dentro, un círculo obligaría a usar la
+   inicial y una inicial hay que descifrarla. */
 .btn-usuario {
   background: transparent;
   border: 1px solid var(--borde);
   border-radius: 999px;
   color: var(--texto-suave);
   font: inherit;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  width: 48px;
-  height: 48px;
+  padding: 8px 12px;
+  min-height: 48px;
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Solo se resalta cuando el movimiento NO es del dueño del teléfono: el caso
