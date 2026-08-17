@@ -375,16 +375,27 @@ body {
 /* "Atrás" vive dentro del bloque de acciones, siempre en el mismo sitio.
    Estuvo fijo en la esquina inferior izquierda y se solapaba con los botones de
    Gasto y de Guardar, que ocupan justo esa zona. */
+/* Con fondo, borde y flecha. Sin ellos era texto gris suelto: estaba ahí, en
+   su sitio y funcionando, pero no se leía como algo pulsable y no se usaba. */
 .btn-atras {
   align-self: flex-start;
-  background: transparent;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
   color: var(--texto-suave);
   font: inherit;
   font-size: 16px;
-  padding: 12px 10px 12px 2px;
+  padding: 0 18px 0 14px;
   min-height: 48px;
-  margin-bottom: 2px;
+  margin-bottom: 8px;
+}
+
+.btn-atras .flecha {
+  font-size: 20px;
+  line-height: 1;
 }
 
 /* En el primer paso no hay a dónde volver, pero se reserva su hueco para que

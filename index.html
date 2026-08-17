@@ -160,7 +160,11 @@
   </main>
 
   <!-- Un único botón "Atrás" que la app mueve al paso activo. -->
-  <button type="button" class="btn-atras hueco" id="btn-atras">Atrás</button>
+  <!-- Se muda al paso activo en vez de repetirlo en cada uno. Lleva flecha y
+       borde porque sin ellos se leía como una etiqueta y nadie lo tocaba. -->
+  <button type="button" class="btn-atras hueco" id="btn-atras" aria-label="Volver al paso anterior">
+    <span class="flecha" aria-hidden="true">←</span> Atrás
+  </button>
 
   <!-- Resumen del mes. Se alimenta del backend y guarda lo último que recibió,
        para poder enseñar algo cuando no hay red. -->

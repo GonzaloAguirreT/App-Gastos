@@ -13,7 +13,7 @@
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v14';
+const CACHE = 'gastos-v15';
 
 /* El mismo código de IndexedDB y de envío que usa la página. Se importa en vez
    de reescribirlo aquí: dos copias de la lógica de la cola acabarían
@@ -39,10 +39,24 @@ const ESENCIALES = [
   './iconos/icono-512.png'
 ];
 
+/* cache: 'reload' en cada descarga, y no es un detalle.
+
+   cache.addAll() pide los archivos como cualquier fetch, así que el navegador
+   puede contestarlos desde SU caché HTTP sin salir a la red. GitHub Pages sirve
+   el HTML con max-age=600, o sea diez minutos: si despliegas dos versiones
+   seguidas en menos de ese rato —cosa que pasó—, el service worker nuevo se
+   guarda el index.html VIEJO dentro de su caché nueva.
+
+   El resultado es justo la mezcla de versiones que este service worker existe
+   para impedir: Ajustes decía v14 mientras la pantalla era la v13, el app.js
+   buscaba un elemento que ese HTML no tenía y el paso moría en silencio.
+
+   'reload' obliga a ir a la red y a refrescar de paso la caché HTTP. */
 self.addEventListener('install', evento => {
   evento.waitUntil(
     caches.open(CACHE)
-      .then(cache => cache.addAll(ESENCIALES))
+      .then(cache => cache.addAll(
+        ESENCIALES.map(url => new Request(url, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });
