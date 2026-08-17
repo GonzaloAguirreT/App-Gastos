@@ -4,14 +4,14 @@
  * Estos dos valores no están en config.js porque config.js va versionado y
  * GitHub Pages lo sirve en abierto. Viven solo en este teléfono.
  *
- * Se guardan en localStorage y no en IndexedDB, al revés que la cola de
- * movimientos de la fase 3. Son dos cadenas cortas que siempre puedes volver a
- * escribir si se pierden, y localStorage es síncrono: la app sabe al arrancar
- * si está configurada, sin esperar a una promesa antes del primer envío.
+ * Se guardan en IndexedDB, no en localStorage. En la fase 2 estaban en
+ * localStorage por ser síncrono, pero un service worker no puede leer
+ * localStorage: sin esto no podría vaciar la cola con la app cerrada. La
+ * lectura pasa a ser asíncrona, que a cambio no molesta a nadie.
  */
 const AJUSTES = (() => {
 
-  const CLAVE = 'gastos.ajustes';
+  const CLAVE_VIEJA = 'gastos.ajustes';
 
   const el = {
     pantalla: document.getElementById('pantalla-ajustes'),
@@ -26,29 +26,28 @@ const AJUSTES = (() => {
     version: document.getElementById('version-app')
   };
 
-  function leer() {
-    let guardados = {};
-    try {
-      guardados = JSON.parse(localStorage.getItem(CLAVE)) || {};
-    } catch (_) {
-      // localStorage corrupto o bloqueado: se sigue con lo que haya en config.js
-    }
-    return {
-      endpoint: guardados.endpoint || CONFIG.ENDPOINT || '',
-      token: guardados.token || CONFIG.TOKEN || ''
-    };
-  }
+  const leer = NUCLEO.leerAjustes;
+  const escribir = NUCLEO.guardarAjustes;
 
-  function escribir(ajustes) {
-    localStorage.setItem(CLAVE, JSON.stringify({
-      endpoint: (ajustes.endpoint || '').trim(),
-      token: (ajustes.token || '').trim()
-    }));
-  }
-
-  function configurado() {
-    const a = leer();
+  async function configurado() {
+    const a = await leer();
     return Boolean(a.endpoint && a.token);
+  }
+
+  /** Los ajustes vivían en localStorage hasta la fase 3. Se traen a IndexedDB
+   *  la primera vez para que nadie tenga que volver a teclear su token. */
+  async function migrarDesdeLocalStorage() {
+    let viejos;
+    try {
+      viejos = JSON.parse(localStorage.getItem(CLAVE_VIEJA));
+    } catch (_) {
+      return;
+    }
+    if (!viejos || !viejos.endpoint) return;
+
+    const actuales = await leer();
+    if (!actuales.endpoint) await escribir(viejos);
+    localStorage.removeItem(CLAVE_VIEJA);
   }
 
   /** Genera el token aquí y no en el script para que no tengas que inventarte
@@ -62,13 +61,16 @@ const AJUSTES = (() => {
 
   /* ------------------------------------------------------------- pantalla */
 
-  function abrir() {
-    const a = leer();
-    el.endpoint.value = a.endpoint;
-    el.token.value = a.token;
+  async function abrir() {
+    // La pantalla se muestra ya y los campos se rellenan al llegar de disco:
+    // esperar a IndexedDB antes de pintar dejaría un parpadeo en blanco.
     estado('');
     mostrarVersion();
     el.pantalla.hidden = false;
+
+    const a = await leer();
+    el.endpoint.value = a.endpoint;
+    el.token.value = a.token;
   }
 
   /** Le pregunta al service worker qué versión está sirviendo. Si no contesta
@@ -141,19 +143,22 @@ const AJUSTES = (() => {
     }
   }
 
-  function guardar() {
+  async function guardar() {
     const v = valores();
     const bloqueo = problema(v);
     if (bloqueo) return estado(bloqueo, 'error');
 
-    escribir(v);
+    await escribir(v);
     cerrar();
 
     const sospecha = aviso(v);
     UI.toast(sospecha || 'Ajustes guardados', { ms: sospecha ? 6000 : 2500 });
+
+    // Si había movimientos esperando por falta de configuración, ya pueden salir.
+    COLA.procesar({ ignorarDeshacer: true, ignorarBackoff: true });
   }
 
-  function iniciar() {
+  async function iniciar() {
     el.abrir.addEventListener('click', abrir);
     el.cerrar.addEventListener('click', cerrar);
     el.generar.addEventListener('click', () => {
@@ -162,6 +167,8 @@ const AJUSTES = (() => {
     });
     el.probar.addEventListener('click', probar);
     el.guardar.addEventListener('click', guardar);
+
+    await migrarDesdeLocalStorage();
   }
 
   return { leer, configurado, abrir, iniciar };

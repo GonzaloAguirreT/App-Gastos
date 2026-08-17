@@ -521,3 +521,27 @@ body {
 }
 
 .version-app span { font-variant-numeric: tabular-nums; }
+
+/* ---------- Indicador de movimientos pendientes ---------- */
+
+/* Solo aparece cuando hay algo sin enviar. En ámbar y no en el verde de acento
+   a propósito: el acento significa "hecho", y esto significa justo lo
+   contrario. Es el único color fuera de la paleta, y se lo ha ganado. */
+.chip-pendientes {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: #3A2E12;
+  border: 1px solid #7A5E1E;
+  border-radius: 999px;
+  color: #F0C05A;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 12px;
+  min-height: 48px;
+}
+
+.chip-pendientes[hidden] { display: none; }
+
+.chip-pendientes .flecha { font-size: 13px; opacity: 0.8; }

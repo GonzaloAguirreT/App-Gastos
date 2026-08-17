@@ -25,6 +25,13 @@
 
     <ol class="migas" id="migas" aria-label="Progreso"></ol>
 
+    <!-- Movimientos anotados que aún no han llegado a la hoja. Oculto mientras
+         no haya ninguno: en el caso normal no debe haber nada que mirar. -->
+    <button type="button" id="btn-pendientes" class="chip-pendientes" hidden
+            aria-label="Movimientos pendientes de enviar. Tocar para reintentar">
+      <span id="num-pendientes">0</span><span class="flecha" aria-hidden="true">↑</span>
+    </button>
+
     <button type="button" id="btn-ajustes" class="btn-icono" aria-label="Ajustes">
       <!-- Un engranaje dibujado a mano: seis dientes y un agujero. Cargar una
            tipografía de iconos por un solo símbolo no compensa. -->
@@ -161,10 +168,13 @@
     <button type="button" class="toast-accion" id="toast-deshacer" hidden>Deshacer</button>
   </div>
 
-  <!-- El orden importa: ajustes.js usa API y UI, y app.js los usa a todos. -->
+  <!-- El orden importa. nucleo.js va primero porque lo usan todos los demás, y
+       es el mismo archivo que carga el service worker con importScripts. -->
   <script src="config.js"></script>
+  <script src="js/nucleo.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/cola.js"></script>
   <script src="js/ajustes.js"></script>
   <script src="js/app.js"></script>
 </body>

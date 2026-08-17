@@ -23,7 +23,9 @@ const UI = (() => {
     btnAtras: document.getElementById('btn-atras'),
     toast: document.getElementById('toast'),
     toastTexto: document.getElementById('toast-texto'),
-    toastDeshacer: document.getElementById('toast-deshacer')
+    toastDeshacer: document.getElementById('toast-deshacer'),
+    btnPendientes: document.getElementById('btn-pendientes'),
+    numPendientes: document.getElementById('num-pendientes')
   };
 
   const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
@@ -116,6 +118,17 @@ const UI = (() => {
       `<span class="detalle">${movimiento.categoria} · ${movimiento.cuenta}</span>`;
   }
 
+  /** El contador de pendientes solo existe cuando hay algo pendiente. Un "0"
+   *  permanente en la cabecera sería ruido diario para avisar de una situación
+   *  que casi nunca se da. */
+  function pintarPendientes(cuantos) {
+    el.btnPendientes.hidden = cuantos === 0;
+    el.numPendientes.textContent = cuantos;
+    el.btnPendientes.title = cuantos === 1
+      ? '1 movimiento sin enviar. Tocar para reintentar.'
+      : `${cuantos} movimientos sin enviar. Tocar para reintentar.`;
+  }
+
   let temporizadorToast = null;
 
   /**
@@ -150,6 +163,7 @@ const UI = (() => {
 
   return {
     el, hoyISO, formatearFecha, formatearImporte, pintarFecha, pintarMigas,
-    mostrarPaso, pintarOpciones, pintarResumen, toast, ocultarToast, vibrar
+    mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes,
+    toast, ocultarToast, vibrar
   };
 })();

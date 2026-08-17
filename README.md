@@ -14,12 +14,8 @@ sirven tal cual desde GitHub Pages o desde `python3 -m http.server`.
 |---|---|---|
 | 1 | Captura completa en local con `MODO_PRUEBA` | ✅ hecha |
 | 2 | Apps Script, token y envío real | ✅ hecha |
-| 3 | Offline, cola en IndexedDB y reintentos | ⬜ pendiente |
+| 3 | Offline, cola en IndexedDB y reintentos | ✅ hecha |
 | 4 | Pantalla de resumen y pulido | ⬜ pendiente |
-
-**Aviso de la fase 2:** todavía no hay cola. Si guardas un movimiento sin
-cobertura, **se pierde** y la app te avisa con un mensaje largo diciéndolo. Eso
-lo arregla la fase 3.
 
 ---
 
@@ -199,6 +195,36 @@ en todos los pasos menos el primero.
 Al guardar hay 5 segundos para deshacer. Si sales de la app durante esa ventana,
 el movimiento se envía en vez de perderse.
 
+### Sin cobertura
+
+**Un movimiento anotado no se pierde nunca.** Al pulsar Guardar se escribe en
+IndexedDB *antes* de intentar nada más: aunque se apague el móvil en el instante
+siguiente, la fila sigue ahí al volver a abrir la app.
+
+Si no hay red, el movimiento se queda en la cola y aparece un **contador ámbar
+en la cabecera** con cuántos quedan por enviar. Tocarlo fuerza un intento.
+
+La cola se vacía sola en cuanto hay conexión, por cuatro caminos:
+
+| Cuándo | Qué pasa |
+|---|---|
+| Al arrancar la app | Se intenta lo que quedara de la sesión anterior |
+| Al volver la red (`online`) | Se intenta 2 segundos después |
+| Cada minuto, con la app abierta | Se intenta lo que ya haya cumplido su espera |
+| Al recuperar la red **con la app cerrada** | Background Sync despierta al service worker |
+
+Los dos segundos de espera tras `online` no son un capricho: ese evento salta en
+cuanto hay interfaz de red, que saliendo del metro es antes de que haya conexión
+de verdad.
+
+Tras un fallo, cada movimiento espera cada vez más antes del siguiente intento
+—5, 10, 20 segundos… hasta 5 minutos— para no gastar batería reintentando sin
+cobertura. Esa espera **se ignora** cuando vuelve la red o cuando fuerzas tú el
+envío: existe para no machacar, no para retrasar.
+
+> El último de esos cuatro caminos, Background Sync, solo lo tiene Chromium. En
+> Firefox la cola se vacía igual, pero hay que abrir la app.
+
 ### Traspasos entre cuentas
 
 Debajo de Gasto e Ingreso hay un tercer botón, **Traspaso entre cuentas**, para
@@ -290,8 +316,10 @@ config.ejemplo.js       documentación del formato
 sw.js                   service worker
 manifest.json           instalación en Android
 css/estilos.css
+js/nucleo.js            IndexedDB y envío. Lo comparten la página y el sw
 js/ui.js                DOM, transiciones, toast
-js/api.js               envío y consulta al Apps Script
+js/api.js               lo que solo necesita la página
+js/cola.js              reintentos, indicador de pendientes
 js/ajustes.js           endpoint, token y su pantalla
 js/app.js               máquina de estados de los 5 pasos
 iconos/                 SVG, PNG y el generador

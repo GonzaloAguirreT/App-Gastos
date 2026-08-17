@@ -1,26 +1,35 @@
 /**
  * Service worker.
  *
- * En la fase 1 hace solo dos cosas: cachear el esqueleto de la app para que
- * arranque sin red, y existir. Lo segundo no es una broma: Chrome en Android no
- * ofrece "Añadir a la pantalla de inicio" como app instalable si no hay un
- * service worker con un manejador de fetch.
+ * Hace tres cosas: cachear el esqueleto para que la app arranque sin red,
+ * existir —Chrome no ofrece instalar una PWA sin un service worker con
+ * manejador de fetch—, y vaciar la cola de movimientos con la app cerrada.
  *
- * La cola de envíos y la Background Sync API llegan en la fase 3.
+ * Lo último es la Background Sync API: sales del supermercado, el móvil pilla
+ * cobertura, y la fila aparece en la hoja sin que abras nada. Solo la tiene
+ * Chromium; donde no exista, la cola se vacía igual pero con la app abierta.
  */
 
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v5';
+const CACHE = 'gastos-v6';
+
+/* El mismo código de IndexedDB y de envío que usa la página. Se importa en vez
+   de reescribirlo aquí: dos copias de la lógica de la cola acabarían
+   divergiendo, y el día que lo hicieran perderíamos movimientos sin enterarnos.
+   config.js va primero porque nucleo.js lee CONFIG. */
+importScripts('config.js', 'js/nucleo.js');
 
 const ESENCIALES = [
   './',
   './index.html',
   './config.js',
   './css/estilos.css',
+  './js/nucleo.js',
   './js/ui.js',
   './js/api.js',
+  './js/cola.js',
   './js/ajustes.js',
   './js/app.js',
   './manifest.json',
@@ -54,6 +63,24 @@ self.addEventListener('activate', evento => {
 self.addEventListener('message', evento => {
   if (evento.data === 'version' && evento.source) {
     evento.source.postMessage({ version: CACHE });
+  }
+});
+
+/* Background Sync: el navegador nos despierta cuando vuelve a haber red,
+   aunque la app esté cerrada. Es el único camino para que un gasto anotado sin
+   cobertura llegue a la hoja sin que tengas que acordarte de abrir la app.
+
+   Si la promesa se rechaza, el navegador reintenta el sync más tarde por su
+   cuenta; por eso aquí no hay reintentos propios. */
+self.addEventListener('sync', evento => {
+  if (evento.tag === 'enviar-cola') {
+    evento.waitUntil(
+      NUCLEO.procesar({ ignorarDeshacer: true, ignorarBackoff: true }).then(resultado => {
+        // Si queda algo, se falla a propósito para que el navegador lo
+        // reprograme en vez de dar el trabajo por terminado.
+        if (resultado.quedan > 0) throw new Error('Quedan ' + resultado.quedan + ' por enviar');
+      })
+    );
   }
 });
 
