@@ -24,6 +24,24 @@ const CONFIG = {
 
   MONEDA: "€",
 
+  /* Al elegir esta categoría, la app pregunta cada cuánto se cobra y hasta
+     cuándo, y en vez de un gasto suelto crea una suscripción. Los cobros los
+     escribe el Apps Script el día que tocan. */
+  CATEGORIA_SUSCRIPCIONES: "Suscripciones",
+
+  FRECUENCIAS: ["Mensual", "Trimestral", "Anual"],
+
+  /* Duraciones ofrecidas. `meses: null` es "indefinida": sigue cobrando hasta
+     que la desactives a mano en la hoja. */
+  DURACIONES: [
+    { etiqueta: "3 meses",    meses: 3 },
+    { etiqueta: "6 meses",    meses: 6 },
+    { etiqueta: "1 año",      meses: 12 },
+    { etiqueta: "2 años",     meses: 24 },
+    { etiqueta: "3 años",     meses: 36 },
+    { etiqueta: "Indefinida", meses: null }
+  ],
+
   /* Categoría con la que se marcan los traspasos entre cuentas propias. Mover
      dinero de la corriente al ahorro no es ni ingreso ni gasto, así que se
      guarda como dos filas con esta categoría y los totales del mes la

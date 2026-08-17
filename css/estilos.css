@@ -49,8 +49,12 @@ body {
   height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* Abajo SIEMPRE hay margen, haya o no safe-area. En un Galaxy S24 con la
+     barra de navegación de tres botones, env(safe-area-inset-bottom) vale 0 y
+     el botón verde acababa por debajo de la barra del sistema: se veía, pero al
+     tocarlo pulsabas "atrás" de Android. Con max() el hueco está garantizado. */
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
-           env(safe-area-inset-bottom) env(safe-area-inset-left);
+           max(18px, env(safe-area-inset-bottom)) env(safe-area-inset-left);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -344,6 +348,8 @@ body {
 
 /* ---------- Atrás ---------- */
 
+/* Lo mismo para el botón flotante de deshacer: nunca por debajo de la barra. */
+
 /* "Atrás" vive dentro del bloque de acciones, siempre en el mismo sitio.
    Estuvo fijo en la esquina inferior izquierda y se solapaba con los botones de
    Gasto y de Guardar, que ocupan justo esa zona. */
@@ -372,7 +378,7 @@ body {
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  bottom: max(20px, calc(8px + env(safe-area-inset-bottom)));
   display: flex;
   align-items: center;
   justify-content: space-between;

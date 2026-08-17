@@ -7,7 +7,7 @@
  */
 (() => {
 
-  const PASOS = ['importe', 'tipo', 'categoria', 'cuenta', 'concepto'];
+  const PASOS_BASE = ['importe', 'tipo', 'categoria', 'cuenta', 'concepto'];
   const CLAVE_ULTIMA_CUENTA = 'gastos.ultimaCuenta';
   const MS_DESHACER = NUCLEO.MS_DESHACER;
 
@@ -42,6 +42,8 @@
       tipo: '',
       categoria: '',
       cuentaDestino: '',  // solo se usa en los traspasos
+      frecuencia: '',     // solo en suscripciones
+      duracion: null,     // {etiqueta, meses}; meses null = indefinida
       usuario: usuarioDelTelefono
     };
   }
@@ -54,18 +56,38 @@
     return movimiento.tipo === 'Traspaso';
   }
 
+  /* Una suscripción no es un gasto de hoy: es un gasto que se repetirá. Por eso
+     pregunta dos cosas más, y por eso lo que se envía no es una fila sino una
+     definición que el backend usará para escribir cada cobro cuando toque. */
+  function esSuscripcion() {
+    return movimiento.tipo === 'Gasto' &&
+           movimiento.categoria === CONFIG.CATEGORIA_SUSCRIPCIONES;
+  }
+
+  /* La lista de pasos no es fija: crece cuando el movimiento lo pide. Las dos
+     preguntas de la suscripción se intercalan justo después de la categoría,
+     que es donde se decide que hay suscripción. */
+  function pasos() {
+    const lista = PASOS_BASE.slice();
+    if (esSuscripcion()) lista.splice(3, 0, 'frecuencia', 'duracion');
+    return lista;
+  }
+
   /* ------------------------------------------------------------------ pasos */
 
   function irA(nuevoIndice, atras = false) {
+    const lista = pasos();
     indice = nuevoIndice;
-    const nombre = PASOS[indice];
+    const nombre = lista[indice];
 
     if (nombre === 'categoria') pintarCategorias();
+    if (nombre === 'frecuencia') pintarFrecuencias();
+    if (nombre === 'duracion') pintarDuraciones();
     if (nombre === 'cuenta') pintarCuentas();
     if (nombre === 'concepto') UI.pintarResumen(movimiento, CONFIG.MONEDA);
 
     UI.mostrarPaso(nombre, atras);
-    UI.pintarMigas(indice, PASOS.length);
+    UI.pintarMigas(indice, lista.length);
 
     // El teclado solo se abre si el navegador considera que venimos de un gesto
     // del usuario. En Android es irregular; si no se abre, un toque en el campo
@@ -74,7 +96,7 @@
     if (nombre === 'concepto') UI.el.inputConcepto.focus();
   }
 
-  function siguiente() { if (indice < PASOS.length - 1) irA(indice + 1); }
+  function siguiente() { if (indice < pasos().length - 1) irA(indice + 1); }
   function atras() { if (indice > 0) irA(indice - 1, true); }
 
   function reiniciar() {
@@ -152,9 +174,29 @@
       ? CONFIG.CATEGORIAS_INGRESO
       : CONFIG.CATEGORIAS_GASTO;
     UI.pintarOpciones(UI.el.rejillaCategorias, lista, categoria => {
+      // Al dejar de ser suscripción, lo contestado antes deja de tener sentido.
+      if (categoria !== CONFIG.CATEGORIA_SUSCRIPCIONES) {
+        movimiento.frecuencia = '';
+        movimiento.duracion = null;
+      }
       movimiento.categoria = categoria;
       siguiente();
     }, movimiento.categoria);
+  }
+
+  function pintarFrecuencias() {
+    UI.pintarOpciones(UI.el.rejillaFrecuencias, CONFIG.FRECUENCIAS, frecuencia => {
+      movimiento.frecuencia = frecuencia;
+      siguiente();
+    }, movimiento.frecuencia);
+  }
+
+  function pintarDuraciones() {
+    const etiquetas = CONFIG.DURACIONES.map(d => d.etiqueta);
+    UI.pintarOpciones(UI.el.rejillaDuraciones, etiquetas, etiqueta => {
+      movimiento.duracion = CONFIG.DURACIONES.filter(d => d.etiqueta === etiqueta)[0];
+      siguiente();
+    }, movimiento.duracion ? movimiento.duracion.etiqueta : null);
   }
 
   /** Paso 4: cuenta, o cuenta de destino si es traspaso. */
@@ -215,7 +257,24 @@
   function faltaAlgo() {
     if (!movimiento.importe || !movimiento.tipo) return true;
     if (esTraspaso()) return !movimiento.cuenta || !movimiento.cuentaDestino;
+    if (esSuscripcion() && (!movimiento.frecuencia || !movimiento.duracion)) return true;
     return !movimiento.categoria || !movimiento.cuenta;
+  }
+
+  /** Lo que se envía de una suscripción: la definición, no un gasto. El backend
+   *  calcula la fecha de fin y escribe cada cobro el día que toca. */
+  function suscripcionDe(m) {
+    return {
+      uuid: API.uuid(),
+      concepto: m.concepto,
+      importe: m.importe,
+      cuenta: m.cuenta,
+      categoria: m.categoria,
+      usuario: m.usuario,
+      frecuencia: m.frecuencia,
+      inicio: m.fecha,
+      duracionMeses: m.duracion ? m.duracion.meses : null
+    };
   }
 
   async function guardar() {
@@ -225,7 +284,8 @@
     }
 
     movimiento.concepto = UI.el.inputConcepto.value.trim();
-    const filas = filasDe(movimiento);
+    const accion = esSuscripcion() ? 'suscripcion' : 'movimientos';
+    const filas = esSuscripcion() ? [suscripcionDe(movimiento)] : filasDe(movimiento);
     const grupo = filas[0].uuid;   // el uuid de la primera fila identifica al lote
 
     /* A disco ANTES de nada. Este es el punto en el que el movimiento deja de
@@ -234,7 +294,7 @@
        después —el aviso, el envío, los reintentos— puede fallar sin
        consecuencias. */
     try {
-      await NUCLEO.encolar(filas, grupo);
+      await NUCLEO.encolar(filas, grupo, accion);
     } catch (error) {
       // Si ni siquiera se puede escribir en disco, hay que decirlo claramente:
       // es el único caso en el que un movimiento se pierde de verdad.
@@ -248,8 +308,9 @@
 
     UI.vibrar(20);
     const importeMostrado = UI.formatearImporte(movimiento.importe, CONFIG.MONEDA);
-    const texto = esTraspaso()
-      ? `Traspaso de ${importeMostrado}`
+    const CADA = { Mensual: 'al mes', Trimestral: 'cada trimestre', Anual: 'al año' };
+    const texto = esTraspaso() ? `Traspaso de ${importeMostrado}`
+      : esSuscripcion() ? `Suscripción de ${importeMostrado} ${CADA[movimiento.frecuencia] || ''}`.trim()
       : `Guardado ${importeMostrado}`;
     UI.toast(texto, { ms: MS_DESHACER, alDeshacer: deshacer });
 
@@ -281,7 +342,7 @@
     UI.el.inputConcepto.value = movimiento.concepto;
     UI.el.btnImporteSiguiente.disabled = false;
     UI.pintarFecha(movimiento.fecha);
-    irA(PASOS.indexOf('concepto'), true);
+    irA(pasos().indexOf('concepto'), true);
     UI.toast('Movimiento recuperado');
   }
 
