@@ -11,13 +11,15 @@
   const CLAVE_ULTIMA_CUENTA = 'gastos.ultimaCuenta';
   const MS_DESHACER = NUCLEO.MS_DESHACER;
 
-  /* Quién usa este teléfono. Se lee de los ajustes al arrancar y es el valor al
-     que vuelve cada movimiento nuevo: lo normal es que anotes lo tuyo, y lo raro
-     que anotes lo del otro.
+  /* Quién usa este teléfono. Se elige UNA vez en Ajustes y se estampa en todos
+     los movimientos. No se puede cambiar desde la captura a propósito: la app
+     existe para no tener que decidir nada más que el importe, y una decisión
+     que se repite en cada gasto es exactamente lo que hay que quitar de en
+     medio.
 
-     Se declara ANTES que `movimiento` a propósito: movimientoVacio() lo lee, y
-     con `let` una variable no existe hasta su línea. Al revés, el módulo entero
-     reventaba al cargarse y la app no arrancaba. */
+     Se declara ANTES que `movimiento`: movimientoVacio() lo lee, y con `let`
+     una variable no existe hasta su línea. Al revés, el módulo entero reventaba
+     al cargarse y la app no arrancaba. */
   let usuarioDelTelefono = CONFIG.USUARIOS[0] || '';
 
   let indice = 0;
@@ -81,20 +83,9 @@
     UI.el.inputConcepto.value = '';
     UI.el.btnImporteSiguiente.disabled = true;
     UI.pintarFecha(movimiento.fecha);
-    UI.pintarUsuario(movimiento.usuario, movimiento.usuario === usuarioDelTelefono);
     irA(0);
   }
 
-  /** Con dos personas, tocar el círculo alterna. Con más, va rotando la lista:
-   *  sigue siendo un solo gesto y no hace falta abrir ningún selector. */
-  function cambiarUsuario() {
-    const lista = CONFIG.USUARIOS;
-    if (lista.length < 2) return;
-    const actual = lista.indexOf(movimiento.usuario);
-    movimiento.usuario = lista[(actual + 1) % lista.length];
-    UI.pintarUsuario(movimiento.usuario, movimiento.usuario === usuarioDelTelefono);
-    UI.vibrar(10);
-  }
 
   /* ---------------------------------------------------------------- importe */
 
@@ -290,7 +281,6 @@
     UI.el.inputConcepto.value = movimiento.concepto;
     UI.el.btnImporteSiguiente.disabled = false;
     UI.pintarFecha(movimiento.fecha);
-    UI.pintarUsuario(movimiento.usuario, movimiento.usuario === usuarioDelTelefono);
     irA(PASOS.indexOf('concepto'), true);
     UI.toast('Movimiento recuperado');
   }
@@ -325,7 +315,6 @@
     UI.el.btnAtras.addEventListener('click', atras);
 
     UI.el.btnFecha.addEventListener('click', abrirSelectorFecha);
-    UI.el.btnUsuario.addEventListener('click', cambiarUsuario);
     UI.el.inputFecha.addEventListener('change', () => {
       // Un input date vacío (cancelar el selector) no debe borrar la fecha.
       if (!UI.el.inputFecha.value) return;
@@ -357,7 +346,6 @@
     await AJUSTES.iniciar();
     usuarioDelTelefono = (await AJUSTES.leer()).usuario || CONFIG.USUARIOS[0] || '';
     movimiento.usuario = usuarioDelTelefono;
-    UI.pintarUsuario(usuarioDelTelefono, true);
 
     COLA.iniciar();
     RESUMEN.iniciar();

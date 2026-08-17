@@ -34,6 +34,10 @@ html, body {
   padding: 0;
   height: 100%;
   overscroll-behavior: none;
+  /* Nada debe desplazarse en horizontal, nunca. Si algo no cabe de ancho es un
+     fallo de diseño, y prefiero que se recorte a que aparezca una barra que
+     obligue a mover la pantalla para llegar a un botón. */
+  overflow-x: hidden;
 }
 
 body {
@@ -56,9 +60,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 8px;
+  padding: 8px 12px;
   flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .btn-fecha {
@@ -88,12 +94,17 @@ body {
   border: 0;
 }
 
+/* Las migas son lo primero que cede cuando falta ancho: son orientativas, y
+   perder un botón por culpa de ellas sí sería un problema. */
 .migas {
   display: flex;
   gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .migas li {
@@ -157,8 +168,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding-bottom: 18px;
-  gap: 14px;
+  padding-bottom: 12px;
+  gap: 12px;
 }
 
 /* El importe es la excepción: es el protagonista del paso y va centrado. */
@@ -166,7 +177,10 @@ body {
 
 .paso-acciones {
   flex: 0 0 auto;
-  max-height: 62%;
+  /* 68% y no 62%: con 12 categorías la rejilla pide 6 filas, y con el 62%
+     anterior se quedaba 6px corta en un Galaxy S24. Seis píxeles bastan para
+     que aparezca una barra de desplazamiento y el paso deje de ser un toque. */
+  max-height: 68%;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -282,7 +296,7 @@ body {
 
 .rejilla {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .rejilla-2 { grid-template-columns: 1fr 1fr; }
@@ -693,3 +707,24 @@ body {
 }
 
 select.campo-input { appearance: none; }
+
+/* ---------- Pantallas estrechas o bajas ---------- */
+
+/* Con el tamaño de pantalla de Android ampliado, el viewport se estrecha y la
+   cabecera deja de caber. Las migas desaparecen antes que cualquier botón. */
+@media (max-width: 350px) {
+  .migas { display: none; }
+}
+
+/* Móviles cortos: se recorta de donde no duele —los huecos y el tamaño de los
+   botones grandes— para no tocar nunca el mínimo de 48px de los objetivos. */
+@media (max-height: 800px) {
+  .btn-alto { min-height: 84px; }
+  .btn-guardar { min-height: 60px; }
+  .paso-cuerpo { padding-bottom: 8px; gap: 10px; }
+  .pregunta { font-size: 18px; }
+  .paso-acciones { max-height: 72%; }
+  /* 52px sigue estando por encima del mínimo de 48. Es lo último que se toca,
+     y solo en pantallas donde la alternativa era desplazar la rejilla. */
+  .btn-opcion { min-height: 52px; }
+}

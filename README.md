@@ -248,16 +248,23 @@ envío: existe para no machacar, no para retrasar.
 
 ### Quién gasta
 
-La columna `Usuario` no es un sexto paso. Cada teléfono se configura una vez en
-Ajustes —Gonzalo en el suyo, Camila en el suyo— y a partir de ahí se estampa
-solo en cada movimiento. Los cinco toques siguen siendo cinco.
+La columna `Usuario` **no se toca desde la captura**. Cada teléfono se configura
+una vez en Ajustes —Gonzalo en el suyo, Camila en el suyo— y a partir de ahí se
+estampa solo en cada movimiento, hasta que se cambie en Ajustes.
 
-Para anotar algo del otro, un toque en el círculo de la cabecera lo cambia. Se
-resalta en verde mientras no seas tú, y vuelve al dueño del teléfono en cuanto
-guardas: lo raro tiene que verse, y no debe quedarse pegado.
+Es deliberado: la app existe para no tener que decidir nada más que el importe, y
+una decisión que se repite en cada gasto es exactamente lo que hay que quitar de
+en medio. Si un día anotas algo del otro, se corrige en la hoja, que tiene lista
+desplegable en esa columna.
 
 La lista de usuarios está en `config.js` y **tiene que decir lo mismo** que la
 constante `USUARIOS` de `Codigo.gs`: de ahí salen las columnas del panel.
+
+> Al cambiar los nombres, el que cada teléfono tenga guardado deja de existir. La
+> app lo detecta al arrancar y lo reemplaza emparejando por el nombre de pila;
+> `instalar()` hace lo propio con las filas ya escritas en la hoja. Sin eso, los
+> movimientos se seguirían escribiendo con un usuario que ya no está en la lista
+> y el panel los sumaría como cero sin dar ningún error.
 
 ### Traspasos entre cuentas
 
