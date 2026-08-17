@@ -96,13 +96,13 @@ function instalar() {
      y ADEMÁS a las filas que ya existan: fijar solo la columna no bastó, las
      filas escritas con appendRow acababan mostrándose como dd/mm/yyyy. Volver
      a ejecutar instalar() repara las filas viejas. */
-  movimientos.getRange('A2:A').setNumberFormat('yyyy-mm-dd');
-  movimientos.getRange('C2:C').setNumberFormat('0.00');
+  formatoSeguro(movimientos.getRange('A2:A'), 'yyyy-mm-dd');
+  formatoSeguro(movimientos.getRange('C2:C'), '0.00');
 
   const ultima = movimientos.getLastRow();
   if (ultima >= 2) {
-    movimientos.getRange(2, 1, ultima - 1, 1).setNumberFormat('yyyy-mm-dd');
-    movimientos.getRange(2, 3, ultima - 1, 1).setNumberFormat('0.00');
+    formatoSeguro(movimientos.getRange(2, 1, ultima - 1, 1), 'yyyy-mm-dd');
+    formatoSeguro(movimientos.getRange(2, 3, ultima - 1, 1), '0.00');
   }
 
   /* La columna Usuario llegó después de las seis primeras. Si la hoja es de
@@ -174,10 +174,7 @@ function crearHojaPanel(libro, nombreHoja, personas, titulo) {
   const colUltima = hayTotal ? colTotal : colTotal - 1;
   const colGrafico = colUltima + 2;
 
-  let panel = libro.getSheetByName(nombreHoja);
-  if (!panel) panel = libro.insertSheet(nombreHoja);
-  panel.clear();
-  panel.getCharts().forEach(function (g) { panel.removeChart(g); });
+  const panel = hojaPanelLimpia(libro, nombreHoja);
 
   const sep = separadorDeFormulas(panel);
 
@@ -201,7 +198,7 @@ function crearHojaPanel(libro, nombreHoja, personas, titulo) {
     panel.getRange(filaPrimerMes + i, 1)
          .setFormula('=EDATE(A' + (filaPrimerMes + i - 1) + sep + '-1)');
   }
-  panel.getRange(filaPrimerMes, 1, MESES_MOSTRADOS, 1).setNumberFormat('yyyy-mm');
+  formatoSeguro(panel.getRange(filaPrimerMes, 1, MESES_MOSTRADOS, 1), 'yyyy-mm');
 
   for (var f = 0; f < MESES_MOSTRADOS; f++) {
     const fila = filaPrimerMes + f;
@@ -214,8 +211,9 @@ function crearHojaPanel(libro, nombreHoja, personas, titulo) {
         '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
     }
   }
-  panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, colUltima - COL_USUARIO_1 + 1)
-       .setNumberFormat('#,##0.00 \u20ac');
+  formatoSeguro(
+    panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, colUltima - COL_USUARIO_1 + 1),
+    '#,##0.00 \u20ac');
 
   // ---- Tabla 2: en qué se va el dinero este mes
   const filaCabCategorias = filaPrimerMes + MESES_MOSTRADOS + 2;
@@ -242,8 +240,10 @@ function crearHojaPanel(libro, nombreHoja, personas, titulo) {
         '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
     }
   });
-  panel.getRange(filaPrimerCategoria, COL_USUARIO_1, CATEGORIAS_GASTO.length,
-                 colUltima - COL_USUARIO_1 + 1).setNumberFormat('#,##0.00 \u20ac');
+  formatoSeguro(
+    panel.getRange(filaPrimerCategoria, COL_USUARIO_1, CATEGORIAS_GASTO.length,
+                   colUltima - COL_USUARIO_1 + 1),
+    '#,##0.00 \u20ac');
 
   /* La torta va sobre las categorías y no sobre las personas: saber que te has
      gastado 400 € no dice nada; saber que 250 fueron en restaurantes, sí.
@@ -265,6 +265,56 @@ function crearHojaPanel(libro, nombreHoja, personas, titulo) {
 
   panel.setColumnWidth(1, 160);
   return panel;
+}
+
+/**
+ * Devuelve la hoja del panel realmente vacía: la borra y la vuelve a crear.
+ *
+ * Antes se reutilizaba con clear(), y eso fue un error. clear() vacía el
+ * contenido y el formato, pero no deshace lo que la hoja "es": si en algún
+ * momento una columna quedó marcada como texto —o Sheets convirtió el rango en
+ * una tabla, que fija el tipo de cada columna—, eso sobrevive al clear(). Al
+ * reinstalar, setNumberFormat fallaba con "No puedes configurar el formato de
+ * número de las celdas de una columna con texto" y se llevaba por delante el
+ * instalar() entero, dejando unas hojas creadas y otras no.
+ *
+ * Una hoja nueva no arrastra nada. Se pierde solo lo que había dentro, que son
+ * fórmulas que este mismo código vuelve a escribir dos líneas después.
+ *
+ * Se reinserta en la posición que ocupaba para que las pestañas no cambien de
+ * sitio en cada reinstalación.
+ */
+function hojaPanelLimpia(libro, nombreHoja) {
+  const vieja = libro.getSheetByName(nombreHoja);
+  // getIndex() es 1-based; insertSheet() cuenta desde 0.
+  let posicion = libro.getNumSheets();
+  if (vieja) {
+    posicion = vieja.getIndex() - 1;
+    libro.deleteSheet(vieja);
+  }
+  return libro.insertSheet(nombreHoja, posicion);
+}
+
+/**
+ * Aplica un formato de número sin poder tumbar la instalación.
+ *
+ * El formato es cosmético: que los euros salgan con dos decimales está bien,
+ * pero no vale un panel a medias por ello. Si Sheets se niega, se anota en el
+ * registro y se sigue.
+ *
+ * El flush() es la parte importante: Apps Script agrupa las escrituras y las
+ * manda cuando le viene bien, así que sin él el error no salta aquí sino en la
+ * siguiente llamada que fuerce el envío —en nuestro caso, el getRange() del
+ * gráfico— y ni el try lo atrapa ni el rastro de pila señala al culpable.
+ */
+function formatoSeguro(rango, formato) {
+  try {
+    rango.setNumberFormat(formato);
+    SpreadsheetApp.flush();
+  } catch (e) {
+    Logger.log('No se pudo dar formato "' + formato + '" a ' +
+               rango.getA1Notation() + ': ' + e.message);
+  }
 }
 
 /**
@@ -392,8 +442,8 @@ function prepararSuscripciones(libro) {
     hoja.getRange(1, 1, 1, CABECERAS_SUSCRIPCIONES.length).setFontWeight('bold');
     hoja.setFrozenRows(1);
   }
-  hoja.getRange('I2:J').setNumberFormat('yyyy-mm-dd');
-  hoja.getRange('D2:D').setNumberFormat('0.00');
+  formatoSeguro(hoja.getRange('I2:J'), 'yyyy-mm-dd');
+  formatoSeguro(hoja.getRange('D2:D'), '0.00');
 
   /* Para cancelar una suscripción se pone Activa en FALSO. Una casilla evita
      tener que acordarse de si se escribe "no", "NO" o "false". */
@@ -640,8 +690,12 @@ function escribirMovimiento(m) {
      Haberlo puesto únicamente en la columna al instalar no funcionó: las filas
      que añade appendRow se mostraban como 17/08/2026 en vez de 2026-08-17. */
   const fila = hoja.getLastRow();
-  hoja.getRange(fila, 1).setNumberFormat('yyyy-mm-dd');
-  hoja.getRange(fila, 3).setNumberFormat('0.00');
+  /* Va por formatoSeguro porque la fila ya está escrita: si el formato fallara
+     y dejara reventar esta función, la app recibiría un error por un gasto que
+     sí está en la hoja, lo reintentaría y el usuario vería un fallo por algo
+     puramente estético. */
+  formatoSeguro(hoja.getRange(fila, 1), 'yyyy-mm-dd');
+  formatoSeguro(hoja.getRange(fila, 3), '0.00');
 }
 
 function registrarUuid(uuid) {
