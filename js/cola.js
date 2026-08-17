@@ -48,7 +48,14 @@ const COLA = (() => {
     if (resultado.quedan === 0) {
       UI.toast(`Enviado${resultado.enviados === 1 ? '' : 's'} ${resultado.enviados}`);
     } else {
-      UI.toast(`Siguen ${resultado.quedan} sin enviar. ¿Hay conexión?`, { ms: 4000 });
+      /* Con el motivo delante se distingue en un vistazo lo que antes obligaba
+         a ir al registro de Apps Script: sin cobertura, token mal, o el
+         despliegue sin actualizar —"Petición sin movimientos" es exactamente
+         eso: una versión vieja que no entiende lo que se le manda—. */
+      const motivo = await NUCLEO.ultimoError();
+      UI.toast(motivo
+        ? `Siguen ${resultado.quedan} sin enviar: ${motivo}`
+        : `Siguen ${resultado.quedan} sin enviar. ¿Hay conexión?`, { ms: 8000 });
     }
   }
 

@@ -164,6 +164,28 @@ const NUCLEO = (() => {
     return conTienda(COLA, 'readwrite', t => t.delete(uuid));
   }
 
+  /**
+   * El motivo del último intento fallido.
+   *
+   * Existe porque "siguen 1 sin enviar" no dice nada: puede ser la red, el
+   * token, o un despliegue viejo del Apps Script que no entiende lo que se le
+   * manda. El backend contesta con mensajes en claro y aquí se guardaban sin
+   * que nadie los mirara, así que había que ir a adivinar al registro de
+   * ejecuciones de Google.
+   *
+   * Se coge el del intento más reciente, que es el que describe la situación
+   * de ahora.
+   */
+  async function ultimoError() {
+    const registros = await todos();
+    var reciente = null;
+    registros.forEach(function (r) {
+      if (!r.ultimoError) return;
+      if (!reciente || (r.reintentarEn || 0) > (reciente.reintentarEn || 0)) reciente = r;
+    });
+    return reciente ? reciente.ultimoError : '';
+  }
+
   async function borrarGrupo(grupo) {
     const registros = await todos();
     const suyos = registros.filter(r => r.grupo === grupo);
@@ -296,7 +318,7 @@ const NUCLEO = (() => {
   return {
     MS_DESHACER,
     leerAjustes, guardarAjustes, guardarResumen, leerResumen,
-    encolar, todos, contar, borrar, borrarGrupo,
+    encolar, todos, contar, borrar, borrarGrupo, ultimoError,
     enviar, consultar, procesar
   };
 })();
