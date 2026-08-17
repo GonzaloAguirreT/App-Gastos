@@ -116,8 +116,14 @@ usas la app en el móvil y en el ordenador, hay que configurar los dos.
 |---|---|
 | `Token no válido` | El token de la app y el de las Propiedades del Script no coinciden |
 | `El endpoint no devuelve JSON` | El despliegue no es "Cualquier persona", o la URL acaba en `/dev` |
-| `Failed to fetch` | La URL está mal escrita, o no hay red |
+| `Failed to fetch` | La URL está mal escrita, no hay red, o el despliegue pide iniciar sesión |
 | `No existe la hoja Movimientos` | Falta ejecutar `instalar()` (paso 3) |
+
+Para distinguir un `Failed to fetch` de un problema de despliegue: **pega la URL
+del `/exec` en el navegador con `?token=TU_TOKEN` al final**. Si sale un JSON, el
+despliegue está bien. Si te pide iniciar sesión, el acceso no quedó en
+"Cualquier persona" — corrígelo y vuelve a implementar **con versión nueva**, que
+si no sigue publicada la anterior.
 
 ### 7. Tus cuentas y categorías
 
@@ -228,6 +234,14 @@ media transferencia escrita descuadraría las dos cuentas a la vez.
 contesta a las peticiones OPTIONS de preflight. Usar `application/json` haría que
 el navegador mandara ese preflight, y el envío fallaría con un error de CORS que
 no dice nada útil. Está comentado en [`js/api.js`](js/api.js).
+
+**Las lecturas también van por POST, aunque suene al revés.** El `doGet` existe y
+funciona si pegas la URL en el navegador con `?token=…`, pero un `fetch` contra
+él desde la app muere con `Failed to fetch`: Apps Script responde con una
+redirección a `script.googleusercontent.com` y ese salto se lleva por delante las
+cabeceras de CORS. Por eso el resumen se pide con un POST y `accion: 'resumen'`,
+que al ser petición simple sí llega. `doGet` se queda como herramienta de
+diagnóstico manual.
 
 **El importe siempre viaja positivo.** El signo lo da la columna Tipo. El campo
 de importe filtra el signo menos según escribes, así que no hay forma de meter

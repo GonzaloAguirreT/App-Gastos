@@ -75,6 +75,13 @@ const API = (() => {
 
   /**
    * Pide el resumen del mes y los últimos movimientos.
+   *
+   * Va por POST y no por GET aunque sea una lectura. El doGet del Apps Script
+   * funciona si abres la URL en el navegador, pero desde aquí muere con un
+   * "Failed to fetch": Apps Script responde con una redirección a
+   * script.googleusercontent.com y ese salto se lleva por delante las cabeceras
+   * de CORS. El POST con text/plain es una petición simple y sí llega.
+   *
    * @param {object} ajustes opcional, para probar valores aún sin guardar.
    */
   async function consultar(ajustes = AJUSTES.leer(), cuantos = 10) {
@@ -82,8 +89,13 @@ const API = (() => {
       throw new Error('Falta configurar el endpoint o el token');
     }
 
-    const url = `${ajustes.endpoint}?token=${encodeURIComponent(ajustes.token)}&n=${cuantos}`;
-    const respuesta = await fetch(url, { method: 'GET', redirect: 'follow' });
+    const respuesta = await fetch(ajustes.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token: ajustes.token, accion: 'resumen', n: cuantos }),
+      redirect: 'follow'
+    });
+
     return await interpretar(respuesta);
   }
 
