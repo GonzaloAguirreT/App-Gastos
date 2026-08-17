@@ -237,6 +237,23 @@ un negativo.
 generado en el móvil. Si el mismo llega dos veces, el script responde que todo
 va bien pero escribe una sola fila. Sin esto, un reintento duplicaría un gasto.
 
+**Hay que subir la versión de caché en cada despliegue.** En [`sw.js`](sw.js),
+la constante `CACHE` (`gastos-v3`, `gastos-v4`…). Es el único mecanismo de
+actualización que tiene la app: mientras esa cadena no cambie, los móviles que
+ya la tengan instalada seguirán con la versión que tienen, aunque Pages sirva
+otra cosa.
+
+Los archivos se cachean todos juntos en el `install` y **no se refrescan por
+separado**. Esto es deliberado y viene de un fallo real: la versión anterior
+refrescaba cada archivo por su cuenta en segundo plano, y la app acabó con el
+`index.html` de una versión y el `app.js` de otra — mostraba el botón de ajustes
+pero ejecutaba código que no sabía qué hacer con él. O toda la versión vieja, o
+toda la nueva; nunca una mezcla.
+
+Al detectar una versión nueva, la app se recarga sola. Si estás a media captura
+no lo hace: avisa con un aviso y espera al siguiente arranque, porque recargar
+te borraría el importe tecleado.
+
 ---
 
 ## Regenerar los iconos
