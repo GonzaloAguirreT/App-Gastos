@@ -311,6 +311,22 @@ body {
 
 .rejilla-2 { grid-template-columns: 1fr 1fr; }
 
+/* Los 31 días, en seis columnas. Con dos —como el resto de rejillas— serían
+   dieciséis filas de desplazamiento para elegir un número de dos cifras. En
+   seis columnas se ve el mes entero de un vistazo, como en un calendario, y
+   cada botón sigue pasando de los 48px que necesita un pulgar. */
+.rejilla-dias {
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.rejilla-dias .btn-opcion {
+  min-height: 52px;
+  padding: 0;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
 .rejilla-scroll {
   overflow-y: auto;
   padding: 2px;

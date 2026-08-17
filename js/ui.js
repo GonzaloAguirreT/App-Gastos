@@ -19,6 +19,8 @@ const UI = (() => {
     rejillaCategorias: document.getElementById('rejilla-categorias'),
     rejillaCuentas: document.getElementById('rejilla-cuentas'),
     rejillaFrecuencias: document.getElementById('rejilla-frecuencias'),
+    preguntaDia: document.getElementById('pregunta-dia'),
+    rejillaDias: document.getElementById('rejilla-dias'),
     rejillaDuraciones: document.getElementById('rejilla-duraciones'),
     resumenMovimiento: document.getElementById('resumen-movimiento'),
     inputConcepto: document.getElementById('input-concepto'),
@@ -119,7 +121,7 @@ const UI = (() => {
        compromiso: qué es, cada cuánto y hasta cuándo. El importe suelto
        engaña —10,99 € no dice lo mismo que 10,99 € al mes durante dos años—. */
     const detalle = movimiento.frecuente
-      ? `${movimiento.categoria} · ${movimiento.frecuencia} · ${movimiento.duracion ? movimiento.duracion.etiqueta : ''}`
+      ? `${movimiento.categoria} · ${movimiento.frecuencia} día ${movimiento.dia} · ${movimiento.duracion ? movimiento.duracion.etiqueta : ''}`
       : `${movimiento.categoria} · ${movimiento.cuenta}`;
 
     el.resumenMovimiento.innerHTML =

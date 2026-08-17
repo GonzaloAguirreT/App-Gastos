@@ -50,6 +50,7 @@
       categoria: '',
       frecuente: false,   // lo decide el primer paso
       frecuencia: '',     // solo en los frecuentes
+      dia: 0,             // día del mes en que se cobra o se paga
       duracion: null,     // {etiqueta, meses}; meses null = indefinida
       usuario: usuarioDelTelefono
     };
@@ -67,7 +68,7 @@
      sabe de qué se trata. */
   function pasos() {
     const lista = PASOS_BASE.slice();
-    if (esFrecuente()) lista.splice(3, 0, 'frecuencia', 'duracion');
+    if (esFrecuente()) lista.splice(3, 0, 'frecuencia', 'dia', 'duracion');
     return lista;
   }
 
@@ -80,6 +81,7 @@
 
     if (nombre === 'categoria') pintarCategorias();
     if (nombre === 'frecuencia') pintarFrecuencias();
+    if (nombre === 'dia') pintarDias();
     if (nombre === 'duracion') pintarDuraciones();
     if (nombre === 'cuenta') pintarCuentas();
     if (nombre === 'concepto') UI.pintarResumen(movimiento, CONFIG.MONEDA);
@@ -146,6 +148,7 @@
     if (movimiento.frecuente !== frecuente) {
       movimiento.categoria = '';
       movimiento.frecuencia = '';
+      movimiento.dia = 0;
       movimiento.duracion = null;
     }
     movimiento.frecuente = frecuente;
@@ -192,6 +195,44 @@
     }, movimiento.frecuencia);
   }
 
+  /**
+   * Día del mes en que cae el cobro.
+   *
+   * Antes lo marcaba la fecha de la cabecera, que es la de hoy: dar de alta el
+   * alquiler un día 17 lo dejaba cobrándose todos los 17, y para corregirlo
+   * había que acordarse de tocar la fecha ANTES de empezar. Ahora se pregunta.
+   *
+   * El 31 vale para todos los meses: el backend recorta al último día del mes
+   * que toque —31 ene, 28 feb, 31 mar— y calcula siempre desde el inicio, así
+   * que la fecha no se desvía con los años.
+   */
+  function pintarDias() {
+    UI.el.preguntaDia.textContent = movimiento.tipo === 'Ingreso'
+      ? '¿Qué día se cobra?'
+      : '¿Qué día se paga?';
+
+    const dias = [];
+    for (var d = 1; d <= 31; d++) dias.push(String(d));
+
+    // Sugerido: el día de la fecha elegida. Suele ser el bueno —das de alta la
+    // suscripción el día que te la han cobrado— y ahorra buscar en la rejilla.
+    const sugerido = String(movimiento.dia || Number(movimiento.fecha.slice(8, 10)));
+
+    UI.pintarOpciones(UI.el.rejillaDias, dias, dia => {
+      movimiento.dia = Number(dia);
+      siguiente();
+    }, sugerido);
+  }
+
+  /** Cambia el día de un yyyy-mm-dd, sin salirse del mes: pedir el 31 en
+   *  febrero da el 28, no el 3 de marzo. */
+  function conDia(iso, dia) {
+    const [anio, mes] = iso.split('-').map(Number);
+    const ultimo = new Date(anio, mes, 0).getDate();
+    const elegido = String(Math.min(dia, ultimo)).padStart(2, '0');
+    return `${iso.slice(0, 7)}-${elegido}`;
+  }
+
   function pintarDuraciones() {
     const etiquetas = CONFIG.DURACIONES.map(d => d.etiqueta);
     UI.pintarOpciones(UI.el.rejillaDuraciones, etiquetas, etiqueta => {
@@ -229,7 +270,7 @@
 
   function faltaAlgo() {
     if (!movimiento.importe || !movimiento.tipo) return true;
-    if (esFrecuente() && (!movimiento.frecuencia || !movimiento.duracion)) return true;
+    if (esFrecuente() && (!movimiento.frecuencia || !movimiento.dia || !movimiento.duracion)) return true;
     return !movimiento.categoria || !movimiento.cuenta;
   }
 
@@ -248,7 +289,11 @@
       // el disparador. Sin esto todos entrarían como gasto.
       tipo: m.tipo,
       frecuencia: m.frecuencia,
-      inicio: m.fecha,
+      /* El inicio se arma con el día elegido, no con la fecha de la cabecera.
+         Si ese día ya pasó este mes, el backend escribe el cobro al instante,
+         que es lo correcto: si hoy es 17 y el alquiler se paga el 3, el de este
+         mes ya lo has pagado. Si aún no ha llegado, espera al disparador. */
+      inicio: conDia(m.fecha, m.dia),
       duracionMeses: m.duracion ? m.duracion.meses : null
     };
   }
@@ -286,7 +331,7 @@
     const importeMostrado = UI.formatearImporte(movimiento.importe, CONFIG.MONEDA);
     const CADA = { Mensual: 'al mes', Trimestral: 'cada trimestre', Anual: 'al año' };
     const texto = esFrecuente()
-      ? `${movimiento.categoria} de ${importeMostrado} ${CADA[movimiento.frecuencia] || ''}`.trim()
+      ? `${movimiento.categoria} de ${importeMostrado} ${CADA[movimiento.frecuencia] || ''}, día ${movimiento.dia}`.trim()
       : `Guardado ${importeMostrado}`;
     UI.toast(texto, { ms: MS_DESHACER, alDeshacer: deshacer });
 
