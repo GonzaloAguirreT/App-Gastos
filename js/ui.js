@@ -13,6 +13,8 @@ const UI = (() => {
     inputImporte: document.getElementById('input-importe'),
     btnImporteSiguiente: document.getElementById('btn-importe-siguiente'),
     moneda: document.getElementById('moneda'),
+    preguntaCategoria: document.getElementById('pregunta-categoria'),
+    preguntaCuenta: document.getElementById('pregunta-cuenta'),
     rejillaCategorias: document.getElementById('rejilla-categorias'),
     rejillaCuentas: document.getElementById('rejilla-cuentas'),
     resumenMovimiento: document.getElementById('resumen-movimiento'),
@@ -99,6 +101,15 @@ const UI = (() => {
   }
 
   function pintarResumen(movimiento, moneda) {
+    // En un traspaso el signo sobra: no se gana ni se pierde nada, solo se
+    // mueve. Se enseña el recorrido entre cuentas en su lugar.
+    if (movimiento.tipo === 'Traspaso') {
+      el.resumenMovimiento.innerHTML =
+        formatearImporte(movimiento.importe, moneda) +
+        `<span class="detalle">${movimiento.cuenta} → ${movimiento.cuentaDestino}</span>`;
+      return;
+    }
+
     const signo = movimiento.tipo === 'Gasto' ? '−' : '+';
     el.resumenMovimiento.innerHTML =
       `${signo}${formatearImporte(movimiento.importe, moneda)}` +

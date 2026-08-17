@@ -26,8 +26,17 @@
       importe: '',
       cuenta: '',
       tipo: '',
-      categoria: ''
+      categoria: '',
+      cuentaDestino: ''   // solo se usa en los traspasos
     };
+  }
+
+  /* Un traspaso reutiliza los mismos cinco pasos, pero los dos del medio
+     cambian de significado: en vez de categoría y cuenta, preguntan por la
+     cuenta de origen y la de destino. Así el gesto sigue siendo el mismo y no
+     hay una segunda pantalla que aprender. */
+  function esTraspaso() {
+    return movimiento.tipo === 'Traspaso';
   }
 
   /* ------------------------------------------------------------------ pasos */
@@ -98,14 +107,31 @@
   /* --------------------------------------------------- tipo, categoría, cuenta */
 
   function elegirTipo(tipo) {
-    // Si se cambia el tipo después de haber elegido categoría, la anterior ya
-    // no vale: las listas de gasto e ingreso son distintas.
-    if (movimiento.tipo !== tipo) movimiento.categoria = '';
+    // Al cambiar de tipo, lo elegido después deja de valer: las listas de gasto
+    // e ingreso son distintas, y un traspaso ni siquiera usa categorías.
+    if (movimiento.tipo !== tipo) {
+      movimiento.categoria = '';
+      movimiento.cuenta = '';
+      movimiento.cuentaDestino = '';
+    }
     movimiento.tipo = tipo;
     siguiente();
   }
 
+  /** Paso 3: categoría, o cuenta de origen si es traspaso. */
   function pintarCategorias() {
+    if (esTraspaso()) {
+      UI.el.preguntaCategoria.textContent = 'Desde qué cuenta';
+      UI.pintarOpciones(UI.el.rejillaCategorias, CONFIG.CUENTAS, cuenta => {
+        // Cambiar el origen puede dejar el destino igual al origen; se limpia.
+        if (movimiento.cuentaDestino === cuenta) movimiento.cuentaDestino = '';
+        movimiento.cuenta = cuenta;
+        siguiente();
+      }, movimiento.cuenta);
+      return;
+    }
+
+    UI.el.preguntaCategoria.textContent = 'Categoría';
     const lista = movimiento.tipo === 'Ingreso'
       ? CONFIG.CATEGORIAS_INGRESO
       : CONFIG.CATEGORIAS_GASTO;
@@ -115,7 +141,20 @@
     }, movimiento.categoria);
   }
 
+  /** Paso 4: cuenta, o cuenta de destino si es traspaso. */
   function pintarCuentas() {
+    if (esTraspaso()) {
+      UI.el.preguntaCuenta.textContent = 'A qué cuenta';
+      // Se quita la de origen: un traspaso a la misma cuenta no significa nada.
+      const destinos = CONFIG.CUENTAS.filter(c => c !== movimiento.cuenta);
+      UI.pintarOpciones(UI.el.rejillaCuentas, destinos, cuenta => {
+        movimiento.cuentaDestino = cuenta;
+        siguiente();
+      }, movimiento.cuentaDestino);
+      return;
+    }
+
+    UI.el.preguntaCuenta.textContent = 'Cuenta';
     const ultima = localStorage.getItem(CLAVE_ULTIMA_CUENTA);
     UI.pintarOpciones(UI.el.rejillaCuentas, CONFIG.CUENTAS, cuenta => {
       movimiento.cuenta = cuenta;
@@ -126,9 +165,44 @@
 
   /* --------------------------------------------------------------- guardado */
 
+  /**
+   * Convierte lo capturado en las filas que van a la hoja.
+   *
+   * Un movimiento normal es una fila. Un traspaso son DOS: un Gasto en la
+   * cuenta de origen y un Ingreso en la de destino, ambos con la categoría de
+   * traspaso. De esa forma el saldo de cada cuenta sale bien y el backend puede
+   * descontarlos de los totales del mes, que es donde falseaban las cuentas.
+   */
+  function filasDe(m) {
+    const base = {
+      fecha: m.fecha,
+      concepto: m.concepto,
+      importe: m.importe
+    };
+
+    if (m.tipo !== 'Traspaso') {
+      return [{ ...base, cuenta: m.cuenta, tipo: m.tipo,
+                categoria: m.categoria, uuid: API.uuid() }];
+    }
+
+    // Dos UUID distintos: el backend desduplica fila a fila, y las dos filas
+    // son movimientos diferentes aunque procedan del mismo gesto.
+    return [
+      { ...base, cuenta: m.cuenta, tipo: 'Gasto',
+        categoria: CONFIG.CATEGORIA_TRASPASO, uuid: API.uuid() },
+      { ...base, cuenta: m.cuentaDestino, tipo: 'Ingreso',
+        categoria: CONFIG.CATEGORIA_TRASPASO, uuid: API.uuid() }
+    ];
+  }
+
+  function faltaAlgo() {
+    if (!movimiento.importe || !movimiento.tipo) return true;
+    if (esTraspaso()) return !movimiento.cuenta || !movimiento.cuentaDestino;
+    return !movimiento.categoria || !movimiento.cuenta;
+  }
+
   function guardar() {
-    if (!movimiento.importe || !movimiento.tipo ||
-        !movimiento.categoria || !movimiento.cuenta) {
+    if (faltaAlgo()) {
       UI.toast('Falta algún dato del movimiento');
       return;
     }
@@ -138,11 +212,14 @@
     confirmarPendiente();
 
     movimiento.concepto = UI.el.inputConcepto.value.trim();
-    pendiente = { ...movimiento, uuid: API.uuid() };
+    pendiente = { origen: { ...movimiento }, filas: filasDe(movimiento) };
 
     UI.vibrar(20);
-    const importeMostrado = UI.formatearImporte(pendiente.importe, CONFIG.MONEDA);
-    UI.toast(`Guardado ${importeMostrado}`, {
+    const importeMostrado = UI.formatearImporte(movimiento.importe, CONFIG.MONEDA);
+    const texto = esTraspaso()
+      ? `Traspaso de ${importeMostrado}`
+      : `Guardado ${importeMostrado}`;
+    UI.toast(texto, {
       ms: MS_DESHACER,
       alDeshacer: deshacer
     });
@@ -162,16 +239,9 @@
 
     // Se recupera el movimiento en el paso del concepto para poder corregirlo
     // en vez de tener que teclearlo otra vez.
-    movimiento = {
-      fecha: descartado.fecha,
-      concepto: descartado.concepto,
-      importe: descartado.importe,
-      cuenta: descartado.cuenta,
-      tipo: descartado.tipo,
-      categoria: descartado.categoria
-    };
-    UI.el.inputImporte.value = descartado.importe.replace('.', ',');
-    UI.el.inputConcepto.value = descartado.concepto;
+    movimiento = { ...descartado.origen };
+    UI.el.inputImporte.value = movimiento.importe.replace('.', ',');
+    UI.el.inputConcepto.value = movimiento.concepto;
     UI.el.btnImporteSiguiente.disabled = false;
     UI.pintarFecha(movimiento.fecha);
     irA(PASOS.indexOf('concepto'), true);
@@ -186,12 +256,14 @@
     pendiente = null;
 
     try {
-      await API.enviar(aEnviar);
+      await API.enviar(aEnviar.filas);
     } catch (error) {
-      // Fase 3: aquí va la cola en IndexedDB. Hasta entonces, avisar y no
-      // fingir que se ha guardado.
+      /* Fase 3: aquí va la cola en IndexedDB y este movimiento se reintentará
+         solo. Hasta entonces se pierde, así que el aviso tiene que ser
+         inequívoco: si dijéramos "no se pudo enviar" a secas, es fácil
+         entender que ya se reintentará y quedarse tan tranquilo. */
       console.error('No se pudo enviar el movimiento:', error);
-      UI.toast('No se pudo enviar. Pendiente de la cola (fase 3)');
+      UI.toast(`NO se ha guardado (${error.message}). Vuelve a anotarlo.`, { ms: 7000 });
     }
   }
 
@@ -242,10 +314,15 @@
   function iniciar() {
     UI.el.moneda.textContent = CONFIG.MONEDA;
     conectarEventos();
+    AJUSTES.iniciar();
     reiniciar();
 
     if (CONFIG.MODO_PRUEBA) {
       console.info('MODO_PRUEBA activo: nada se envía, todo va a la consola.');
+    } else if (!AJUSTES.configurado()) {
+      // Sin endpoint ni token no hay dónde escribir. Mejor pedirlos al entrar
+      // que dejar que el primer gasto se pierda con un error.
+      AJUSTES.abrir();
     }
 
     if ('serviceWorker' in navigator) {

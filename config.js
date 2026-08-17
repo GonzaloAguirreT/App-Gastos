@@ -19,22 +19,38 @@ const CONFIG = {
   TOKEN: "",
 
   // En modo prueba no se envía nada: los movimientos se escriben en la consola.
-  // Arranca en true para que la app funcione antes de tener el backend montado.
-  MODO_PRUEBA: true,
+  // Ponlo en true si quieres trastear con el flujo sin tocar la hoja.
+  MODO_PRUEBA: false,
 
   MONEDA: "€",
+
+  /* Categoría con la que se marcan los traspasos entre cuentas propias. Mover
+     dinero de la corriente al ahorro no es ni ingreso ni gasto, así que se
+     guarda como dos filas con esta categoría y los totales del mes la
+     descuentan. Si cambias el texto, cámbialo también en Codigo.gs y en la
+     hoja de configuración del Excel. */
+  CATEGORIA_TRASPASO: "Traspaso",
 
   // IMPORTANTE: estos textos deben coincidir palabra por palabra con las listas
   // de la hoja de configuración del Excel. Si aquí pone "Tarjeta de crédito" y
   // allí "Tarjeta crédito", el SUMIFS del panel devuelve cero y no te enteras.
+  // Escritas tal cual me las dictaste. Si un día cambias una, cámbiala también
+  // en la hoja de configuración del Excel: los SUMIFS comparan texto exacto.
   CUENTAS: [
-    "Efectivo",
-    "Cuenta corriente",
-    "Tarjeta de crédito",
+    "Cuenta Corriente",
+    "Tarjeta Credito",
+    "Bizum",
     "Ahorro",
-    "PayPal"
+    "Efectivo"
   ],
 
+  /* Doce categorías de gasto, y son doce por un motivo: en dos columnas caben
+     seis filas en la mitad inferior de la pantalla sin obligar a desplazar. Si
+     añades más, la rejilla empieza a hacer scroll y el paso deja de ser un solo
+     toque. Antes de añadir una, plantéate si no cabe en "Otros".
+
+     Los grupos vienen de la plantilla de presupuesto que ya tenías (facturas,
+     suscripciones, deudas), para que el día que montes el panel cuadren. */
   CATEGORIAS_GASTO: [
     "Alimentación",
     "Restaurantes",
@@ -45,8 +61,8 @@ const CONFIG = {
     "Ocio",
     "Compras",
     "Suscripciones",
-    "Educación",
-    "Regalos",
+    "Deudas",
+    "Viajes",
     "Otros"
   ],
 

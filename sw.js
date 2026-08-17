@@ -11,7 +11,7 @@
 
 // Subir la versión invalida la caché entera. Es la forma más simple de
 // asegurarse de que un despliegue nuevo llega al teléfono.
-const CACHE = 'gastos-v1';
+const CACHE = 'gastos-v2';
 
 const ESENCIALES = [
   './',
@@ -20,6 +20,7 @@ const ESENCIALES = [
   './css/estilos.css',
   './js/ui.js',
   './js/api.js',
+  './js/ajustes.js',
   './js/app.js',
   './manifest.json',
   './iconos/icono.svg',
