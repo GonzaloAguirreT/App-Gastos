@@ -198,9 +198,9 @@ Pasos encadenados, cada uno avanza solo al elegir:
    paso no se salta.
 5. **Concepto** — opcional. "Guardar" o Enter.
 
-Total en un puntual: **teclear el importe + 5 toques**. Los frecuentes meten dos
-preguntas más entre la categoría y la cuenta —cada cuánto y hasta cuándo—, y a
-cambio no vuelves a anotarlo nunca.
+Total en un puntual: **teclear el importe + 5 toques**. Los frecuentes meten tres
+preguntas más entre la categoría y la cuenta —cada cuánto, qué día y hasta
+cuándo—, y a cambio no vuelves a anotarlo nunca.
 
 ### Frecuentes y puntuales
 
@@ -295,9 +295,23 @@ constante `USUARIOS` de `Codigo.gs`: de ahí salen las columnas del panel.
 
 ### Movimientos frecuentes
 
-Al elegir `Frecuentes` en el primer paso, la app pregunta dos cosas más: **cada
-cuánto se repite** (mensual, trimestral o anual) y **durante cuánto tiempo** (de
-3 meses a 3 años, o indefinida).
+Al elegir `Frecuentes` en el primer paso, la app pregunta tres cosas más: **cada
+cuánto se repite** (mensual, trimestral o anual), **qué día del mes** cae, y
+**durante cuánto tiempo** (de 3 meses a 3 años, o indefinida).
+
+El día se pregunta —en vez de deducirlo de la fecha de la cabecera, que es la de
+hoy— porque dar de alta el alquiler un día 17 lo dejaba cobrándose todos los 17,
+y para corregirlo había que acordarse de tocar la fecha *antes* de empezar. La
+pregunta cambia según el tipo: *¿Qué día se paga?* en un gasto, *¿Qué día se
+cobra?* en un ingreso. Viene sugerido el día de la fecha elegida.
+
+> El 31 vale para todos los meses: las fechas se recortan al último día del mes
+> que toque —31 ene, 28 feb, 31 mar— y se calculan siempre desde el inicio, así
+> que no se desvían con los años.
+
+Si el día elegido **ya pasó** este mes, el primer cobro se escribe en el acto:
+si hoy es 17 y el alquiler se paga el 3, el de este mes ya lo has pagado. Si aún
+no ha llegado, espera al disparador.
 
 Lo que se guarda **no es un movimiento**, es una definición en la hoja
 `Suscripciones`. Un disparador diario del Apps Script escribe el cobro el día
