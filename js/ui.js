@@ -33,6 +33,24 @@ const UI = (() => {
     numPendientes: document.getElementById('num-pendientes')
   };
 
+  /**
+   * Comprueba que el HTML servido sea de la misma versión que este JS.
+   *
+   * Si falta un elemento, lo que hay cargado es un index.html de otra versión.
+   * Antes eso se manifestaba como una app que se quedaba muerta a mitad de un
+   * paso, sin error visible y sin pista de por dónde mirar: el primer
+   * `el.loQueSea.textContent` sobre un null tumbaba el módulo entero.
+   *
+   * Un fallo así no se puede arreglar desde dentro, pero sí se puede decir en
+   * voz alta y dar la única instrucción que lo resuelve.
+   */
+  function elementosQueFaltan() {
+    return Object.keys(el).filter(nombre => {
+      const nodo = el[nombre];
+      return !nodo || (typeof nodo.length === 'number' && nodo.length === 0);
+    });
+  }
+
   const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
                  'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -175,6 +193,7 @@ const UI = (() => {
   return {
     el, hoyISO, formatearFecha, formatearImporte, pintarFecha, pintarMigas,
     mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes, habilitarRamas,
+    elementosQueFaltan,
     toast, ocultarToast, vibrar
   };
 })();

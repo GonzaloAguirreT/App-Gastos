@@ -422,6 +422,18 @@
   }
 
   async function iniciar() {
+    /* Antes de nada: que el HTML cargado sea de esta misma versión. Si no lo
+       es, la app se rompería a mitad de un paso sin decir por qué, y desde
+       fuera es indistinguible de un fallo cualquiera. Mejor pararse y pedir lo
+       único que lo arregla. */
+    const faltan = UI.elementosQueFaltan();
+    if (faltan.length) {
+      console.error('Versiones mezcladas. Faltan estos elementos en el HTML:', faltan);
+      UI.toast('La app está a medias entre dos versiones. Ciérrala del todo y vuelve a abrirla.',
+               { ms: 20000 });
+      return;
+    }
+
     UI.el.moneda.textContent = CONFIG.MONEDA;
     conectarEventos();
     reiniciar();
