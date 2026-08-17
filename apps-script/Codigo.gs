@@ -92,6 +92,20 @@ function doPost(e) {
       return responder({ ok: false, error: 'Token no válido' });
     }
 
+    /* Las lecturas también entran por aquí, y no por doGet, aunque suene raro.
+
+       El doGet funciona si abres la URL en el navegador, pero un fetch desde la
+       PWA falla con "Failed to fetch": Apps Script contesta con una redirección
+       a script.googleusercontent.com y ese salto se lleva por delante las
+       cabeceras de CORS. Pasó de verdad en el despliegue de Gonzalo.
+
+       El POST con Content-Type text/plain sí funciona, porque el navegador lo
+       trata como petición simple. Así que la lectura viaja como POST. doGet se
+       queda solo para comprobar a mano desde el navegador. */
+    if (peticion.accion === 'resumen') {
+      return responder(resumenDelMes(Number(peticion.n) || 10));
+    }
+
     /* Se acepta un movimiento suelto o una lista. La lista existe por los
        traspasos, que son dos filas que tienen que entrar juntas o no entrar:
        media transferencia escrita descuadra los saldos de las dos cuentas. */
@@ -172,6 +186,12 @@ function uuidYaRegistrado(uuid) {
    Lectura (pantalla de resumen)
    ======================================================================== */
 
+/**
+ * doGet queda para comprobar el despliegue a mano desde el navegador: pegas la
+ * URL con ?token=... y ves el JSON. La app NO lo usa, porque un fetch contra él
+ * muere en la redirección de Apps Script; sus lecturas van por doPost con
+ * accion: 'resumen'.
+ */
 function doGet(e) {
   try {
     const parametros = (e && e.parameter) || {};
@@ -180,13 +200,23 @@ function doGet(e) {
       return responder({ ok: false, error: 'Token no válido' });
     }
 
-    const cuantos = Math.min(Number(parametros.n) || 10, 50);
+    return responder(resumenDelMes(Number(parametros.n) || 10));
+
+  } catch (error) {
+    return responder({ ok: false, error: String(error) });
+  }
+}
+
+/** Totales del mes en curso y últimos movimientos. Lo comparten doGet y doPost. */
+function resumenDelMes(cuantosPedidos) {
+  try {
+    const cuantos = Math.min(cuantosPedidos || 10, 50);
     const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_MOVIMIENTOS);
-    if (!hoja) return responder({ ok: false, error: 'No existe la hoja ' + HOJA_MOVIMIENTOS });
+    if (!hoja) return { ok: false, error: 'No existe la hoja ' + HOJA_MOVIMIENTOS };
 
     const ultimaFila = hoja.getLastRow();
     if (ultimaFila < 2) {
-      return responder({ ok: true, mes: ceros(), ultimos: [] });
+      return { ok: true, mes: ceros(), ultimos: [] };
     }
 
     const filas = hoja.getRange(2, 1, ultimaFila - 1, CABECERAS.length).getValues();
@@ -225,10 +255,10 @@ function doGet(e) {
       categoria: String(fila[5] || '')
     }));
 
-    return responder({ ok: true, mes: totales, ultimos: ultimos });
+    return { ok: true, mes: totales, ultimos: ultimos };
 
   } catch (error) {
-    return responder({ ok: false, error: String(error) });
+    return { ok: false, error: String(error) };
   }
 }
 

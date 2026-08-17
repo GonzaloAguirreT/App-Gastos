@@ -12,7 +12,7 @@
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v3';
+const CACHE = 'gastos-v4';
 
 const ESENCIALES = [
   './',
