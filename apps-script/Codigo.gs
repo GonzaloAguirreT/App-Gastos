@@ -50,10 +50,18 @@ function instalar() {
     movimientos.getRange(1, 1, 1, CABECERAS.length).setFontWeight('bold');
     movimientos.setFrozenRows(1);
   }
-  // Se fija el formato de la columna de fecha para que lo que ve Power Query
-  // sea siempre yyyy-mm-dd, independientemente del idioma de la hoja.
+  /* Formato de las columnas de fecha e importe. Se aplica a la columna entera
+     y ADEMÁS a las filas que ya existan: fijar solo la columna no bastó, las
+     filas escritas con appendRow acababan mostrándose como dd/mm/yyyy. Volver
+     a ejecutar instalar() repara las filas viejas. */
   movimientos.getRange('A2:A').setNumberFormat('yyyy-mm-dd');
   movimientos.getRange('C2:C').setNumberFormat('0.00');
+
+  const ultima = movimientos.getLastRow();
+  if (ultima >= 2) {
+    movimientos.getRange(2, 1, ultima - 1, 1).setNumberFormat('yyyy-mm-dd');
+    movimientos.getRange(2, 3, ultima - 1, 1).setNumberFormat('0.00');
+  }
 
   let uuids = libro.getSheetByName(HOJA_UUIDS);
   if (!uuids) {
@@ -165,6 +173,13 @@ function escribirMovimiento(m) {
     m.tipo,
     m.categoria
   ]);
+
+  /* El formato se fija en la fila recién escrita, no solo en la columna.
+     Haberlo puesto únicamente en la columna al instalar no funcionó: las filas
+     que añade appendRow se mostraban como 17/08/2026 en vez de 2026-08-17. */
+  const fila = hoja.getLastRow();
+  hoja.getRange(fila, 1).setNumberFormat('yyyy-mm-dd');
+  hoja.getRange(fila, 3).setNumberFormat('0.00');
 }
 
 function registrarUuid(uuid) {

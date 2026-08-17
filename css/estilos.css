@@ -545,3 +545,125 @@ body {
 .chip-pendientes[hidden] { display: none; }
 
 .chip-pendientes .flecha { font-size: 13px; opacity: 0.8; }
+
+/* ---------- Pantalla de resumen ---------- */
+
+.aviso-cache {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--texto-suave);
+}
+
+.aviso-cache[hidden] { display: none; }
+
+.totales {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.total {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* El ahorro es la cifra que de verdad se mira, así que ocupa las dos columnas
+   y va más grande. Ingresos y gastos son el desglose que la explica. */
+.total-ahorro { grid-column: 1 / -1; }
+
+.total-etiqueta {
+  font-size: 14px;
+  color: var(--texto-suave);
+}
+
+.total-cifra {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.total-ahorro .total-cifra {
+  font-size: 30px;
+  color: var(--acento);
+}
+
+/* Un ahorro negativo es el único dato de la app que conviene que moleste. */
+.total-ahorro .total-cifra.negativo { color: #FF9E9E; }
+
+.subtitulo {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--texto-suave);
+}
+
+.lista-movimientos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.movimiento {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.movimiento:last-child { border-bottom: none; }
+
+.mov-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mov-principal {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mov-detalle {
+  font-size: 13px;
+  color: var(--texto-suave);
+}
+
+.mov-importe {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mov-importe.ingreso { color: var(--acento); }
+.mov-importe.traspaso { color: var(--texto-suave); }
+
+.lista-vacia {
+  padding: 20px 2px;
+  font-size: 15px;
+  color: var(--texto-suave);
+}
+
+/* Reintentar solo aparece si hay algo que reintentar, así que la fila no puede
+   ser una rejilla de dos columnas fijas: quedaría un hueco. */
+.pantalla-acciones-resumen {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.pantalla-acciones-resumen .btn-texto { align-self: center; }

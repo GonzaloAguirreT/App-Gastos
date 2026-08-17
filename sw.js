@@ -13,7 +13,7 @@
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v6';
+const CACHE = 'gastos-v7';
 
 /* El mismo código de IndexedDB y de envío que usa la página. Se importa en vez
    de reescribirlo aquí: dos copias de la lógica de la cola acabarían
@@ -31,6 +31,7 @@ const ESENCIALES = [
   './js/api.js',
   './js/cola.js',
   './js/ajustes.js',
+  './js/resumen.js',
   './js/app.js',
   './manifest.json',
   './iconos/icono.svg',

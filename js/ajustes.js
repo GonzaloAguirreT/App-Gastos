@@ -15,7 +15,8 @@ const AJUSTES = (() => {
 
   const el = {
     pantalla: document.getElementById('pantalla-ajustes'),
-    abrir: document.getElementById('btn-ajustes'),
+    // No hay botón propio en la cabecera: se entra desde el resumen. Los
+    // ajustes se tocan una vez y el hueco de la cabecera vale más para otra cosa.
     cerrar: document.getElementById('btn-cerrar-ajustes'),
     endpoint: document.getElementById('input-endpoint'),
     token: document.getElementById('input-token'),
@@ -159,7 +160,6 @@ const AJUSTES = (() => {
   }
 
   async function iniciar() {
-    el.abrir.addEventListener('click', abrir);
     el.cerrar.addEventListener('click', cerrar);
     el.generar.addEventListener('click', () => {
       el.token.value = generarToken();
