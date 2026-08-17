@@ -330,7 +330,37 @@
       // (http:// que no sea localhost). Ver README.
       navigator.serviceWorker.register('sw.js').catch(e =>
         console.warn('Service worker no registrado:', e.message));
+
+      vigilarActualizaciones();
     }
+  }
+
+  /**
+   * Cuando se despliega una versión nueva, el service worker se la descarga por
+   * detrás pero la pestaña abierta sigue con la vieja hasta que se recarga.
+   * Sin esto hay que cerrar y abrir la app para ver los cambios, y no hay forma
+   * de saber que hace falta.
+   */
+  function vigilarActualizaciones() {
+    // En la primera instalación no hay controlador previo, y no hay nada viejo
+    // que sustituir: recargar ahí sería un parpadeo gratuito.
+    const habiaControlador = Boolean(navigator.serviceWorker.controller);
+    let yaRecargando = false;
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!habiaControlador || yaRecargando) return;
+
+      // Recargar a media captura borraría el importe tecleado. Si estás en
+      // mitad de algo, se avisa y la versión nueva espera al siguiente arranque.
+      const aMedias = indice !== 0 || UI.el.inputImporte.value || pendiente;
+      if (aMedias) {
+        UI.toast('Hay una versión nueva. Se aplicará al reabrir la app.', { ms: 5000 });
+        return;
+      }
+
+      yaRecargando = true;
+      location.reload();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', iniciar);
