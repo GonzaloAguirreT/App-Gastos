@@ -9,14 +9,17 @@
 
   const PASOS = ['importe', 'tipo', 'categoria', 'cuenta', 'concepto'];
   const CLAVE_ULTIMA_CUENTA = 'gastos.ultimaCuenta';
-  const MS_DESHACER = 5000;
+  const MS_DESHACER = NUCLEO.MS_DESHACER;
 
   let indice = 0;
   let movimiento = movimientoVacio();
 
-  // Movimiento guardado a la espera de que pasen los 5 segundos de deshacer.
-  // En la fase 3 esto pasará a IndexedDB para que cerrar la app no lo pierda.
-  let pendiente = null;
+  /* Lo último guardado, solo para poder deshacerlo. El movimiento en sí ya está
+     en IndexedDB desde el instante en que pulsas Guardar: esto es una copia
+     para repintar la pantalla si te arrepientes, no el dato bueno. Si cierras
+     la app durante la ventana de deshacer, esta variable desaparece y el
+     movimiento se envía igual, que es justo lo que queremos. */
+  let ultimoGuardado = null;
   let temporizadorEnvio = null;
 
   function movimientoVacio() {
@@ -201,41 +204,61 @@
     return !movimiento.categoria || !movimiento.cuenta;
   }
 
-  function guardar() {
+  async function guardar() {
     if (faltaAlgo()) {
       UI.toast('Falta algún dato del movimiento');
       return;
     }
 
-    // Si aún había uno esperando su ventana de deshacer, se envía ya: nunca
-    // puede haber dos pendientes a la vez.
-    confirmarPendiente();
-
     movimiento.concepto = UI.el.inputConcepto.value.trim();
-    pendiente = { origen: { ...movimiento }, filas: filasDe(movimiento) };
+    const filas = filasDe(movimiento);
+    const grupo = filas[0].uuid;   // el uuid de la primera fila identifica al lote
+
+    /* A disco ANTES de nada. Este es el punto en el que el movimiento deja de
+       poder perderse: aunque se vaya la batería en el segundo siguiente, la
+       fila ya está en IndexedDB y saldrá al arrancar la app. Lo que viene
+       después —el aviso, el envío, los reintentos— puede fallar sin
+       consecuencias. */
+    try {
+      await NUCLEO.encolar(filas, grupo);
+    } catch (error) {
+      // Si ni siquiera se puede escribir en disco, hay que decirlo claramente:
+      // es el único caso en el que un movimiento se pierde de verdad.
+      console.error('No se pudo encolar el movimiento:', error);
+      UI.toast(`NO se ha guardado (${error.message}). Vuelve a anotarlo.`, { ms: 7000 });
+      return;
+    }
+
+    ultimoGuardado = { origen: { ...movimiento }, grupo };
+    COLA.pintarIndicador();
 
     UI.vibrar(20);
     const importeMostrado = UI.formatearImporte(movimiento.importe, CONFIG.MONEDA);
     const texto = esTraspaso()
       ? `Traspaso de ${importeMostrado}`
       : `Guardado ${importeMostrado}`;
-    UI.toast(texto, {
-      ms: MS_DESHACER,
-      alDeshacer: deshacer
-    });
+    UI.toast(texto, { ms: MS_DESHACER, alDeshacer: deshacer });
 
-    temporizadorEnvio = setTimeout(confirmarPendiente, MS_DESHACER);
+    // Pasada la ventana de deshacer, se intenta enviar. Si no hay red no pasa
+    // nada: sigue en la cola y se reintenta solo.
+    clearTimeout(temporizadorEnvio);
+    temporizadorEnvio = setTimeout(() => {
+      ultimoGuardado = null;
+      COLA.procesar();
+    }, MS_DESHACER);
 
-    // Vuelta al paso 1 inmediatamente: el movimiento anterior se envía solo por
-    // detrás. No hay pantalla intermedia ni confirmación que cerrar.
+    // Vuelta al paso 1 inmediatamente. No hay pantalla intermedia que cerrar.
     reiniciar();
   }
 
-  function deshacer() {
+  async function deshacer() {
     clearTimeout(temporizadorEnvio);
-    const descartado = pendiente;
-    pendiente = null;
+    const descartado = ultimoGuardado;
+    ultimoGuardado = null;
     if (!descartado) return;
+
+    await NUCLEO.borrarGrupo(descartado.grupo);
+    COLA.pintarIndicador();
 
     // Se recupera el movimiento en el paso del concepto para poder corregirlo
     // en vez de tener que teclearlo otra vez.
@@ -246,25 +269,6 @@
     UI.pintarFecha(movimiento.fecha);
     irA(PASOS.indexOf('concepto'), true);
     UI.toast('Movimiento recuperado');
-  }
-
-  async function confirmarPendiente() {
-    clearTimeout(temporizadorEnvio);
-    if (!pendiente) return;
-
-    const aEnviar = pendiente;
-    pendiente = null;
-
-    try {
-      await API.enviar(aEnviar.filas);
-    } catch (error) {
-      /* Fase 3: aquí va la cola en IndexedDB y este movimiento se reintentará
-         solo. Hasta entonces se pierde, así que el aviso tiene que ser
-         inequívoco: si dijéramos "no se pudo enviar" a secas, es fácil
-         entender que ya se reintentará y quedarse tan tranquilo. */
-      console.error('No se pudo enviar el movimiento:', error);
-      UI.toast(`NO se ha guardado (${error.message}). Vuelve a anotarlo.`, { ms: 7000 });
-    }
   }
 
   /* ----------------------------------------------------------------- fecha */
@@ -304,24 +308,35 @@
       UI.pintarFecha(movimiento.fecha);
     });
 
-    // Salir de la app durante la ventana de deshacer no puede perder el
-    // movimiento: se envía en cuanto la pantalla se oculta.
+    /* Al salir de la app ya no puedes deshacer, así que la espera de cinco
+       segundos deja de tener sentido y se envía lo que haya. El movimiento no
+       corre peligro en ningún caso —está en disco desde que pulsaste Guardar—,
+       pero cuanto antes llegue a la hoja, mejor. */
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') confirmarPendiente();
+      if (document.visibilityState === 'hidden') {
+        clearTimeout(temporizadorEnvio);
+        ultimoGuardado = null;
+        COLA.procesar({ ignorarDeshacer: true, ignorarBackoff: true });
+      }
     });
   }
 
-  function iniciar() {
+  async function iniciar() {
     UI.el.moneda.textContent = CONFIG.MONEDA;
     conectarEventos();
-    AJUSTES.iniciar();
     reiniciar();
+
+    // Primero la migración de ajustes, que puede traer el token de localStorage,
+    // y solo después la cola: si no, el primer vaciado creería que no hay
+    // configuración y pospondría todo sin motivo.
+    await AJUSTES.iniciar();
+    COLA.iniciar();
 
     if (CONFIG.MODO_PRUEBA) {
       console.info('MODO_PRUEBA activo: nada se envía, todo va a la consola.');
-    } else if (!AJUSTES.configurado()) {
+    } else if (!await AJUSTES.configurado()) {
       // Sin endpoint ni token no hay dónde escribir. Mejor pedirlos al entrar
-      // que dejar que el primer gasto se pierda con un error.
+      // que dejar que el primer gasto se quede atascado en la cola.
       AJUSTES.abrir();
     }
 
@@ -352,7 +367,7 @@
 
       // Recargar a media captura borraría el importe tecleado. Si estás en
       // mitad de algo, se avisa y la versión nueva espera al siguiente arranque.
-      const aMedias = indice !== 0 || UI.el.inputImporte.value || pendiente;
+      const aMedias = indice !== 0 || UI.el.inputImporte.value || ultimoGuardado;
       if (aMedias) {
         UI.toast('Hay una versión nueva. Se aplicará al reabrir la app.', { ms: 5000 });
         return;
