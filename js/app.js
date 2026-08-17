@@ -188,10 +188,12 @@
     try {
       await API.enviar(aEnviar);
     } catch (error) {
-      // Fase 3: aquí va la cola en IndexedDB. Hasta entonces, avisar y no
-      // fingir que se ha guardado.
+      /* Fase 3: aquí va la cola en IndexedDB y este movimiento se reintentará
+         solo. Hasta entonces se pierde, así que el aviso tiene que ser
+         inequívoco: si dijéramos "no se pudo enviar" a secas, es fácil
+         entender que ya se reintentará y quedarse tan tranquilo. */
       console.error('No se pudo enviar el movimiento:', error);
-      UI.toast('No se pudo enviar. Pendiente de la cola (fase 3)');
+      UI.toast(`NO se ha guardado (${error.message}). Vuelve a anotarlo.`, { ms: 7000 });
     }
   }
 
@@ -242,10 +244,15 @@
   function iniciar() {
     UI.el.moneda.textContent = CONFIG.MONEDA;
     conectarEventos();
+    AJUSTES.iniciar();
     reiniciar();
 
     if (CONFIG.MODO_PRUEBA) {
       console.info('MODO_PRUEBA activo: nada se envía, todo va a la consola.');
+    } else if (!AJUSTES.configurado()) {
+      // Sin endpoint ni token no hay dónde escribir. Mejor pedirlos al entrar
+      // que dejar que el primer gasto se pierda con un error.
+      AJUSTES.abrir();
     }
 
     if ('serviceWorker' in navigator) {

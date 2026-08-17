@@ -24,6 +24,15 @@
     <input type="date" id="input-fecha" class="input-fecha-oculto" tabindex="-1" aria-hidden="true">
 
     <ol class="migas" id="migas" aria-label="Progreso"></ol>
+
+    <button type="button" id="btn-ajustes" class="btn-icono" aria-label="Ajustes">
+      <!-- Un engranaje dibujado a mano: seis dientes y un agujero. Cargar una
+           tipografía de iconos por un solo símbolo no compensa. -->
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path fill="currentColor" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm0 5.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
+        <path fill="currentColor" d="M19.4 12c0-.5-.05-.98-.14-1.44l1.86-1.4-1.9-3.29-2.2.85a7.5 7.5 0 0 0-2.5-1.45L14.2 3h-3.8l-.32 2.27a7.5 7.5 0 0 0-2.5 1.45l-2.2-.85-1.9 3.29 1.86 1.4a7.6 7.6 0 0 0 0 2.88l-1.86 1.4 1.9 3.29 2.2-.85c.74.63 1.58 1.12 2.5 1.45L10.4 21h3.8l.32-2.27a7.5 7.5 0 0 0 2.5-1.45l2.2.85 1.9-3.29-1.86-1.4c.09-.46.14-.94.14-1.44zm-1.66 1.05.2.95 1.35 1.02-.6 1.03-1.6-.62-.73.63c-.6.51-1.28.9-2.03 1.17l-.9.33-.24 1.64h-1.18l-.24-1.64-.9-.33a6 6 0 0 1-2.03-1.17l-.73-.63-1.6.62-.6-1.03 1.35-1.02.2-.95a6.1 6.1 0 0 1 0-2.1l-.2-.95L4.96 8.98l.6-1.03 1.6.62.73-.63c.6-.51 1.28-.9 2.03-1.17l.9-.33.24-1.64h1.18l.24 1.64.9.33c.75.27 1.43.66 2.03 1.17l.73.63 1.6-.62.6 1.03-1.35 1.02-.2.95c.14.7.14 1.4 0 2.1z"/>
+      </svg>
+    </button>
   </header>
 
   <main class="pasos" id="pasos">
@@ -100,14 +109,54 @@
   <!-- Un único botón "Atrás" que la app mueve al paso activo. -->
   <button type="button" class="btn-atras hueco" id="btn-atras">Atrás</button>
 
+  <!-- Ajustes: tapa la captura entera mientras está abierta. Solo se entra a
+       propósito, y en el primer arranque si aún no hay endpoint ni token. -->
+  <section class="pantalla" id="pantalla-ajustes" aria-label="Ajustes" hidden>
+    <header class="cabecera">
+      <h1 class="titulo">Ajustes</h1>
+      <button type="button" id="btn-cerrar-ajustes" class="btn-texto">Cerrar</button>
+    </header>
+
+    <div class="pantalla-cuerpo">
+      <label class="campo">
+        <span class="campo-etiqueta">URL del Apps Script</span>
+        <input type="url" id="input-endpoint" class="campo-input" autocomplete="off"
+               inputmode="url" placeholder="https://script.google.com/macros/s/…/exec">
+        <span class="campo-ayuda">La del despliegue, la que acaba en <code>/exec</code>.</span>
+      </label>
+
+      <label class="campo">
+        <span class="campo-etiqueta">Token</span>
+        <input type="text" id="input-token" class="campo-input" autocomplete="off"
+               spellcheck="false" placeholder="pega o genera uno">
+        <span class="campo-ayuda">Tiene que ser idéntico al de las Propiedades del Script.</span>
+      </label>
+
+      <!-- Fuera del párrafo de ayuda: dentro no cabía un objetivo táctil de
+           48px sin descolocar la línea de texto. -->
+      <button type="button" id="btn-generar-token" class="btn-texto btn-secundario">
+        Generar un token nuevo
+      </button>
+
+      <p class="estado-ajustes" id="estado-ajustes" role="status" aria-live="polite"></p>
+    </div>
+
+    <div class="pantalla-acciones">
+      <button type="button" id="btn-probar" class="btn">Probar conexión</button>
+      <button type="button" id="btn-guardar-ajustes" class="btn btn-primario">Guardar</button>
+    </div>
+  </section>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
     <span class="toast-texto" id="toast-texto"></span>
     <button type="button" class="toast-accion" id="toast-deshacer" hidden>Deshacer</button>
   </div>
 
+  <!-- El orden importa: ajustes.js usa API y UI, y app.js los usa a todos. -->
   <script src="config.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/ajustes.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

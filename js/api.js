@@ -1,9 +1,9 @@
 /**
  * Comunicación con el backend (Google Apps Script).
  *
- * En la fase 1 esto solo se ejercita con MODO_PRUEBA: el movimiento se escribe
- * en la consola y no sale nada a la red. El envío real queda ya escrito para no
- * tener que rehacerlo, pero no se ha probado contra un despliegue hasta la fase 2.
+ * El endpoint y el token no se leen de CONFIG sino de AJUSTES, que los saca del
+ * almacenamiento del teléfono. CONFIG solo actúa de respaldo para cuando estás
+ * trabajando en local y los has rellenado a mano.
  */
 const API = (() => {
 
@@ -20,12 +20,12 @@ const API = (() => {
   }
 
   function configurado() {
-    return Boolean(CONFIG.ENDPOINT && CONFIG.TOKEN);
+    return AJUSTES.configurado();
   }
 
   /**
-   * Envía un movimiento. Lanza excepción si el envío falla, para que quien
-   * llama decida si encolarlo (fase 3) o avisar al usuario.
+   * Envía un movimiento. Lanza excepción si falla, para que quien llama decida
+   * si encolarlo (fase 3) o avisar al usuario.
    */
   async function enviar(movimiento) {
     if (CONFIG.MODO_PRUEBA) {
@@ -34,8 +34,9 @@ const API = (() => {
       return { ok: true, prueba: true };
     }
 
-    if (!configurado()) {
-      throw new Error('Falta ENDPOINT o TOKEN');
+    const ajustes = AJUSTES.leer();
+    if (!ajustes.endpoint || !ajustes.token) {
+      throw new Error('Falta configurar el endpoint o el token');
     }
 
     /* ---------------------------------------------------------------------
@@ -53,19 +54,50 @@ const API = (() => {
 
        No cambiar a application/json aunque parezca lo correcto.
        --------------------------------------------------------------------- */
-    const respuesta = await fetch(CONFIG.ENDPOINT, {
+    const respuesta = await fetch(ajustes.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: CONFIG.TOKEN, movimiento }),
+      body: JSON.stringify({ token: ajustes.token, movimiento }),
+      // Apps Script contesta con un redirect a script.googleusercontent.com.
+      // Hay que seguirlo; es el comportamiento por defecto, se deja explícito
+      // para que nadie lo cambie por error.
       redirect: 'follow'
     });
 
+    return await interpretar(respuesta);
+  }
+
+  /**
+   * Pide el resumen del mes y los últimos movimientos.
+   * @param {object} ajustes opcional, para probar valores aún sin guardar.
+   */
+  async function consultar(ajustes = AJUSTES.leer(), cuantos = 10) {
+    if (!ajustes.endpoint || !ajustes.token) {
+      throw new Error('Falta configurar el endpoint o el token');
+    }
+
+    const url = `${ajustes.endpoint}?token=${encodeURIComponent(ajustes.token)}&n=${cuantos}`;
+    const respuesta = await fetch(url, { method: 'GET', redirect: 'follow' });
+    return await interpretar(respuesta);
+  }
+
+  async function interpretar(respuesta) {
     if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
 
-    const datos = await respuesta.json();
+    const texto = await respuesta.text();
+    let datos;
+    try {
+      datos = JSON.parse(texto);
+    } catch (_) {
+      /* Apps Script devuelve una página HTML de error cuando el despliegue no
+         es accesible o cuando pide iniciar sesión. Da la cara aquí en vez de
+         soltar un "Unexpected token <" que no le dice nada a nadie. */
+      throw new Error('El endpoint no devuelve JSON. Revisa que el despliegue sea "Cualquier persona" y que la URL acabe en /exec');
+    }
+
     if (!datos.ok) throw new Error(datos.error || 'Error desconocido del backend');
     return datos;
   }
 
-  return { uuid, enviar, configurado };
+  return { uuid, enviar, consultar, configurado };
 })();

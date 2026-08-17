@@ -19,8 +19,8 @@ const CONFIG = {
   TOKEN: "",
 
   // En modo prueba no se envía nada: los movimientos se escriben en la consola.
-  // Arranca en true para que la app funcione antes de tener el backend montado.
-  MODO_PRUEBA: true,
+  // Ponlo en true si quieres trastear con el flujo sin tocar la hoja.
+  MODO_PRUEBA: false,
 
   MONEDA: "€",
 
