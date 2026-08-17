@@ -29,17 +29,28 @@ const CABECERAS = ['Fecha', 'Concepto', 'Importe', 'Cuenta', 'Tipo', 'Categoría
 const USUARIOS = ['Gonzalo', 'Camila'];
 
 /* Las categorías de gasto, para las filas del panel y la torta. Tienen que
-   decir lo mismo que CONFIG.CATEGORIAS_GASTO en config.js.
+   decir lo mismo que CONFIG.CATEGORIAS_GASTO y CONFIG.CATEGORIAS_FRECUENTES_GASTO
+   en config.js, y en el mismo orden: primero lo que se repite y luego lo del día
+   a día, que es como se mira un presupuesto —lo fijo arriba, lo variable debajo—.
 
    Se listan aquí en vez de sacarlas de la hoja con UNIQUE a propósito: así el
-   panel enseña las doce SIEMPRE, también las que este mes están a cero, y de un
+   panel las enseña SIEMPRE, también las que este mes están a cero, y de un
    vistazo se ve en qué no has gastado. Con UNIQUE aparecerían y desaparecerían
    filas según el mes, y el gráfico cambiaría de colores cada vez. */
 const CATEGORIAS_GASTO = [
-  'Alimentación', 'Restaurantes', 'Transporte', 'Vivienda',
-  'Suministros', 'Salud', 'Ocio', 'Compras',
-  'Suscripciones', 'Deudas', 'Viajes', 'Otros'
+  'Suscripciones', 'Arriendo', 'Suministros', 'Seguros', 'Préstamos', 'Cuotas',
+  'Alimentación', 'Restaurantes', 'Transporte', 'Hogar',
+  'Salud', 'Ocio', 'Compras', 'Viajes', 'Otros'
 ];
+
+/* Categorías que se retiraron y con las que hay filas ya escritas. Al instalar
+   se renombran en Movimientos y en Suscripciones para que el panel las siga
+   sumando: si no, el histórico se queda huérfano y las cifras de meses
+   anteriores bajan solas sin que nadie entienda por qué. */
+const CATEGORIAS_RENOMBRADAS = {
+  'Vivienda': 'Arriendo',
+  'Deudas': 'Préstamos'
+};
 
 const HOJA_PANEL = 'Panel';
 
@@ -64,10 +75,18 @@ const CATEGORIA_TRASPASO = 'Traspaso';
    cancelas te quedan meses de gastos fantasma que hay que borrar a mano. */
 const HOJA_SUSCRIPCIONES = 'Suscripciones';
 
+/* 'Tipo' va al final, igual que en su día 'Usuario': así ninguna de las doce
+   columnas anteriores cambia de sitio y las suscripciones ya dadas de alta
+   siguen valiendo. Vacío se interpreta como 'Gasto', que es lo que eran todas
+   antes de que los frecuentes admitieran ingresos. */
 const CABECERAS_SUSCRIPCIONES = [
   'UUID', 'Alta', 'Concepto', 'Importe', 'Cuenta', 'Categoría',
-  'Usuario', 'Frecuencia', 'Inicio', 'Fin', 'Activa', 'Último cobro'
+  'Usuario', 'Frecuencia', 'Inicio', 'Fin', 'Activa', 'Último cobro', 'Tipo'
 ];
+
+const COL_SUS_ACTIVA = 11;
+const COL_SUS_ULTIMO_COBRO = 12;
+const COL_SUS_TIPO = 13;
 
 const MESES_POR_FRECUENCIA = { 'Mensual': 1, 'Trimestral': 3, 'Anual': 12 };
 
@@ -113,6 +132,7 @@ function instalar() {
   }
 
   normalizarUsuarios(movimientos);
+  renombrarCategorias(movimientos, 6);
   ponerListaDeUsuarios(movimientos);
 
   let uuids = libro.getSheetByName(HOJA_UUIDS);
@@ -406,6 +426,38 @@ function normalizarUsuarios(hoja) {
   return cambiadas;
 }
 
+/**
+ * Pasa las filas viejas a las categorías nuevas.
+ *
+ * Cuando una categoría se retira, las filas ya escritas se quedan con el nombre
+ * antiguo. El panel las lista por nombre exacto, así que sin esto el alquiler
+ * de agosto desaparecería de la tabla: la cifra del mes bajaría sola y no habría
+ * ni un error que lo delatara. Se ejecuta en cada instalar() y no hace nada si
+ * no encuentra nombres retirados.
+ *
+ * @param {number} columna 1-based, la de Categoría en esa hoja.
+ * @returns {number} cuántas filas se han renombrado.
+ */
+function renombrarCategorias(hoja, columna) {
+  const ultima = hoja.getLastRow();
+  if (ultima < 2) return 0;
+
+  const rango = hoja.getRange(2, columna, ultima - 1, 1);
+  const valores = rango.getValues();
+  var cambiadas = 0;
+
+  for (var i = 0; i < valores.length; i++) {
+    const nueva = CATEGORIAS_RENOMBRADAS[String(valores[i][0] || '').trim()];
+    if (nueva) {
+      valores[i][0] = nueva;
+      cambiadas++;
+    }
+  }
+
+  if (cambiadas) rango.setValues(valores);
+  return cambiadas;
+}
+
 /** Lista desplegable en la columna Usuario, para cuando edites la hoja a mano y
  *  no tengas que acordarte de cómo se escribe exactamente cada nombre. */
 function ponerListaDeUsuarios(hoja) {
@@ -442,7 +494,34 @@ function prepararSuscripciones(libro) {
     hoja.getRange(1, 1, 1, CABECERAS_SUSCRIPCIONES.length).setFontWeight('bold');
     hoja.setFrozenRows(1);
   }
+  /* La columna Tipo llegó con los ingresos frecuentes. Si la hoja es de antes,
+     se le pone la cabecera y se rellenan las filas viejas con 'Gasto', que es
+     lo que eran todas: dejarlas vacías haría que el disparador tuviera que
+     adivinar el signo de cada cobro. */
+  if (hoja.getRange(1, COL_SUS_TIPO).getValue() !== 'Tipo') {
+    hoja.getRange(1, COL_SUS_TIPO).setValue('Tipo').setFontWeight('bold');
+  }
+  const ultima = hoja.getLastRow();
+  if (ultima >= 2) {
+    const tipos = hoja.getRange(2, COL_SUS_TIPO, ultima - 1, 1).getValues();
+    var faltaAlguno = false;
+    for (var i = 0; i < tipos.length; i++) {
+      // Solo las filas que tienen suscripción de verdad; las vacías se quedan.
+      if (!tipos[i][0] && hoja.getRange(i + 2, 1).getValue()) {
+        tipos[i][0] = 'Gasto';
+        faltaAlguno = true;
+      }
+    }
+    if (faltaAlguno) hoja.getRange(2, COL_SUS_TIPO, tipos.length, 1).setValues(tipos);
+  }
+
+  // Las suscripciones vivas también arrastran la categoría vieja, y esas
+  // seguirían escribiendo cobros con ella todos los meses.
+  renombrarCategorias(hoja, 6);
+
+  formatoSeguro(hoja.getRange('B2:B'), 'yyyy-mm-dd hh:mm');
   formatoSeguro(hoja.getRange('I2:J'), 'yyyy-mm-dd');
+  formatoSeguro(hoja.getRange('L2:L'), 'yyyy-mm-dd');
   formatoSeguro(hoja.getRange('D2:D'), '0.00');
   ordenarSuscripciones(hoja);
   return hoja;
@@ -488,7 +567,7 @@ function ordenarSuscripciones(hoja) {
   if (seguidas) {
     // Aun estando en su sitio, la casilla tiene que existir donde hay datos y
     // no existir donde no los hay: es lo que descolocaba las altas.
-    if (cuantas) hoja.getRange(2, 11, cuantas, 1).setDataValidation(casillaActiva());
+    if (cuantas) hoja.getRange(2, COL_SUS_ACTIVA, cuantas, 1).setDataValidation(casillaActiva());
     if (cuantas + 2 <= filas) {
       hoja.getRange(cuantas + 2, 1, filas - cuantas - 1, ancho).clearDataValidations();
     }
@@ -514,7 +593,7 @@ function ordenarSuscripciones(hoja) {
 
   if (!reales.length) return;
   hoja.getRange(2, 1, reales.length, ancho).setValues(reales);
-  hoja.getRange(2, 11, reales.length, 1).setDataValidation(casillaActiva());
+  hoja.getRange(2, COL_SUS_ACTIVA, reales.length, 1).setDataValidation(casillaActiva());
   formatoSeguro(hoja.getRange(2, 9, reales.length, 2), 'yyyy-mm-dd');
   formatoSeguro(hoja.getRange(2, 4, reales.length, 1), '0.00');
 }
@@ -586,9 +665,10 @@ function altaSuscripcion(s) {
 
     hoja.getRange(fila, 1, 1, CABECERAS_SUSCRIPCIONES.length).setValues([[
       s.uuid, new Date(), s.concepto || '', Number(s.importe), s.cuenta,
-      s.categoria, s.usuario || '', s.frecuencia, inicio, fin, true, ''
+      s.categoria, s.usuario || '', s.frecuencia, inicio, fin, true, '',
+      s.tipo === 'Ingreso' ? 'Ingreso' : 'Gasto'
     ]]);
-    hoja.getRange(fila, 11).setDataValidation(casillaActiva());
+    hoja.getRange(fila, COL_SUS_ACTIVA).setDataValidation(casillaActiva());
     formatoSeguro(hoja.getRange(fila, 9, 1, 2), 'yyyy-mm-dd');
     formatoSeguro(hoja.getRange(fila, 4), '0.00');
     registrarUuid('alta-' + s.uuid);
@@ -612,6 +692,10 @@ function validarSuscripcion(s) {
   if (!MESES_POR_FRECUENCIA[s.frecuencia]) return 'Frecuencia no válida';
   if (!s.cuenta) return 'Falta la cuenta';
   if (!s.categoria) return 'Falta la categoría';
+  /* El tipo no se exige: una app sin actualizar no lo manda, y rechazarla
+     dejaría la suscripción atrapada en su cola para siempre. Sin tipo se
+     asume Gasto, que es lo que era todo antes de los ingresos frecuentes. */
+  if (s.tipo && TIPOS_VALIDOS.indexOf(s.tipo) === -1) return 'Tipo debe ser Ingreso o Gasto';
   return null;
 }
 
@@ -665,7 +749,10 @@ function procesarSuscripciones() {
         if (!uuidYaRegistrado(uuid)) {
           escribirMovimiento({
             fecha: iso, concepto: f[2], importe: f[3], cuenta: f[4],
-            tipo: 'Gasto', categoria: f[5], usuario: f[6], uuid: uuid
+            // Vacío = Gasto: las suscripciones dadas de alta antes de que
+            // existieran los ingresos frecuentes no traen esta columna.
+            tipo: f[12] === 'Ingreso' ? 'Ingreso' : 'Gasto',
+            categoria: f[5], usuario: f[6], uuid: uuid
           });
           registrarUuid(uuid);
           escritos++;
@@ -673,8 +760,8 @@ function procesarSuscripciones() {
         ultimo = iso;
       }
 
-      if (ultimo) hoja.getRange(i + 2, 12).setValue(ultimo);
-      if (terminada) hoja.getRange(i + 2, 11).setValue(false);
+      if (ultimo) hoja.getRange(i + 2, COL_SUS_ULTIMO_COBRO).setValue(ultimo);
+      if (terminada) hoja.getRange(i + 2, COL_SUS_ACTIVA).setValue(false);
     }
   } finally {
     bloqueo.releaseLock();

@@ -187,17 +187,39 @@ Application.
 
 ## Cómo funciona la captura
 
-Cinco pasos encadenados, cada uno avanza solo al elegir:
+Pasos encadenados, cada uno avanza solo al elegir:
 
-1. **Importe** — teclado numérico, foco automático. Acepta coma o punto. Enter o
-   "Siguiente".
+1. **Importe** — teclado numérico, foco automático. Acepta coma o punto. Debajo,
+   dos botones que además **eligen la rama**: `Frecuentes` (se repite solo) o
+   `Puntuales` (solo esta vez). Enter equivale a `Puntuales`.
 2. **Tipo** — Gasto / Ingreso. Un toque.
-3. **Categoría** — rejilla, según el tipo elegido. Un toque.
+3. **Categoría** — rejilla, distinta según la rama y el tipo. Un toque.
 4. **Cuenta** — rejilla. Un toque. La última usada aparece resaltada, pero el
    paso no se salta.
 5. **Concepto** — opcional. "Guardar" o Enter.
 
-Total: **teclear el importe + 5 toques**.
+Total en un puntual: **teclear el importe + 5 toques**. Los frecuentes meten dos
+preguntas más entre la categoría y la cuenta —cada cuánto y hasta cuándo—, y a
+cambio no vuelves a anotarlo nunca.
+
+### Frecuentes y puntuales
+
+La pregunta va en el primer paso, con el importe recién tecleado y el pulgar ya
+abajo, porque es la que cambia lo que ocurre después:
+
+| | Puntual | Frecuente |
+|---|---|---|
+| Qué es | una fila | una regla |
+| Qué escribe | un movimiento | uno cada mes, trimestre o año |
+| Dónde vive | `Movimientos` | `Suscripciones`, y de ahí a `Movimientos` |
+| Categorías | Alimentación, Restaurantes… | Suscripciones, Arriendo, Suministros… |
+
+Los dos admiten gasto e ingreso: la nómina se da de alta una vez como ingreso
+frecuente y aparece sola cada mes.
+
+Preguntarlo al principio evita el error caro —anotar el alquiler como gasto
+suelto y tener que repetirlo los doce meses— sin costar ningún toque de más: los
+dos botones ocupan el sitio del antiguo "Siguiente".
 
 La fecha se asume hoy y se cambia tocándola en la cabecera. "Atrás" está visible
 en todos los pasos menos el primero.
@@ -271,21 +293,25 @@ constante `USUARIOS` de `Codigo.gs`: de ahí salen las columnas del panel.
 > movimientos se seguirían escribiendo con un usuario que ya no está en la lista
 > y el panel los sumaría como cero sin dar ningún error.
 
-### Suscripciones
+### Movimientos frecuentes
 
-Al elegir la categoría `Suscripciones`, la app pregunta dos cosas más: **cada
-cuánto se cobra** (mensual, trimestral o anual) y **durante cuánto tiempo** (de
+Al elegir `Frecuentes` en el primer paso, la app pregunta dos cosas más: **cada
+cuánto se repite** (mensual, trimestral o anual) y **durante cuánto tiempo** (de
 3 meses a 3 años, o indefinida).
 
-Lo que se guarda **no es un gasto**, es una definición en la hoja
+Lo que se guarda **no es un movimiento**, es una definición en la hoja
 `Suscripciones`. Un disparador diario del Apps Script escribe el cobro el día
 que toca, y el primero se escribe en el acto al darla de alta.
+
+La columna `Tipo` de esa hoja decide el signo de cada cobro, así que un ingreso
+frecuente —la nómina— escribe filas de `Ingreso` y no de `Gasto`. Vacía se
+interpreta como `Gasto`, que es lo que eran todas antes de que existiera.
 
 Se hace así y no escribiendo todos los cobros por adelantado por dos motivos:
 con duración indefinida no hay un número de filas que escribir, y si cancelas la
 suscripción te quedarían meses de gastos fantasma que borrar a mano.
 
-**Para cancelar una suscripción**, desmarca su casilla `Activa` en la hoja. Deja
+**Para cancelar un frecuente**, desmarca su casilla `Activa` en la hoja. Deja
 de cobrar a partir de ese momento y los cobros ya escritos se quedan como están,
 que es lo correcto: ocurrieron.
 
@@ -299,26 +325,16 @@ que el disparador puede ejecutarse mil veces sin duplicar nada.
 
 ### Traspasos entre cuentas
 
-Debajo de Gasto e Ingreso hay un tercer botón, **Traspaso entre cuentas**, para
-cuando mueves dinero de un sitio tuyo a otro sitio tuyo.
+**La app ya no los captura.** Existieron —un tercer botón junto a Gasto e
+Ingreso— y se quitaron a petición: en el uso real no aparecían, y el botón
+ocupaba sitio en el paso que más se toca.
 
-Mover 200 € de la corriente al ahorro no es un gasto ni un ingreso: ese dinero
-no ha entrado ni salido de tu patrimonio, solo ha cambiado de sitio. Anotarlo
-como gasto te haría el mes 200 € más caro de lo que fue.
-
-El flujo son los mismos cinco pasos, pero los dos del medio preguntan otra cosa:
-
-| | Movimiento normal | Traspaso |
-|---|---|---|
-| Paso 3 | Categoría | **Desde qué cuenta** |
-| Paso 4 | Cuenta | **A qué cuenta** (sin la de origen) |
-
-Se guarda como **dos filas**: un `Gasto` en la cuenta de origen y un `Ingreso`
-en la de destino, ambas con la categoría `Traspaso`. Así el saldo de cada cuenta
-sale bien, y los totales del mes que devuelve `doGet` descuentan esa categoría.
-
-Las dos filas viajan en la misma petición y se escriben bajo el mismo bloqueo:
-media transferencia escrita descuadraría las dos cuentas a la vez.
+Lo que sí sigue en pie es el tratamiento de la categoría `Traspaso`, para las
+filas que escribas a mano en la hoja. Mover 200 € de la corriente al ahorro no
+es un gasto ni un ingreso: ese dinero no ha entrado ni salido de tu patrimonio,
+solo ha cambiado de sitio, y contarlo como gasto te haría el mes 200 € más caro
+de lo que fue. Por eso los totales del mes y las fórmulas del panel descuentan
+esa categoría, y el resumen la pinta sin signo.
 
 > Si montas el panel en el Excel, acuérdate de excluir la categoría `Traspaso`
 > de los SUMIFS de ingresos y gastos. Para los saldos por cuenta, en cambio,
@@ -394,7 +410,7 @@ js/api.js               lo que solo necesita la página
 js/cola.js              reintentos, indicador de pendientes
 js/ajustes.js           endpoint, token y su pantalla
 js/resumen.js           totales del mes y últimos movimientos
-js/app.js               máquina de estados de los 5 pasos
+js/app.js               máquina de estados de los pasos
 iconos/                 SVG, PNG y el generador
 apps-script/Codigo.gs   backend: doPost, doGet e instalar()
 ```
