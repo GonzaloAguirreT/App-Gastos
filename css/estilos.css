@@ -394,6 +394,13 @@ body {
 
 .toast[hidden] { display: none; }
 
+/* Los mensajes de error del backend son frases enteras, no dos palabras. Sin
+   esto se salen del cuadro por la derecha justo cuando más importa leerlos. */
+#toast-texto {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .toast-accion {
   background: transparent;
   border: none;
