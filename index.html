@@ -46,6 +46,16 @@
     </button>
   </header>
 
+  <!-- La ficha ocupa el hueco de la mitad superior, que hasta ahora era negro
+       vacío, y va enseñando el movimiento tal y como lo vas construyendo: el
+       importe en cuanto lo tecleas, y debajo lo que ya has contestado. Sirve
+       para lo mismo que servía el resumen del último paso —comprobar antes de
+       guardar— pero durante todo el recorrido, no solo al final. -->
+  <section class="ficha" id="ficha" aria-live="polite" aria-label="Movimiento en curso">
+    <p class="ficha-importe" id="ficha-importe"></p>
+    <ul class="ficha-datos" id="ficha-datos"></ul>
+  </section>
+
   <main class="pasos" id="pasos">
 
     <!-- Paso 1: importe. Va primero porque es lo único que siempre hay que teclear. -->
@@ -67,12 +77,10 @@
       <div class="paso-acciones">
         <div class="rejilla rejilla-2">
           <button type="button" class="btn btn-opcion btn-alto btn-rama" id="btn-frecuentes" disabled>
-            <span class="signo">↻</span>Frecuentes
-            <span class="ayuda">se repite solo</span>
+            Frecuente
           </button>
           <button type="button" class="btn btn-opcion btn-alto btn-rama" id="btn-puntuales" disabled>
-            <span class="signo">1×</span>Puntuales
-            <span class="ayuda">solo esta vez</span>
+            Puntual
           </button>
         </div>
       </div>
@@ -147,7 +155,6 @@
     <!-- Paso 5: concepto, opcional. Enter también guarda. -->
     <section class="paso" id="paso-concepto" data-paso="5" aria-label="Concepto">
       <div class="paso-cuerpo">
-        <p class="resumen-movimiento" id="resumen-movimiento"></p>
         <input type="text" id="input-concepto" class="input-concepto"
                enterkeyhint="done" autocomplete="off" placeholder="Concepto (opcional)"
                aria-label="Concepto">

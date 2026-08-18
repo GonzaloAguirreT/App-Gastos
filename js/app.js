@@ -84,8 +84,10 @@
     if (nombre === 'dia') pintarDias();
     if (nombre === 'duracion') pintarDuraciones();
     if (nombre === 'cuenta') pintarCuentas();
-    if (nombre === 'concepto') UI.pintarResumen(movimiento, CONFIG.MONEDA);
 
+    /* En el paso del importe la ficha se esconde: el número gigante del campo
+       ya es la ficha, y enseñarlo dos veces en la misma pantalla sobra. */
+    UI.pintarFicha(movimiento, CONFIG.MONEDA, nombre !== 'importe');
     UI.mostrarPaso(nombre, atras);
     UI.pintarMigas(indice, lista.length);
 

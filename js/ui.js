@@ -22,7 +22,9 @@ const UI = (() => {
     preguntaDia: document.getElementById('pregunta-dia'),
     rejillaDias: document.getElementById('rejilla-dias'),
     rejillaDuraciones: document.getElementById('rejilla-duraciones'),
-    resumenMovimiento: document.getElementById('resumen-movimiento'),
+    ficha: document.getElementById('ficha'),
+    fichaImporte: document.getElementById('ficha-importe'),
+    fichaDatos: document.getElementById('ficha-datos'),
     inputConcepto: document.getElementById('input-concepto'),
     btnGuardar: document.getElementById('btn-guardar'),
     btnAtras: document.getElementById('btn-atras'),
@@ -103,6 +105,47 @@ const UI = (() => {
     el.btnAtras.classList.toggle('hueco', nombre === 'importe');
   }
 
+  /**
+   * Pinta la ficha del movimiento en curso, en el hueco de arriba.
+   *
+   * Ese espacio estaba vacío en todos los pasos: negro y nada. Ahora lleva lo
+   * que ya has contestado, que es justo lo que quieres comprobar antes de
+   * guardar sin tener que volver atrás a mirarlo.
+   *
+   * Se enseña solo lo contestado: una ficha con huecos reservados para lo que
+   * falta sería un formulario, y esto no lo es.
+   */
+  function pintarFicha(movimiento, moneda, visible) {
+    el.ficha.classList.toggle('oculta', !visible);
+    if (!visible) return;
+
+    const hayImporte = Boolean(movimiento.importe);
+    const signo = !movimiento.tipo ? '' : (movimiento.tipo === 'Gasto' ? '−' : '+');
+    el.fichaImporte.textContent = hayImporte
+      ? signo + formatearImporte(movimiento.importe, moneda)
+      : '';
+    el.fichaImporte.className = 'ficha-importe' +
+      (movimiento.tipo === 'Ingreso' ? ' es-ingreso' : movimiento.tipo === 'Gasto' ? ' es-gasto' : '');
+
+    const datos = [];
+    if (movimiento.frecuente) datos.push({ clase: 'rama', texto: 'Frecuente' });
+    if (movimiento.categoria) datos.push({ clase: 'categoria', texto: movimiento.categoria });
+    if (movimiento.frecuencia) {
+      datos.push({ clase: 'ritmo', texto: movimiento.frecuencia.toLowerCase() +
+        (movimiento.dia ? ', día ' + movimiento.dia : '') });
+    }
+    if (movimiento.duracion) datos.push({ clase: 'ritmo', texto: movimiento.duracion.etiqueta.toLowerCase() });
+    if (movimiento.cuenta) datos.push({ clase: 'cuenta', texto: movimiento.cuenta });
+
+    el.fichaDatos.innerHTML = '';
+    datos.forEach(d => {
+      const li = document.createElement('li');
+      li.className = 'ficha-dato ' + d.clase;
+      li.textContent = d.texto;
+      el.fichaDatos.appendChild(li);
+    });
+  }
+
   /** Los dos botones del primer paso solo sirven con un importe válido escrito:
    *  avanzar sin importe dejaría un movimiento a medias que hay que abandonar. */
   function habilitarRamas(activos) {
@@ -130,21 +173,6 @@ const UI = (() => {
    *  contrato, pero en pantalla se lee con coma. Solo para mostrar. */
   function formatearImporte(importe, moneda) {
     return `${String(importe).replace('.', ',')} ${moneda}`;
-  }
-
-  function pintarResumen(movimiento, moneda) {
-    const signo = movimiento.tipo === 'Gasto' ? '−' : '+';
-
-    /* En un frecuente lo que importa no es el importe de hoy sino el
-       compromiso: qué es, cada cuánto y hasta cuándo. El importe suelto
-       engaña —10,99 € no dice lo mismo que 10,99 € al mes durante dos años—. */
-    const detalle = movimiento.frecuente
-      ? `${movimiento.categoria} · ${movimiento.frecuencia} día ${movimiento.dia} · ${movimiento.duracion ? movimiento.duracion.etiqueta : ''}`
-      : `${movimiento.categoria} · ${movimiento.cuenta}`;
-
-    el.resumenMovimiento.innerHTML =
-      `${signo}${formatearImporte(movimiento.importe, moneda)}` +
-      `<span class="detalle">${detalle}</span>`;
   }
 
   /** El contador de pendientes solo existe cuando hay algo pendiente. Un "0"
@@ -192,7 +220,8 @@ const UI = (() => {
 
   return {
     el, hoyISO, formatearFecha, formatearImporte, pintarFecha, pintarMigas,
-    mostrarPaso, pintarOpciones, pintarResumen, pintarPendientes, habilitarRamas,
+    mostrarPaso, pintarOpciones, pintarPendientes, habilitarRamas,
+    pintarFicha,
     elementosQueFaltan,
     toast, ocultarToast, vibrar
   };

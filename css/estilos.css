@@ -6,16 +6,24 @@
    ========================================================================= */
 
 :root {
-  --fondo: #0E1013;
-  --superficie: #171A1F;
-  --superficie-alta: #21262E;
-  --borde: #2E353F;
-  --texto: #F4F6F8;
-  --texto-suave: #98A2B0;
-  --acento: #4ADE80;
-  --acento-oscuro: #0C2A18;
+  /* Neutros cálidos, no azulados: la app se mira de noche y en la calle, y un
+     gris frío sobre negro cansa más de lo que parece. */
+  --fondo: #14100E;
+  --superficie: #1F1A17;
+  --superficie-alta: #2B2421;
+  --borde: #3A312C;
+  --texto: #F7F3EF;
+  --texto-suave: #A99B90;
 
-  --radio: 14px;
+  --acento: #FF8A5B;
+  --acento-oscuro: #2A1006;
+
+  /* El color dice de qué se trata sin leer: cada tipo tiene el suyo, y es el
+     mismo en el importe de la ficha, en el signo del botón y en el resumen. */
+  --gasto: #FF8A5B;
+  --ingreso: #6FE39B;
+
+  --radio: 18px;
   --toque-min: 56px;
   /* 150ms: lo justo para que se note el cambio de paso sin que estorbe al
      encadenar toques rápido. Cualquier cosa por encima se siente lenta. */
@@ -41,7 +49,9 @@ html, body {
 }
 
 body {
-  background: var(--fondo);
+  /* Un degradado muy leve desde arriba: sin él, con el fondo tan oscuro la
+     pantalla se lee como un agujero plano. */
+  background: radial-gradient(120% 80% at 50% 0%, #1E1714 0%, #14100E 60%);
   color: var(--texto);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   /* 100dvh y no 100vh: en Chrome Android la barra de direcciones aparece y
@@ -207,7 +217,7 @@ body {
 
 .moneda {
   font-size: 32px;
-  color: var(--texto-suave);
+  color: var(--acento);
 }
 
 .input-importe {
@@ -242,10 +252,13 @@ body {
   padding: 12px 14px;
   text-align: center;
   cursor: pointer;
-  transition: background var(--transicion) ease, border-color var(--transicion) ease;
+  transition: transform 120ms ease, background var(--transicion) ease,
+              border-color var(--transicion) ease;
 }
 
-.btn:active { background: var(--superficie-alta); }
+/* Se hunde un poco al tocarlo. En un móvil no hay puntero ni foco: el único
+   acuse de recibo posible es que el botón reaccione bajo el dedo. */
+.btn:active { background: var(--superficie-alta); transform: scale(0.97); }
 
 .btn-primario {
   background: var(--acento);
@@ -262,7 +275,20 @@ body {
   color: #4C5563;
 }
 
-.btn-guardar { min-height: 64px; }
+/* Guardar va en contorno, no relleno.
+   El coral queda así reservado para el DATO —el importe de la ficha, el signo
+   del gasto— en vez de competir con él desde la acción. Y el botón sigue
+   siendo lo más grande de la pantalla, que es lo que de verdad lo hace fácil
+   de acertar; no hacía falta además que gritara. */
+.btn-guardar {
+  min-height: 64px;
+  background: transparent;
+  border: 1.5px solid var(--acento);
+  color: var(--acento);
+  font-weight: 650;
+}
+
+.btn-guardar:active { background: rgba(255, 138, 91, 0.12); }
 
 .btn-alto {
   min-height: 96px;
@@ -280,15 +306,13 @@ body {
   color: var(--texto-suave);
 }
 
-/* Los dos botones del primer paso. La línea pequeña de debajo dice qué
-   significa cada uno: "Frecuentes" y "Puntuales" son claros una vez lo sabes,
-   pero la primera vez no, y esa duda es justo lo que no queremos a las nueve
-   de la noche en la cola del supermercado. */
-.btn-rama .ayuda {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--texto-suave);
-  line-height: 1.2;
+/* Los dos botones del primer paso llevan una palabra y nada más: ni icono ni
+   coletilla explicativa. Con dos opciones, un símbolo no desempata nada que la
+   palabra no desempate ya, y la explicación sobra en cuanto la has usado dos
+   veces —que es a partir del segundo día—. */
+.btn-rama {
+  font-size: 21px;
+  line-height: 1.25;
 }
 
 /* Deshabilitados hasta que hay importe: sin esto parecen pulsables y no hacen
@@ -335,22 +359,6 @@ body {
 
 .rejilla-scroll::-webkit-scrollbar { display: none; }
 
-/* ---------- Paso 5: concepto ---------- */
-
-.resumen-movimiento {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.resumen-movimiento .detalle {
-  display: block;
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--texto-suave);
-  margin-top: 6px;
-}
 
 .input-concepto {
   width: 100%;
@@ -774,3 +782,58 @@ select.campo-input { appearance: none; }
      y solo en pantallas donde la alternativa era desplazar la rejilla. */
   .btn-opcion { min-height: 52px; }
 }
+
+/* ---------- Ficha del movimiento en curso ---------- */
+
+/* Ocupa el hueco de la mitad superior, que antes era negro y nada. Va fuera de
+   los pasos —no dentro de cada uno— porque el movimiento es uno solo y
+   sobrevive a los siete pasos: repetirla en cada sección sería mantener siete
+   copias del mismo estado. */
+.ficha {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 0;
+  min-height: 0;
+}
+
+/* En el paso del importe el número gigante ya hace de ficha. Se reserva el
+   hueco en vez de quitarlo para que la pantalla no dé un salto al avanzar. */
+.ficha.oculta { visibility: hidden; }
+
+.ficha-importe {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.ficha-importe.es-gasto   { color: var(--gasto); }
+.ficha-importe.es-ingreso { color: var(--ingreso); }
+
+.ficha-datos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ficha-dato {
+  font-size: 14px;
+  color: #E8D6CB;
+  background: rgba(255, 138, 91, 0.08);
+  border: 1px solid rgba(255, 138, 91, 0.28);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+/* El signo de gasto e ingreso lleva su color: es lo que permite elegir sin
+   leer, que en un paso de dos opciones es toda la diferencia. */
+[data-tipo="Gasto"]   .signo { color: var(--gasto); }
+[data-tipo="Ingreso"] .signo { color: var(--ingreso); }
