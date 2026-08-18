@@ -275,7 +275,20 @@ body {
   color: #4C5563;
 }
 
-.btn-guardar { min-height: 64px; }
+/* Guardar va en contorno, no relleno.
+   El coral queda así reservado para el DATO —el importe de la ficha, el signo
+   del gasto— en vez de competir con él desde la acción. Y el botón sigue
+   siendo lo más grande de la pantalla, que es lo que de verdad lo hace fácil
+   de acertar; no hacía falta además que gritara. */
+.btn-guardar {
+  min-height: 64px;
+  background: transparent;
+  border: 1.5px solid var(--acento);
+  color: var(--acento);
+  font-weight: 650;
+}
+
+.btn-guardar:active { background: rgba(255, 138, 91, 0.12); }
 
 .btn-alto {
   min-height: 96px;

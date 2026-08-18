@@ -199,8 +199,8 @@ Application.
 Pasos encadenados, cada uno avanza solo al elegir:
 
 1. **Importe** — teclado numérico, foco automático. Acepta coma o punto. Debajo,
-   dos botones que además **eligen la rama**: `Frecuentes` (se repite solo) o
-   `Puntuales` (solo esta vez). Enter equivale a `Puntuales`.
+   dos botones que además **eligen la rama**: *"Se repite solo"* (frecuente) o
+   *"Solo esta vez"* (puntual). Enter equivale al segundo.
 2. **Tipo** — Gasto / Ingreso. Un toque.
 3. **Categoría** — rejilla, distinta según la rama y el tipo. Un toque.
 4. **Cuenta** — rejilla. Un toque. La última usada aparece resaltada, pero el
