@@ -37,11 +37,20 @@ Lo que va a crear:
   |---|---|---|---|---|---|---|
   | `yyyy-mm-dd` | texto libre | número positivo | texto | `Ingreso` o `Gasto` | texto | texto |
 
-- Tres hojas de panel: **`Panel`** con todos, y **`Panel Gonzalo`** y **`Panel
-  Camila`** con cada uno por separado. Cada una lleva el gasto por mes, el gasto
-  por categoría del mes en curso y su propio gráfico de torta. Son fórmulas, no
-  datos volcados: se recalculan solas con cada fila que entra. No escribas nada
-  en ellas.
+- Una hoja **`Año`** y doce hojas de mes, **`Enero`** a **`Diciembre`**:
+
+  | Hoja | Qué lleva |
+  |---|---|
+  | `Año` | Gasto de cada persona en cada mes, con el total del año y un gráfico de barras |
+  | `Enero`…`Diciembre` | Ingresos, gastos y lo que queda; el desglose por categoría de cada persona; y tres tortas: una por persona y otra del conjunto |
+
+  Son fórmulas, no datos volcados: se recalculan solas con cada fila que entra.
+  No escribas nada en ellas.
+
+  **Miran siempre el año en curso.** El 1 de enero las trece se ponen a cero y
+  empiezan el año nuevo. Lo anterior no se pierde —sigue entero en
+  `Movimientos`—, pero deja de verse en los paneles; si algún año quieres
+  conservarlo a la vista, duplica las hojas antes de que cambie el año.
 
 - Una hoja **`Suscripciones`** con los gastos recurrentes dados de alta. Ver
   abajo.

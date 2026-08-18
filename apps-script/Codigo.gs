@@ -52,11 +52,18 @@ const CATEGORIAS_RENOMBRADAS = {
   'Deudas': 'Préstamos'
 };
 
-const HOJA_PANEL = 'Panel';
+/* Una hoja por mes, más el resumen del año. Se llaman por su nombre —Enero,
+   Febrero...— porque una pestaña que se llama como el mes se encuentra sin
+   pensar, que es de lo que va todo esto.
 
-/* Además del panel global hay uno por persona. Se llaman "Panel Gonzalo" y
-   "Panel Camila": el prefijo los agrupa al ordenar las pestañas. */
-function nombrePanelDe(usuario) { return HOJA_PANEL + ' ' + usuario; }
+   El orden del array ES el orden de las pestañas y el número de mes: el índice
+   0 es enero. No reordenar. */
+const MESES_DEL_ANIO = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+const HOJA_ANIO = 'Año';
 const TIPOS_VALIDOS = ['Ingreso', 'Gasto'];
 
 /* Los traspasos entre cuentas propias no son ni ingreso ni gasto: el dinero no
@@ -156,139 +163,208 @@ function instalar() {
 }
 
 /**
- * Crea (o rehace) la hoja Panel: gasto por persona y mes, y un gráfico de torta
- * con el reparto del mes en curso.
+ * Rehace las hojas del año: una por cada mes, más el resumen anual.
  *
  * Todo son fórmulas, no valores volcados. Es lo que hace que sea dinámico: cada
- * fila nueva que escribe la app recalcula la tabla y el gráfico sin que nadie
- * ejecute nada. Un volcado con datos habría que refrescarlo a mano, y el día que
- * se te olvidara estarías mirando un panel viejo sin saberlo.
+ * fila nueva que escribe la app recalcula las tablas y los gráficos sin que
+ * nadie ejecute nada. Un volcado habría que refrescarlo a mano, y el día que se
+ * te olvidara estarías mirando cifras viejas sin saberlo.
+ *
+ * Las hojas miran SIEMPRE el año en curso: el 1 de enero se ponen a cero y
+ * empiezan el año nuevo. Lo anterior no se pierde —sigue entero en
+ * Movimientos—, pero deja de verse en el panel. Si algún año quieres
+ * conservarlo a la vista, duplica las hojas antes de que cambie el año.
  *
  * Volver a ejecutar instalar() rehace las fórmulas pero no toca Movimientos.
  */
 function crearPanel(libro) {
-  crearHojaPanel(libro, HOJA_PANEL, USUARIOS, 'Gastos');
-  USUARIOS.forEach(function (usuario) {
-    crearHojaPanel(libro, nombrePanelDe(usuario), [usuario], 'Gastos de ' + usuario);
+  crearHojaAnio(libro);
+  MESES_DEL_ANIO.forEach(function (nombre, i) {
+    crearHojaMes(libro, nombre, i + 1);
+  });
+  retirarPanelesViejos(libro);
+}
+
+/* Los paneles de antes —uno global y uno por persona, con doce meses móviles—
+   los sustituyen estas hojas. Se borran en vez de dejarlos ahí: eran solo
+   fórmulas, no guardaban ningún dato, y tener dos sitios que dicen lo mismo
+   acaba con alguien mirando el que no toca. */
+function retirarPanelesViejos(libro) {
+  const viejas = ['Panel'].concat(USUARIOS.map(function (u) { return 'Panel ' + u; }));
+  viejas.forEach(function (nombre) {
+    const hoja = libro.getSheetByName(nombre);
+    if (hoja) libro.deleteSheet(hoja);
   });
 }
 
 /**
- * Pinta una hoja de panel para las personas que se le pasen.
+ * Hoja "Año": cuánto gasta cada uno en cada mes del año en curso.
  *
- * La misma función sirve para el panel global —con todos— y para el de cada
- * uno —con uno solo—, en vez de tener tres copias que se desincronicen a la
- * primera de cambio.
- *
- * @param {string} titulo cabecera de la hoja
- * @param {string[]} personas columnas de las tablas
+ * Es la vista de arriba, la que responde a "¿en qué mes se nos fue la mano?".
+ * El detalle de cada mes vive en su propia hoja.
  */
-function crearHojaPanel(libro, nombreHoja, personas, titulo) {
-  const MESES_MOSTRADOS = 12;
+function crearHojaAnio(libro) {
   const FILA_CABECERA = 4;
   const COL_USUARIO_1 = 2;
-  /* Con una sola persona la columna Total repetiría la anterior, así que no se
-     pone: una cifra duplicada al lado de sí misma solo hace dudar. */
-  const hayTotal = personas.length > 1;
-  const colTotal = COL_USUARIO_1 + personas.length;
-  const colUltima = hayTotal ? colTotal : colTotal - 1;
-  const colGrafico = colUltima + 2;
+  const colTotal = COL_USUARIO_1 + USUARIOS.length;
 
-  const panel = hojaPanelLimpia(libro, nombreHoja);
+  const hoja = hojaLimpia(libro, HOJA_ANIO, 0);
+  const sep = separadorDeFormulas(hoja);
 
-  const sep = separadorDeFormulas(panel);
+  hoja.getRange(1, 1).setFormula('="Año "&YEAR(TODAY())').setFontSize(14).setFontWeight('bold');
+  hoja.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
+      .setFontColor('#888888');
 
-  panel.getRange(1, 1).setValue(titulo).setFontSize(14).setFontWeight('bold');
-  panel.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
-       .setFontColor('#888888');
-
-  // ---- Tabla 1: cuánto se gasta cada mes
-  panel.getRange(FILA_CABECERA, 1).setValue('Mes');
-  personas.forEach(function (nombre, i) {
-    panel.getRange(FILA_CABECERA, COL_USUARIO_1 + i).setValue(nombre);
+  hoja.getRange(FILA_CABECERA, 1).setValue('Mes');
+  USUARIOS.forEach(function (nombre, i) {
+    hoja.getRange(FILA_CABECERA, COL_USUARIO_1 + i).setValue(nombre);
   });
-  if (hayTotal) panel.getRange(FILA_CABECERA, colTotal).setValue('Total');
-  panel.getRange(FILA_CABECERA, 1, 1, colUltima).setFontWeight('bold');
+  hoja.getRange(FILA_CABECERA, colTotal).setValue('Total');
+  hoja.getRange(FILA_CABECERA, 1, 1, colTotal).setFontWeight('bold');
 
-  /* Los meses se calculan hacia atrás desde el actual, así que la tabla se
-     desplaza sola con el calendario y nunca hay que añadir filas a mano. */
-  const filaPrimerMes = FILA_CABECERA + 1;
-  panel.getRange(filaPrimerMes, 1).setFormula('=EOMONTH(TODAY()' + sep + '-1)+1');
-  for (var i = 1; i < MESES_MOSTRADOS; i++) {
-    panel.getRange(filaPrimerMes + i, 1)
-         .setFormula('=EDATE(A' + (filaPrimerMes + i - 1) + sep + '-1)');
-  }
-  formatoSeguro(panel.getRange(filaPrimerMes, 1, MESES_MOSTRADOS, 1), 'yyyy-mm');
-
-  for (var f = 0; f < MESES_MOSTRADOS; f++) {
-    const fila = filaPrimerMes + f;
-    personas.forEach(function (nombre, u) {
-      panel.getRange(fila, COL_USUARIO_1 + u).setFormula(
-        formulaGasto('$A' + fila, letra(COL_USUARIO_1 + u) + '$' + FILA_CABECERA, sep));
+  MESES_DEL_ANIO.forEach(function (nombre, i) {
+    const fila = FILA_CABECERA + 1 + i;
+    hoja.getRange(fila, 1).setValue(nombre);
+    USUARIOS.forEach(function (persona, u) {
+      hoja.getRange(fila, COL_USUARIO_1 + u).setFormula(
+        formulaGasto(letra(COL_USUARIO_1 + u) + '$' + FILA_CABECERA, i + 1, null, sep));
     });
-    if (hayTotal) {
-      panel.getRange(fila, colTotal).setFormula(
-        '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
-    }
+    hoja.getRange(fila, colTotal).setFormula(
+      '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+  });
+
+  const filaTotal = FILA_CABECERA + 1 + MESES_DEL_ANIO.length;
+  hoja.getRange(filaTotal, 1).setValue('Total año').setFontWeight('bold');
+  for (var c = COL_USUARIO_1; c <= colTotal; c++) {
+    hoja.getRange(filaTotal, c).setFormula(
+      '=SUM(' + letra(c) + (FILA_CABECERA + 1) + ':' + letra(c) + (filaTotal - 1) + ')')
+      .setFontWeight('bold');
   }
-  formatoSeguro(
-    panel.getRange(filaPrimerMes, COL_USUARIO_1, MESES_MOSTRADOS, colUltima - COL_USUARIO_1 + 1),
-    '#,##0.00 \u20ac');
 
-  // ---- Tabla 2: en qué se va el dinero este mes
-  const filaCabCategorias = filaPrimerMes + MESES_MOSTRADOS + 2;
-  const filaPrimerCategoria = filaCabCategorias + 1;
+  formatoSeguro(hoja.getRange(FILA_CABECERA + 1, COL_USUARIO_1,
+                              MESES_DEL_ANIO.length + 1, USUARIOS.length + 1), '#,##0.00 €');
 
-  panel.getRange(filaCabCategorias, 1).setValue('Categoría (este mes)');
-  personas.forEach(function (nombre, i) {
-    panel.getRange(filaCabCategorias, COL_USUARIO_1 + i).setValue(nombre);
-  });
-  if (hayTotal) panel.getRange(filaCabCategorias, colTotal).setValue('Total');
-  panel.getRange(filaCabCategorias, 1, 1, colUltima).setFontWeight('bold');
-
-  CATEGORIAS_GASTO.forEach(function (categoria, i) {
-    const fila = filaPrimerCategoria + i;
-    panel.getRange(fila, 1).setValue(categoria);
-    personas.forEach(function (nombre, u) {
-      panel.getRange(fila, COL_USUARIO_1 + u).setFormula(
-        formulaGastoCategoria('$A$' + filaPrimerMes,
-                              letra(COL_USUARIO_1 + u) + '$' + filaCabCategorias,
-                              '$A' + fila, sep));
-    });
-    if (hayTotal) {
-      panel.getRange(fila, colTotal).setFormula(
-        '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
-    }
-  });
-  formatoSeguro(
-    panel.getRange(filaPrimerCategoria, COL_USUARIO_1, CATEGORIAS_GASTO.length,
-                   colUltima - COL_USUARIO_1 + 1),
-    '#,##0.00 \u20ac');
-
-  /* La torta va sobre las categorías y no sobre las personas: saber que te has
-     gastado 400 € no dice nada; saber que 250 fueron en restaurantes, sí.
-
-     Se le pasan dos rangos sueltos —los nombres y la columna de importes—
-     porque en el panel global hay columnas de cada persona entre medias. */
-  const grafico = panel.newChart()
-    .setChartType(Charts.ChartType.PIE)
-    .addRange(panel.getRange(filaCabCategorias, 1, CATEGORIAS_GASTO.length + 1, 1))
-    .addRange(panel.getRange(filaCabCategorias, colUltima, CATEGORIAS_GASTO.length + 1, 1))
-    .setPosition(FILA_CABECERA, colGrafico, 0, 0)
-    .setOption('title', 'En qué se va el dinero este mes')
-    .setOption('pieSliceText', 'percentage')
-    .setOption('legend', { position: 'right' })
-    .setOption('width', 480)
-    .setOption('height', 320)
+  const grafico = hoja.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(hoja.getRange(FILA_CABECERA, 1, MESES_DEL_ANIO.length + 1, 1))
+    .addRange(hoja.getRange(FILA_CABECERA, COL_USUARIO_1, MESES_DEL_ANIO.length + 1, USUARIOS.length))
+    .setPosition(FILA_CABECERA, colTotal + 2, 0, 0)
+    .setOption('title', 'Gasto por mes')
+    .setOption('legend', { position: 'top' })
+    .setOption('width', 560)
+    .setOption('height', 340)
     .build();
-  panel.insertChart(grafico);
+  hoja.insertChart(grafico);
 
-  panel.setColumnWidth(1, 160);
-  return panel;
+  hoja.setColumnWidth(1, 140);
+  return hoja;
 }
 
 /**
- * Devuelve la hoja del panel realmente vacía: la borra y la vuelve a crear.
+ * Una hoja por mes: en qué se fue el dinero ese mes, y quién lo gastó.
+ *
+ * Arriba un resumen de tres líneas —ingresos, gastos y lo que queda— y debajo
+ * el desglose por categoría. Tres tortas al lado: una de cada uno y otra del
+ * conjunto.
+ *
+ * @param {string} nombre  el de la pestaña: Enero, Febrero...
+ * @param {number} mes     1 a 12
+ */
+function crearHojaMes(libro, nombre, mes) {
+  const COL_USUARIO_1 = 2;
+  const colTotal = COL_USUARIO_1 + USUARIOS.length;
+  const FILA_RESUMEN = 4;                       // cabecera del bloque de arriba
+  const FILA_CAT = FILA_RESUMEN + 5;            // cabecera del desglose
+  const FILA_PRIMERA_CAT = FILA_CAT + 1;
+
+  const hoja = hojaLimpia(libro, nombre, mes);
+  const sep = separadorDeFormulas(hoja);
+
+  hoja.getRange(1, 1).setFormula('="' + nombre + ' "&YEAR(TODAY())')
+      .setFontSize(14).setFontWeight('bold');
+  hoja.getRange(2, 1).setValue('Se actualiza solo. No escribas nada en esta hoja: son fórmulas.')
+      .setFontColor('#888888');
+
+  // ---- Resumen del mes
+  hoja.getRange(FILA_RESUMEN, 1).setValue('Resumen');
+  USUARIOS.forEach(function (persona, i) {
+    hoja.getRange(FILA_RESUMEN, COL_USUARIO_1 + i).setValue(persona);
+  });
+  hoja.getRange(FILA_RESUMEN, colTotal).setValue('Total');
+  hoja.getRange(FILA_RESUMEN, 1, 1, colTotal).setFontWeight('bold');
+
+  hoja.getRange(FILA_RESUMEN + 1, 1).setValue('Ingresos');
+  hoja.getRange(FILA_RESUMEN + 2, 1).setValue('Gastos');
+  hoja.getRange(FILA_RESUMEN + 3, 1).setValue('Queda');
+
+  USUARIOS.forEach(function (persona, u) {
+    const col = COL_USUARIO_1 + u;
+    const celdaPersona = letra(col) + '$' + FILA_RESUMEN;
+    hoja.getRange(FILA_RESUMEN + 1, col).setFormula(
+      formulaMovimientos('Ingreso', celdaPersona, mes, null, sep));
+    hoja.getRange(FILA_RESUMEN + 2, col).setFormula(
+      formulaGasto(celdaPersona, mes, null, sep));
+    hoja.getRange(FILA_RESUMEN + 3, col).setFormula(
+      '=' + letra(col) + (FILA_RESUMEN + 1) + '-' + letra(col) + (FILA_RESUMEN + 2));
+  });
+  for (var f = 1; f <= 3; f++) {
+    hoja.getRange(FILA_RESUMEN + f, colTotal).setFormula(
+      '=SUM(' + letra(COL_USUARIO_1) + (FILA_RESUMEN + f) + ':' +
+      letra(colTotal - 1) + (FILA_RESUMEN + f) + ')');
+  }
+  hoja.getRange(FILA_RESUMEN + 3, 1, 1, colTotal).setFontWeight('bold');
+
+  // ---- En qué se fue el dinero
+  hoja.getRange(FILA_CAT, 1).setValue('Categoría');
+  USUARIOS.forEach(function (persona, i) {
+    hoja.getRange(FILA_CAT, COL_USUARIO_1 + i).setValue(persona);
+  });
+  hoja.getRange(FILA_CAT, colTotal).setValue('Total');
+  hoja.getRange(FILA_CAT, 1, 1, colTotal).setFontWeight('bold');
+
+  CATEGORIAS_GASTO.forEach(function (categoria, i) {
+    const fila = FILA_PRIMERA_CAT + i;
+    hoja.getRange(fila, 1).setValue(categoria);
+    USUARIOS.forEach(function (persona, u) {
+      hoja.getRange(fila, COL_USUARIO_1 + u).setFormula(
+        formulaGasto(letra(COL_USUARIO_1 + u) + '$' + FILA_CAT, mes, '$A' + fila, sep));
+    });
+    hoja.getRange(fila, colTotal).setFormula(
+      '=SUM(' + letra(COL_USUARIO_1) + fila + ':' + letra(colTotal - 1) + fila + ')');
+  });
+
+  formatoSeguro(hoja.getRange(FILA_RESUMEN + 1, COL_USUARIO_1, 3, USUARIOS.length + 1), '#,##0.00 €');
+  formatoSeguro(hoja.getRange(FILA_PRIMERA_CAT, COL_USUARIO_1,
+                              CATEGORIAS_GASTO.length, USUARIOS.length + 1), '#,##0.00 €');
+
+  /* Una torta por persona y otra del conjunto, apiladas a la derecha.
+     Se le pasan dos rangos sueltos —los nombres y la columna de importes—
+     porque entre medias hay columnas de las otras personas. */
+  const columnas = USUARIOS.map(function (persona, i) {
+    return { titulo: 'En qué gasta ' + persona, col: COL_USUARIO_1 + i };
+  }).concat([{ titulo: 'En qué se va el dinero', col: colTotal }]);
+
+  columnas.forEach(function (serie, i) {
+    const grafico = hoja.newChart()
+      .setChartType(Charts.ChartType.PIE)
+      .addRange(hoja.getRange(FILA_CAT, 1, CATEGORIAS_GASTO.length + 1, 1))
+      .addRange(hoja.getRange(FILA_CAT, serie.col, CATEGORIAS_GASTO.length + 1, 1))
+      .setPosition(FILA_RESUMEN + i * 17, colTotal + 2, 0, 0)
+      .setOption('title', serie.titulo)
+      .setOption('pieSliceText', 'percentage')
+      .setOption('legend', { position: 'right' })
+      .setOption('width', 460)
+      .setOption('height', 300)
+      .build();
+    hoja.insertChart(grafico);
+  });
+
+  hoja.setColumnWidth(1, 160);
+  return hoja;
+}
+
+/**
+ * Devuelve una hoja realmente vacía: la borra y la vuelve a crear.
  *
  * Antes se reutilizaba con clear(), y eso fue un error. clear() vacía el
  * contenido y el formato, pero no deshace lo que la hoja "es": si en algún
@@ -301,18 +377,17 @@ function crearHojaPanel(libro, nombreHoja, personas, titulo) {
  * Una hoja nueva no arrastra nada. Se pierde solo lo que había dentro, que son
  * fórmulas que este mismo código vuelve a escribir dos líneas después.
  *
- * Se reinserta en la posición que ocupaba para que las pestañas no cambien de
- * sitio en cada reinstalación.
+ * La posición se impone en vez de conservar la que tuviera: son trece hojas que
+ * solo se entienden en orden —Año, Enero, Febrero...— y dejarlas donde
+ * cayeran haría que buscar marzo fuese un ejercicio de memoria.
+ *
+ * @param {number} posicion 0 = primera pestaña del libro.
  */
-function hojaPanelLimpia(libro, nombreHoja) {
+function hojaLimpia(libro, nombreHoja, posicion) {
   const vieja = libro.getSheetByName(nombreHoja);
-  // getIndex() es 1-based; insertSheet() cuenta desde 0.
-  let posicion = libro.getNumSheets();
-  if (vieja) {
-    posicion = vieja.getIndex() - 1;
-    libro.deleteSheet(vieja);
-  }
-  return libro.insertSheet(nombreHoja, posicion);
+  if (vieja) libro.deleteSheet(vieja);
+  // insertSheet() cuenta desde 0, y no admite un hueco más allá del final.
+  return libro.insertSheet(nombreHoja, Math.min(posicion, libro.getNumSheets()));
 }
 
 /**
@@ -360,36 +435,44 @@ function separadorDeFormulas(hoja) {
 }
 
 /**
- * Suma los gastos de una persona en un mes.
+ * Suma los movimientos de un tipo, de una persona, en un mes del año en curso.
  *
- * Excluye los traspasos: mover dinero de una cuenta propia a otra no es gasto
- * de nadie, y sin esta condición cada traspaso de 300 € aparecería como 300 €
- * gastados por quien lo hizo.
+ * El mes va metido en la propia fórmula —DATE(YEAR(TODAY());mes;1)— en vez de
+ * apuntar a una celda con la fecha. Así la hoja no tiene ningún estado oculto
+ * que alguien pueda tocar sin querer, y el año sale de TODAY(), que es lo que
+ * hace que el 1 de enero todo empiece de cero solo.
  *
- * @param {string} celdaMes celda con el día 1 del mes (referencia A1)
- * @param {string} celdaUsuario celda con el nombre de la persona
- * @param {string} sep separador de argumentos de esta hoja
+ * El límite superior es el mes siguiente. Para diciembre eso es el mes 13, que
+ * Sheets entiende perfectamente como enero del año que viene.
+ *
+ * @param {string} tipo           'Gasto' o 'Ingreso'
+ * @param {string} celdaUsuario   referencia A1 a la celda con el nombre
+ * @param {number} mes            1 a 12
+ * @param {?string} celdaCategoria referencia A1, o null para no filtrar
  */
-function formulaGasto(celdaMes, celdaUsuario, sep) {
-  return '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C' + sep +
-         HOJA_MOVIMIENTOS + '!$E:$E' + sep + '"Gasto"' + sep +
-         HOJA_MOVIMIENTOS + '!$F:$F' + sep + '"<>' + CATEGORIA_TRASPASO + '"' + sep +
-         HOJA_MOVIMIENTOS + '!$G:$G' + sep + celdaUsuario + sep +
-         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '">="&' + celdaMes + sep +
-         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '"<"&EDATE(' + celdaMes + sep + '1))';
+function formulaMovimientos(tipo, celdaUsuario, mes, celdaCategoria, sep) {
+  const desde = 'DATE(YEAR(TODAY())' + sep + mes + sep + '1)';
+  const hasta = 'DATE(YEAR(TODAY())' + sep + (mes + 1) + sep + '1)';
+
+  var f = '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C' + sep +
+          HOJA_MOVIMIENTOS + '!$E:$E' + sep + '"' + tipo + '"' + sep;
+
+  /* Con categoría concreta se filtra por ella; sin categoría hay que excluir a
+     mano los traspasos. Mover dinero de una cuenta propia a otra no es gasto de
+     nadie: sin esta condición, un traspaso de 300 € aparecería como 300 €
+     gastados y otros 300 ingresados el mismo mes. */
+  f += HOJA_MOVIMIENTOS + '!$F:$F' + sep +
+       (celdaCategoria ? celdaCategoria : '"<>' + CATEGORIA_TRASPASO + '"') + sep;
+
+  f += HOJA_MOVIMIENTOS + '!$G:$G' + sep + celdaUsuario + sep +
+       HOJA_MOVIMIENTOS + '!$A:$A' + sep + '">="&' + desde + sep +
+       HOJA_MOVIMIENTOS + '!$A:$A' + sep + '"<"&' + hasta + ')';
+  return f;
 }
 
-/**
- * Como formulaGasto, pero además filtrando por categoría. Es la que alimenta la
- * tabla de "en qué se va el dinero" y, con ella, el gráfico de torta.
- */
-function formulaGastoCategoria(celdaMes, celdaUsuario, celdaCategoria, sep) {
-  return '=SUMIFS(' + HOJA_MOVIMIENTOS + '!$C:$C' + sep +
-         HOJA_MOVIMIENTOS + '!$E:$E' + sep + '"Gasto"' + sep +
-         HOJA_MOVIMIENTOS + '!$F:$F' + sep + celdaCategoria + sep +
-         HOJA_MOVIMIENTOS + '!$G:$G' + sep + celdaUsuario + sep +
-         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '">="&' + celdaMes + sep +
-         HOJA_MOVIMIENTOS + '!$A:$A' + sep + '"<"&EDATE(' + celdaMes + sep + '1))';
+/** Atajo para lo que más se usa: los gastos. */
+function formulaGasto(celdaUsuario, mes, celdaCategoria, sep) {
+  return formulaMovimientos('Gasto', celdaUsuario, mes, celdaCategoria, sep);
 }
 
 /**
