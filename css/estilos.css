@@ -335,22 +335,6 @@ body {
 
 .rejilla-scroll::-webkit-scrollbar { display: none; }
 
-/* ---------- Paso 5: concepto ---------- */
-
-.resumen-movimiento {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.resumen-movimiento .detalle {
-  display: block;
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--texto-suave);
-  margin-top: 6px;
-}
 
 .input-concepto {
   width: 100%;
@@ -773,4 +757,54 @@ select.campo-input { appearance: none; }
   /* 52px sigue estando por encima del mínimo de 48. Es lo último que se toca,
      y solo en pantallas donde la alternativa era desplazar la rejilla. */
   .btn-opcion { min-height: 52px; }
+}
+
+/* ---------- Ficha del movimiento en curso ---------- */
+
+/* Ocupa el hueco de la mitad superior, que antes era negro y nada. Va fuera de
+   los pasos —no dentro de cada uno— porque el movimiento es uno solo y
+   sobrevive a los siete pasos: repetirla en cada sección sería mantener siete
+   copias del mismo estado. */
+.ficha {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 0;
+  min-height: 0;
+}
+
+/* En el paso del importe el número gigante ya hace de ficha. Se reserva el
+   hueco en vez de quitarlo para que la pantalla no dé un salto al avanzar. */
+.ficha.oculta { visibility: hidden; }
+
+.ficha-importe {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.ficha-importe.es-gasto   { color: var(--texto); }
+.ficha-importe.es-ingreso { color: var(--acento); }
+
+.ficha-datos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ficha-dato {
+  font-size: 14px;
+  color: var(--texto-suave);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  padding: 5px 12px;
 }
