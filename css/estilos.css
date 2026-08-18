@@ -306,13 +306,12 @@ body {
   color: var(--texto-suave);
 }
 
-/* Los dos botones del primer paso llevan la frase y nada más. "Frecuentes" y
-   "Puntuales" son claros una vez te lo han explicado; "se repite solo" no hay
-   que explicarlo, y a las nueve de la noche en la cola del supermercado eso es
-   toda la diferencia. Sin icono: con dos opciones, un símbolo no desempata
-   nada que la frase no desempate ya. */
+/* Los dos botones del primer paso llevan una palabra y nada más: ni icono ni
+   coletilla explicativa. Con dos opciones, un símbolo no desempata nada que la
+   palabra no desempate ya, y la explicación sobra en cuanto la has usado dos
+   veces —que es a partir del segundo día—. */
 .btn-rama {
-  font-size: 19px;
+  font-size: 21px;
   line-height: 1.25;
 }
 
