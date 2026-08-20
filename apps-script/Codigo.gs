@@ -160,12 +160,21 @@ function instalar() {
   instalarDisparadorDiario();
 
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
-  const aviso = token
+  const aviso = (token
     ? 'Listo. El libro ya tiene el formato nuevo.'
-    : 'Listo, PERO falta el TOKEN en Configuración del proyecto → Propiedades del script.';
-  SpreadsheetApp.getUi().alert(aviso +
-    '\n\nMovimientos migrados: ' + movimientos.length +
-    '\nFijos migrados: ' + fijos.length);
+    : 'Listo, PERO falta el TOKEN en Configuración del proyecto → Propiedades del script.')
+    + '\n\nMovimientos migrados: ' + movimientos.length
+    + '\nFijos migrados: ' + fijos.length;
+
+  /* El aviso es lo último y es solo un aviso: para cuando llega, el libro ya
+     está hecho. getUi() no existe si la función se ejecuta sin una hoja abierta
+     delante —desde un disparador, o desde el editor con la pestaña cerrada— y
+     dejarlo pelado marcaría como fallida una instalación que salió bien. */
+  try {
+    SpreadsheetApp.getUi().alert(aviso);
+  } catch (e) {
+    Logger.log(aviso);
+  }
 }
 
 /**
