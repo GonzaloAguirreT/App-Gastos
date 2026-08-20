@@ -56,6 +56,28 @@ propiedades del script y en el IndexedDB de cada teléfono.
 En el editor de Apps Script, elige `instalar` y dale a ejecutar. Te pedirá
 permisos la primera vez.
 
+Tarda alrededor de **medio minuto**, y el registro de ejecución va diciendo por
+dónde va:
+
+```
+leído el libro · 1853 ms
+retirados Panel y Año · 2531 ms
+Listas · 3608 ms
+…
+terminado · 30137 ms
+```
+
+Ese cronómetro está ahí porque `instalar()` se murió tres veces por tiempo y el
+registro solo decía que se había muerto. Si vuelve a pasar, la última línea es
+el sitio.
+
+No sale ningún diálogo: el resumen va al registro y, si tienes la hoja abierta,
+también como aviso flotante. **Un diálogo modal no puede estar aquí**: `alert()`
+suspende el script hasta que alguien pulsa Aceptar, y ejecutando desde el editor
+con la pestaña de la hoja cerrada no lo pulsa nadie. El trabajo terminaba en
+treinta segundos y la ejecución se quedaba parada hasta morir a los seis
+minutos.
+
 Deja el libro con diez pestañas:
 
 | Pestaña | Quién escribe | Qué es |

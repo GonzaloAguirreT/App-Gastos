@@ -209,21 +209,31 @@ function instalar() {
   paso('pestañas y disparador');
 
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
-  const aviso = (token
+  const resumen = (token
     ? 'Listo. El libro ya tiene el formato nuevo.'
     : 'Listo, PERO falta el TOKEN en Configuración del proyecto → Propiedades del script.')
-    + '\n\nMovimientos migrados: ' + movimientos.length
-    + '\nFijos migrados: ' + fijos.length;
+    + ' Movimientos migrados: ' + movimientos.length
+    + '. Fijos migrados: ' + fijos.length + '.';
 
-  /* El aviso es lo último y es solo un aviso: para cuando llega, el libro ya
-     está hecho. getUi() no existe si la función se ejecuta sin una hoja abierta
-     delante —desde un disparador, o desde el editor con la pestaña cerrada— y
-     dejarlo pelado marcaría como fallida una instalación que salió bien. */
+  /* AQUÍ NO PUEDE HABER UN SpreadsheetApp.getUi().alert().
+   *
+   * Un alert es modal y SUSPENDE el script hasta que alguien pulsa Aceptar.
+   * Ejecutando desde el editor con la pestaña de la hoja cerrada no lo pulsa
+   * nadie: el trabajo terminaba en treinta segundos y la ejecución se quedaba
+   * parada hasta morir a los seis minutos con "Exceeded maximum execution
+   * time". Pasó tres veces seguidas, y como alert() no lanza sino que bloquea,
+   * el try/catch que tenía alrededor no servía de nada.
+   *
+   * console.log sale al registro siempre. toast() es un aviso flotante que no
+   * bloquea: si hay alguien mirando la hoja lo ve, y si no, no pasa nada. */
+  console.log(resumen);
   try {
-    SpreadsheetApp.getUi().alert(aviso);
+    libro.toast(resumen, 'Instalación', 15);
   } catch (e) {
-    Logger.log(aviso);
+    /* Sin hoja delante no hay dónde enseñarlo, y da igual: está en el registro. */
   }
+
+  paso('terminado');
 }
 
 /**
@@ -1467,14 +1477,37 @@ function hoy() { return new Date(); }
 
 /** yyyy-MM-dd en la zona horaria de la hoja. Sin fijar la zona, una ejecución
  *  de madrugada puede fechar el cargo en el día anterior. */
-function iso(fecha) {
-  return Utilities.formatDate(fecha, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(),
-                              'yyyy-MM-dd');
+/* La zona horaria de la hoja se pregunta una vez. Parece un detalle y no lo es:
+   iso() se llama dos veces por cada fila al leer el libro, así que con
+   cuatrocientos movimientos serían ochocientas consultas al servicio para
+   averiguar ochocientas veces lo mismo. */
+var ZONA = null;
+function zonaDeLaHoja() {
+  if (ZONA === null) ZONA = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  return ZONA;
 }
 
+function iso(fecha) {
+  return Utilities.formatDate(fecha, zonaDeLaHoja(), 'yyyy-MM-dd');
+}
+
+/**
+ * Un yyyy-mm-dd convertido en la fecha que hay que escribir en la celda.
+ *
+ * A MEDIODÍA, no a medianoche, y esto no es un capricho: `new Date(a, m, d)`
+ * da medianoche en la zona horaria DEL SCRIPT, mientras que la celda se
+ * interpreta y se lee en la zona horaria DE LA HOJA. Si el proyecto de Apps
+ * Script quedara en UTC y la hoja en Santiago, medianoche UTC son las ocho de
+ * la tarde del día ANTERIOR en Chile, y todas las fechas del libro aparecerían
+ * corridas un día sin que nada avisara.
+ *
+ * Con las doce del mediodía haría falta un desfase de más de doce horas para
+ * cambiar de día, y eso no existe entre dos zonas habitadas. La hora no se ve:
+ * la columna lleva formato yyyy-mm-dd.
+ */
 function fechaDesdeISO(texto) {
   const p = String(texto).split('-').map(Number);
-  return new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+  return new Date(p[0], (p[1] || 1) - 1, p[2] || 1, 12, 0, 0);
 }
 
 function nuevoUuid() { return Utilities.getUuid(); }
