@@ -1,0 +1,47 @@
+/**
+ * Las dos familias del rediseño, servidas desde el propio repositorio.
+ *
+ * No se enlazan desde Google Fonts a propósito. Una PWA que se abre sin red
+ * tiene que poder pintarse entera, y un `@import` a fonts.googleapis.com es
+ * justo lo que el service worker no puede cachear sin permiso del otro
+ * dominio: el primer día sin cobertura la app aparecería en Times New Roman.
+ * Cuatro archivos de 15–24 KB caben de sobra en la caché.
+ *
+ * Subconjunto "latin": cubre las tildes, la eñe, el punto medio y el signo
+ * menos real (−). Los símbolos sueltos que quedan fuera —la flecha de borrar
+ * y la marca de cargado— los pone la fuente del sistema, y ahí se ven bien.
+ *
+ * `font-display: swap`: antes que esperar a la fuente, texto legible ya.
+ */
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fuentes/newsreader-400.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fuentes/newsreader-500.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fuentes/plex-mono-400.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fuentes/plex-mono-500.woff2) format('woff2');
+}

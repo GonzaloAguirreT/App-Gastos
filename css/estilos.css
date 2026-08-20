@@ -1,890 +1,593 @@
-/* =========================================================================
-   Estilos de la app. Oscuro por defecto, alto contraste, un solo acento.
-   La regla que manda sobre todas las demás: todo lo que se toca vive en la
-   mitad inferior de la pantalla y mide 56px o más. La densidad de información
-   se sacrifica sin pena.
-   ========================================================================= */
+@import url('fuentes.css');
 
+/**
+ * Papel y tinta.
+ *
+ * Toda la identidad del rediseño cabe en tres reglas: un solo acento, cero
+ * redondeos y las reglas de 1 px como único separador. No hay sombras ni
+ * degradados ni tarjetas; lo que separa dos bloques es una línea, igual que en
+ * un cuaderno de cuentas. Si añades algo, que siga estas tres.
+ */
+
+/* ------------------------------------------------------------------ tokens
+
+   El tema claro se define entero en :root. El oscuro solo REDEFINE los mismos
+   nombres, dos veces: en @media para quien no ha elegido nada, y en
+   [data-tema] para quien sí. Los dos bloques hacen falta —el interruptor de
+   Ajustes tiene que poder ganarle al sistema en ambos sentidos— y ningún color
+   puede tener su única definición dentro de uno de ellos. */
 :root {
-  /* Neutros cálidos, no azulados: la app se mira de noche y en la calle, y un
-     gris frío sobre negro cansa más de lo que parece. */
-  --fondo: #14100E;
-  --superficie: #1F1A17;
-  --superficie-alta: #2B2421;
-  --borde: #3A312C;
-  --texto: #F7F3EF;
-  --texto-suave: #A99B90;
+  --bg:      #F4F0E8;
+  --ink:     #1A1815;
+  --sec:     #58544C;
+  --mut:     #8A857C;
+  --faint:   #9C9482;
+  --hair:    #DCD5C6;
+  --acc:     #A3341F;
+  --invT:    #F4F0E8;
+  --avisoBg: #EFE7D6;
+  --p1:      #3D5A6C;
+  --p2:      #A34E6B;
+  --p3:      #5E7A52;
+  --p4:      #9A7A3F;
 
-  --acento: #FF8A5B;
-  --acento-oscuro: #2A1006;
-
-  /* El color dice de qué se trata sin leer: cada tipo tiene el suyo, y es el
-     mismo en el importe de la ficha, en el signo del botón y en el resumen. */
-  --gasto: #FF8A5B;
-  --ingreso: #6FE39B;
-
-  --radio: 18px;
-  --toque-min: 56px;
-  /* 150ms: lo justo para que se note el cambio de paso sin que estorbe al
-     encadenar toques rápido. Cualquier cosa por encima se siente lenta. */
-  --transicion: 150ms;
+  --margen: 26px;
+  --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
-/* Respeta a quien tenga reducido el movimiento en el sistema. */
-@media (prefers-reduced-motion: reduce) {
-  :root { --transicion: 0ms; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --bg:      #14100E;
+    --ink:     #EDE6D6;
+    --sec:     #A39A88;
+    --mut:     #8F8778;
+    --faint:   #6F675A;
+    --hair:    #2C261D;
+    --acc:     #D2694F;
+    --invT:    #14100E;
+    --avisoBg: #211B15;
+    --p1:      #7FA6BE;
+    --p2:      #D08DA6;
+    --p3:      #9FB78F;
+    --p4:      #D3B173;
+  }
 }
 
-* { box-sizing: border-box; }
+:root[data-tema="oscuro"] {
+  --bg:      #14100E;
+  --ink:     #EDE6D6;
+  --sec:     #A39A88;
+  --mut:     #8F8778;
+  --faint:   #6F675A;
+  --hair:    #2C261D;
+  --acc:     #D2694F;
+  --invT:    #14100E;
+  --avisoBg: #211B15;
+  --p1:      #7FA6BE;
+  --p2:      #D08DA6;
+  --p3:      #9FB78F;
+  --p4:      #D3B173;
+}
+
+/* ------------------------------------------------------------------ reset */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* La barra de desplazamiento oculta es una decisión, no un descuido: esto se
+   usa con el pulgar y tiene que deslizarse como un teléfono, no como una
+   ventana. */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 html, body {
   margin: 0;
-  padding: 0;
   height: 100%;
-  overscroll-behavior: none;
-  /* Nada debe desplazarse en horizontal, nunca. Si algo no cabe de ancho es un
-     fallo de diseño, y prefiero que se recorte a que aparezca una barra que
-     obligue a mover la pantalla para llegar a un botón. */
-  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
 }
 
-body {
-  /* Un degradado muy leve desde arriba: sin él, con el fondo tan oscuro la
-     pantalla se lee como un agujero plano. */
-  background: radial-gradient(120% 80% at 50% 0%, #1E1714 0%, #14100E 60%);
-  color: var(--texto);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* 100dvh y no 100vh: en Chrome Android la barra de direcciones aparece y
-     desaparece al hacer scroll, y con vh el botón de guardar se salía. */
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  /* Abajo SIEMPRE hay margen, haya o no safe-area. En un Galaxy S24 con la
-     barra de navegación de tres botones, env(safe-area-inset-bottom) vale 0 y
-     el botón verde acababa por debajo de la barra del sistema: se veía, pero al
-     tocarlo pulsabas "atrás" de Android. Con max() el hueco está garantizado. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-           max(18px, env(safe-area-inset-bottom)) env(safe-area-inset-left);
+/* La app se usa a toques: la selección de texto solo estorba —un toque largo
+   sobre una cifra abría el menú de copiar— salvo donde de verdad se escribe. */
+body { user-select: none; -webkit-user-select: none; }
+input, textarea { user-select: text; -webkit-user-select: text; }
+
+button {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ---------- Cabecera ---------- */
+h1, h2, h3, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
 
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-  min-width: 0;
-}
-
-.btn-fecha {
-  background: transparent;
-  border: 1px solid var(--borde);
-  border-radius: 999px;
-  color: var(--texto-suave);
+input {
   font: inherit;
-  font-size: 15px;
-  padding: 8px 14px;
-  min-height: 48px;
-}
-
-.btn-fecha.fecha-cambiada {
-  color: var(--acento);
-  border-color: var(--acento);
-}
-
-/* El input de fecha existe solo para invocar el selector nativo del sistema.
-   No se puede usar display:none porque entonces showPicker() falla. */
-.input-fecha-oculto {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+  color: inherit;
+  background: transparent;
   border: 0;
+  border-radius: 0;
+  outline: none;
 }
+input::placeholder { color: var(--mut); opacity: 1; }
 
-/* Las migas son lo primero que cede cuando falta ancho: son orientativas, y
-   perder un botón por culpa de ellas sí sería un problema. */
-.migas {
+/* ------------------------------------------------------------------- capas */
+
+.app {
   display: flex;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  flex: 0 1 auto;
-  min-width: 0;
+  flex-direction: column;
+  height: 100dvh;
   overflow: hidden;
+  padding-top: env(safe-area-inset-top);
 }
 
-.migas li {
-  width: 22px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--borde);
-  transition: background var(--transicion) ease;
-}
-
-.migas li.hecho { background: var(--texto-suave); }
-.migas li.actual { background: var(--acento); }
-
-/* ---------- Pasos ---------- */
-
-.pasos {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.paso {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0 16px calc(12px + 7dvh);
-  opacity: 0;
-  transform: translateX(12px);
-  pointer-events: none;
-  /* visibility, y no solo opacity: un paso a opacidad 0 sigue siendo alcanzable
-     con el tabulador y sigue existiendo para un lector de pantalla. La
-     transición de visibility se retrasa el tiempo del fundido para que la
-     salida se siga viendo. */
-  visibility: hidden;
-  transition: opacity var(--transicion) ease,
-              transform var(--transicion) ease,
-              visibility 0s linear var(--transicion);
-}
-
-.paso.activo {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-  visibility: visible;
-  transition: opacity var(--transicion) ease,
-              transform var(--transicion) ease,
-              visibility 0s;
-}
-
-/* Al retroceder, la entrada viene del lado contrario. */
-.paso.atras { transform: translateX(-12px); }
-
-/* El grupo de pregunta y opciones sube, en vez de quedar pegado al borde de
-   abajo con un agujero negro por encima.
-
-   Sube con un desplazamiento y no centrándolo. Centrado, el hueco se reparte a
-   partes iguales y abajo quedaban 159px muertos —medidos— justo en la zona
-   donde mejor llega el pulgar: se gana estética y se pierde alcance. Con el
-   desplazamiento el bloque se levanta lo justo y el grueso del hueco sigue
-   arriba, que es donde no estorba.
-
-   En dvh y no en porcentaje: el padding en % se calcula sobre el ANCHO, no
-   sobre el alto, así que en un móvil estrecho no subiría casi nada. */
-.paso { justify-content: flex-end; }
-
-.paso-cuerpo {
-  flex: 0 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding-bottom: 12px;
-  gap: 12px;
-}
-
-/* El importe es la excepción: es el protagonista del paso, ocupa el hueco
-   entero y sus dos botones se quedan abajo del todo. */
-#paso-importe .paso-cuerpo { flex: 1 1 auto; justify-content: center; }
-
-.paso-acciones {
-  flex: 0 0 auto;
-  /* 68% y no 62%: con 12 categorías la rejilla pide 6 filas, y con el 62%
-     anterior se quedaba 6px corta en un Galaxy S24. Seis píxeles bastan para
-     que aparezca una barra de desplazamiento y el paso deje de ser un toque. */
-  max-height: 68%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-/* Pregunta y "Atrás" comparten línea. Antes "Atrás" caía suelto entre la
-   pregunta y la rejilla, y partía la relación entre lo que se pregunta y lo
-   que la responde. */
-.paso-encabezado {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 12px;
-}
-
-.pregunta {
-  margin: 0;
-  font-size: 20px;
-  color: var(--texto-suave);
-  /* Ocupa el resto de la línea y se centra en ella, así que la pregunta queda
-     en el eje de la pantalla aunque "Atrás" esté a su izquierda. */
-  flex: 1 1 auto;
-  text-align: center;
-}
-
-/* En el paso del importe no hay pregunta, y "Atrás" está oculto: sin esto la
-   línea vacía dejaría un hueco entre el importe y los botones. */
-#paso-importe .paso-encabezado { display: none; }
-
-/* ---------- Paso 1: importe ---------- */
-
-.campo-importe {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  max-width: 100%;
-}
-
-.moneda {
-  font-size: 32px;
-  color: var(--acento);
-}
-
-.input-importe {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--texto);
-  font-family: inherit;
-  font-size: 64px;
-  font-weight: 600;
-  letter-spacing: -1px;
-  width: 100%;
-  max-width: 6ch;
-  padding: 0;
-  /* Alineado a la derecha, con el símbolo de moneda detrás: así el número crece
-     hacia la izquierda como en una calculadora y el € no se mueve de sitio. */
-  text-align: right;
-}
-
-.input-importe::placeholder { color: #39414C; }
-
-/* ---------- Botones ---------- */
-
-.btn {
-  font: inherit;
-  font-size: 17px;
-  color: var(--texto);
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  min-height: var(--toque-min);
-  padding: 12px 14px;
-  text-align: center;
-  cursor: pointer;
-  transition: transform 120ms ease, background var(--transicion) ease,
-              border-color var(--transicion) ease;
-}
-
-/* Se hunde un poco al tocarlo. En un móvil no hay puntero ni foco: el único
-   acuse de recibo posible es que el botón reaccione bajo el dedo. */
-.btn:active { background: var(--superficie-alta); transform: scale(0.97); }
-
-.btn-primario {
-  background: var(--acento);
-  border-color: var(--acento);
-  color: #06210F;
-  font-weight: 650;
-  font-size: 19px;
-  width: 100%;
-}
-
-.btn-primario:disabled {
-  background: var(--superficie);
-  border-color: var(--borde);
-  color: #4C5563;
-}
-
-/* Guardar va en contorno, no relleno.
-   El coral queda así reservado para el DATO —el importe de la ficha, el signo
-   del gasto— en vez de competir con él desde la acción. Y el botón sigue
-   siendo lo más grande de la pantalla, que es lo que de verdad lo hace fácil
-   de acertar; no hacía falta además que gritara. */
-.btn-guardar {
-  min-height: 64px;
-  background: transparent;
-  border: 1.5px solid var(--acento);
-  color: var(--acento);
-  font-weight: 650;
-}
-
-.btn-guardar:active { background: rgba(255, 138, 91, 0.12); }
-
-.btn-alto {
-  min-height: 96px;
-  font-size: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.signo {
-  font-size: 28px;
-  line-height: 1;
-  color: var(--texto-suave);
-}
-
-/* Los dos botones del primer paso llevan una palabra y nada más: ni icono ni
-   coletilla explicativa. Con dos opciones, un símbolo no desempata nada que la
-   palabra no desempate ya, y la explicación sobra en cuanto la has usado dos
-   veces —que es a partir del segundo día—. */
-.btn-rama {
-  font-size: 21px;
-  line-height: 1.25;
-}
-
-/* Deshabilitados hasta que hay importe: sin esto parecen pulsables y no hacen
-   nada, que es peor que verlos apagados. */
-.btn-rama:disabled {
-  opacity: 0.45;
-}
-
-/* Última cuenta usada: se marca, pero no se salta el paso. Saltarlo llevaba a
-   registrar movimientos en la cuenta equivocada sin darse cuenta. */
-.btn-opcion.sugerido {
-  border-color: var(--acento);
-  color: var(--acento);
-}
-
-.rejilla {
-  display: grid;
-  gap: 8px;
-}
-
-.rejilla-2 { grid-template-columns: 1fr 1fr; }
-
-/* Los 31 días, en seis columnas. Con dos —como el resto de rejillas— serían
-   dieciséis filas de desplazamiento para elegir un número de dos cifras. En
-   seis columnas se ve el mes entero de un vistazo, como en un calendario, y
-   cada botón sigue pasando de los 48px que necesita un pulgar. */
-.rejilla-dias {
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
-}
-
-.rejilla-dias .btn-opcion {
-  min-height: 52px;
-  padding: 0;
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.rejilla-scroll {
-  overflow-y: auto;
-  padding: 2px;
-  scrollbar-width: none;
-}
-
-.rejilla-scroll::-webkit-scrollbar { display: none; }
-
-
-.input-concepto {
-  width: 100%;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  color: var(--texto);
-  font: inherit;
-  font-size: 18px;
-  min-height: var(--toque-min);
-  padding: 12px 14px;
-  outline: none;
-}
-
-.input-concepto:focus { border-color: var(--acento); }
-.input-concepto::placeholder { color: #5A6472; }
-
-/* ---------- Atrás ---------- */
-
-/* Lo mismo para el botón flotante de deshacer: nunca por debajo de la barra. */
-
-/* "Atrás" vive dentro del bloque de acciones, siempre en el mismo sitio.
-   Estuvo fijo en la esquina inferior izquierda y se solapaba con los botones de
-   Gasto y de Guardar, que ocupan justo esa zona. */
-/* Con fondo, borde y flecha. Sin ellos era texto gris suelto: estaba ahí, en
-   su sitio y funcionando, pero no se leía como algo pulsable y no se usaba. */
-.btn-atras {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  color: var(--texto-suave);
-  font: inherit;
-  font-size: 16px;
-  padding: 0 16px 0 12px;
-  min-height: 48px;
-  flex: 0 0 auto;
-}
-
-.btn-atras .flecha {
-  font-size: 20px;
-  line-height: 1;
-}
-
-/* En el primer paso no hay a dónde volver, pero se reserva su hueco para que
-   el botón principal no baile de sitio entre pasos. */
-.btn-atras.hueco {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-/* ---------- Toast ---------- */
-
-.toast {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: max(20px, calc(8px + env(safe-area-inset-bottom)));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--superficie-alta);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 12px 12px 12px 16px;
-  font-size: 16px;
-  z-index: 10;
-  animation: entra-toast var(--transicion) ease;
-}
-
-.toast[hidden] { display: none; }
-
-/* Los mensajes de error del backend son frases enteras, no dos palabras. Sin
-   esto se salen del cuadro por la derecha justo cuando más importa leerlos. */
-#toast-texto {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.toast-accion {
-  background: transparent;
-  border: none;
-  color: var(--acento);
-  font: inherit;
-  font-weight: 650;
-  font-size: 16px;
-  padding: 10px 12px;
-  min-height: 48px;
-}
-
-@keyframes entra-toast {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
-}
-
-/* ---------- Pantalla de ajustes ---------- */
-
-.btn-icono {
-  background: transparent;
-  border: none;
-  color: var(--texto-suave);
-  padding: 12px;
-  min-height: 48px;
-  min-width: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+/* Arriba solo hay aire: el sistema ya pinta la hora y las pestañas ya dicen
+   dónde estás. */
+.aire { flex: 0 0 18px; }
 
 .pantalla {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  background: var(--fondo);
-  display: flex;
+  flex: 1;
+  min-height: 0;
+  display: none;
   flex-direction: column;
-  padding: env(safe-area-inset-top) 0 calc(12px + env(safe-area-inset-bottom));
+  overflow: hidden;
 }
+.pantalla.activa { display: flex; }
 
-.pantalla[hidden] { display: none; }
+/* El scroll vive en un hijo y no en .pantalla para que las barras fijas de
+   arriba (título, filtros) y de abajo (guardar) no se muevan con el dedo.
+
+   Y por eso todo lo demás lleva flex-shrink: 0. Sin esto el navegador reparte
+   la falta de sitio entre todos los hermanos y el bloque de guardar se
+   comprime hasta que sus botones dejan de verse: pasó, y el síntoma —una raya
+   al fondo de la pantalla y nada debajo— no apunta en absoluto a la causa. */
+.pantalla > * { flex: 0 0 auto; }
+.pantalla > .desliza { flex: 1 1 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.desliza { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+.margen { padding-left: var(--margen); padding-right: var(--margen); }
+.respiro { height: 24px; }
+
+/* ------------------------------------------------------------ tipografía */
 
 .titulo {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.btn-texto {
-  background: transparent;
-  border: none;
-  color: var(--acento);
-  font: inherit;
-  font-size: 16px;
-  padding: 12px 10px;
-  min-height: 48px;
-}
-
-/* Sin subrayado: el subrayado es de los enlaces de una página web y aquí canta.
-   Lo que dice que se puede tocar es el color y el borde. */
-.btn-secundario {
-  align-self: flex-start;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 10px 16px;
-  margin-top: -12px;   /* recupera el hueco que deja el gap del contenedor */
-}
-
-.pantalla-cuerpo {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 8px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.campo {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.campo-etiqueta {
-  font-size: 15px;
-  color: var(--texto-suave);
-}
-
-.campo-input {
-  width: 100%;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  color: var(--texto);
-  font: inherit;
-  font-size: 16px;
-  min-height: var(--toque-min);
-  padding: 12px 14px;
-  outline: none;
-}
-
-.campo-input:focus { border-color: var(--acento); }
-.campo-input::placeholder { color: #5A6472; }
-
-.campo-ayuda {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--texto-suave);
-}
-
-.campo-ayuda code {
-  background: var(--superficie);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 13px;
-}
-
-.estado-ajustes {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--texto-suave);
-  min-height: 1.5em;
-}
-
-.estado-ajustes.ok { color: var(--acento); }
-.estado-ajustes.error { color: #FF9E9E; }
-
-.pantalla-acciones {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 8px 16px 0;
-}
-
-/* Pantallas pequeñas: baja el tamaño del importe antes de que se desborde. */
-@media (max-height: 640px) {
-  .input-importe { font-size: 52px; }
-  .btn-alto { min-height: 84px; }
-}
-
-/* Versión que sirve el service worker, en Ajustes. Deliberadamente discreta:
-   no es información de uso diario, es para diagnosticar. */
-.version-app {
-  margin: 0;
-  font-size: 13px;
-  color: #6B7482;
-}
-
-.version-app span { font-variant-numeric: tabular-nums; }
-
-/* ---------- Indicador de movimientos pendientes ---------- */
-
-/* Solo aparece cuando hay algo sin enviar. En ámbar y no en el verde de acento
-   a propósito: el acento significa "hecho", y esto significa justo lo
-   contrario. Es el único color fuera de la paleta, y se lo ha ganado. */
-.chip-pendientes {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  background: #3A2E12;
-  border: 1px solid #7A5E1E;
-  border-radius: 999px;
-  color: #F0C05A;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 8px 12px;
-  min-height: 48px;
-}
-
-.chip-pendientes[hidden] { display: none; }
-
-.chip-pendientes .flecha { font-size: 13px; opacity: 0.8; }
-
-/* ---------- Pantalla de resumen ---------- */
-
-.aviso-cache {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--texto-suave);
-}
-
-.aviso-cache[hidden] { display: none; }
-
-.totales {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.total {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* El ahorro es la cifra que de verdad se mira, así que ocupa las dos columnas
-   y va más grande. Ingresos y gastos son el desglose que la explica. */
-.total-ahorro { grid-column: 1 / -1; }
-
-.total-etiqueta {
-  font-size: 14px;
-  color: var(--texto-suave);
-}
-
-.total-cifra {
-  font-size: 22px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.total-ahorro .total-cifra {
+  font-family: var(--serif);
+  font-weight: 400;
   font-size: 30px;
-  color: var(--acento);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
-/* Un ahorro negativo es el único dato de la app que conviene que moleste, pero
-   con el color que ya significa "gasto" en el resto de pantallas. Antes era un
-   rosa que no estaba en la paleta y contaba una tercera historia. */
-.total-ahorro .total-cifra.negativo { color: var(--gasto); }
-
-.subtitulo {
-  margin: 6px 0 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--texto-suave);
+.editorial {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1.12;
 }
+.editorial.grande { font-size: 40px; line-height: 1.08; }
 
-.lista-movimientos {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* El encabezado de sección. Va en versalitas anchas porque tiene que leerse
+   como una etiqueta de archivador, no como una frase. */
+.etiqueta {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+.etiqueta.corta { letter-spacing: 0.1em; }
+.etiqueta.mini { font-size: 10px; letter-spacing: 0.1em; }
+
+.cifra { font-family: var(--serif); font-weight: 400; }
+.nota { font-size: 11px; line-height: 1.55; color: var(--mut); }
+.nota.suelta { font-size: 12px; line-height: 1.6; color: var(--sec); }
+.nota.centrada { text-align: center; font-size: 10px; }
+.acento { color: var(--acc); }
+.apagado { color: var(--mut); }
+
+/* ------------------------------------------------------------------ reglas */
+
+.regla { border-bottom: 1px solid var(--hair); }
+.regla-fuerte { border-bottom: 1px solid var(--ink); }
+.techo-fuerte { border-top: 1px solid var(--ink); }
+
+/* ----------------------------------------------------------------- cabezas */
+
+.cabeza {
+  padding: 10px var(--margen) 14px;
+  border-bottom: 1px solid var(--ink);
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.movimiento {
+/* Cabecera de las vistas que se abren encima (detalle, listas, reparto): no
+   son pestañas, así que llevan una salida a la izquierda en vez de título. */
+.cabeza-hoja {
+  padding: 6px var(--margen) 12px;
+  border-bottom: 1px solid var(--hair);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 2px;
-  border-bottom: 1px solid var(--borde);
 }
 
-.movimiento:last-child { border-bottom: none; }
+.salir { font-size: 13px; color: var(--sec); padding: 4px 0; }
 
-.mov-texto {
+.mes-nav { display: flex; align-items: baseline; gap: 10px; }
+.flecha { font-size: 18px; color: var(--mut); padding: 2px 4px; }
+.flecha[disabled] { color: var(--hair); opacity: 1; }
+
+/* -------------------------------------------------------------- secciones */
+
+.seccion { padding: 18px var(--margen) 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.seccion.pegada { padding-top: 12px; padding-bottom: 6px; }
+/* Dentro de un bloque que ya tiene el margen lateral, la sección no lo repite:
+   si no, sus encabezados quedan sangrados 52 px y parecen otro nivel. */
+.margen > .seccion { padding-left: 0; padding-right: 0; }
+
+/* --------------------------------------------------------------- banners */
+
+.banner {
+  padding: 12px var(--margen);
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mov-principal {
-  font-size: 16px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mov-detalle {
-  font-size: 13px;
-  color: var(--texto-suave);
-}
-
-.mov-importe {
-  font-size: 16px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.mov-importe.gasto { color: var(--gasto); }
-.mov-importe.ingreso { color: var(--ingreso); }
-.mov-importe.traspaso { color: var(--texto-suave); }
-
-.lista-vacia {
-  padding: 20px 2px;
-  font-size: 15px;
-  color: var(--texto-suave);
-}
-
-/* Reintentar solo aparece si hay algo que reintentar, así que la fila no puede
-   ser una rejilla de dos columnas fijas: quedaría un hueco. */
-.pantalla-acciones-resumen {
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: stretch;
-  gap: 4px;
-}
-
-.pantalla-acciones-resumen .btn-texto { align-self: center; }
-
-/* Círculo con la inicial de quién gasta, junto a la fecha. */
-/* Píldora, no círculo: con "Gonzalo" dentro, un círculo obligaría a usar la
-   inicial y una inicial hay que descifrarla. */
-.btn-usuario {
-  background: transparent;
-  border: 1px solid var(--borde);
-  border-radius: 999px;
-  color: var(--texto-suave);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 8px 12px;
-  min-height: 48px;
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-/* Solo se resalta cuando el movimiento NO es del dueño del teléfono: el caso
-   raro tiene que verse, y el de todos los días no debe meter ruido. */
-.btn-usuario.ajeno {
-  color: var(--acento);
-  border-color: var(--acento);
-}
-
-select.campo-input { appearance: none; }
-
-/* ---------- Pantallas estrechas o bajas ---------- */
-
-/* Con el tamaño de pantalla de Android ampliado, el viewport se estrecha y la
-   cabecera deja de caber. Las migas desaparecen antes que cualquier botón. */
-@media (max-width: 350px) {
-  .migas { display: none; }
-}
-
-/* Móviles cortos: se recorta de donde no duele —los huecos y el tamaño de los
-   botones grandes— para no tocar nunca el mínimo de 48px de los objetivos. */
-@media (max-height: 800px) {
-  .btn-alto { min-height: 84px; }
-  .btn-guardar { min-height: 60px; }
-  .paso-cuerpo { padding-bottom: 8px; gap: 10px; }
-  .pregunta { font-size: 18px; }
-  .paso-acciones { max-height: 72%; }
-  /* 52px sigue estando por encima del mínimo de 48. Es lo último que se toca,
-     y solo en pantallas donde la alternativa era desplazar la rejilla. */
-  .btn-opcion { min-height: 52px; }
-}
-
-/* ---------- Ficha del movimiento en curso ---------- */
-
-/* Ocupa el hueco de la mitad superior, que antes era negro y nada. Va fuera de
-   los pasos —no dentro de cada uno— porque el movimiento es uno solo y
-   sobrevive a los siete pasos: repetirla en cada sección sería mantener siete
-   copias del mismo estado. */
-.ficha {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px 0;
-  min-height: 0;
+  gap: 12px;
+  background: var(--avisoBg);
+  border-bottom: 1px solid var(--hair);
 }
+.banner-texto { font-size: 12px; line-height: 1.45; }
+.banner-accion { flex: 0 0 auto; padding: 7px 10px; font-size: 11px; border: 1px solid currentColor; }
+.banner.urgente { color: var(--acc); }
 
-/* En el paso del importe el número gigante ya hace de ficha. Se reserva el
-   hueco en vez de quitarlo para que la pantalla no dé un salto al avanzar. */
-.ficha.oculta { visibility: hidden; }
+/* ----------------------------------------------------------------- saldo */
 
-.ficha-importe {
-  margin: 0;
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+.saldo { padding: 18px var(--margen) 16px; border-bottom: 1px solid var(--hair); display: flex; flex-direction: column; gap: 9px; }
+.saldo-cifra { display: flex; align-items: baseline; gap: 6px; }
+.saldo-signo { font-family: var(--serif); font-size: 30px; }
+.saldo-numero { font-family: var(--serif); font-size: 54px; line-height: 0.9; letter-spacing: -0.02em; }
+.saldo.negativo .saldo-signo, .saldo.negativo .saldo-numero { color: var(--acc); }
+.saldo.lectura .saldo-signo { color: var(--mut); }
+
+/* La barra de reparto: un tramo por persona y, al final, lo que aún tiene que
+   salir. Sin redondeo y sin hueco entre tramos, como una regla graduada. */
+.barra { display: flex; height: 9px; background: var(--hair); margin-top: 2px; }
+.barra > div { height: 100%; }
+
+.leyenda {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  font-size: 10px; white-space: nowrap; color: var(--sec);
 }
+.leyenda > span { display: flex; align-items: center; gap: 5px; }
+.cuadro { width: 7px; height: 7px; flex: 0 0 7px; background: var(--acc); }
 
-.ficha-importe.es-gasto   { color: var(--gasto); }
-.ficha-importe.es-ingreso { color: var(--ingreso); }
+/* ------------------------------------------------------------- personas */
 
-.ficha-datos {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.personas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--hair);
+  border-bottom: 1px solid var(--hair);
 }
+/* El fondo del contenedor es el que se ve por el hueco de 1 px: la rejilla no
+   dibuja líneas, las deja ver. Por eso cada celda tiene que taparlo, y por eso
+   con tres personas hace falta una celda vacía: sin ella quedaría un rectángulo
+   gris donde debería haber papel. */
+.persona { background: var(--bg); padding: 14px 20px 16px var(--margen); display: flex; flex-direction: column; gap: 5px; }
+.persona-nombre { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.persona-nombre .etiqueta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marca { width: 9px; height: 9px; flex: 0 0 9px; }
+.persona-total { font-family: var(--serif); font-size: 26px; line-height: 1; }
+.persona-detalle { font-size: 11px; color: var(--mut); }
 
-.ficha-dato {
+.reparto-linea { padding: 11px var(--margen) 12px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--hair); }
+
+/* ------------------------------------------------------------------ filas */
+
+.fila {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  width: 100%;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.fila-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fila-nombre { font-size: 14px; }
+.fila-valor { font-size: 14px; color: var(--sec); white-space: nowrap; }
+.fila-nota { font-size: 10px; color: var(--mut); }
+.fila.alta { padding: 15px 0; }
+.fila.baja { padding: 12px 0; }
+.fila .cifra { font-size: 20px; }
+
+/* Movimiento del historial: nombre e importe en la primera línea, el detalle
+   debajo ocupando el ancho entero. */
+.mov {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px; row-gap: 2px;
+  width: 100%;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+}
+.mov-nombre { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mov-importe { font-family: var(--serif); font-size: 17px; white-space: nowrap; }
+.mov-importe.entra { color: var(--mut); }
+.mov-meta { grid-column: 1 / -1; font-size: 11px; color: var(--mut); }
+
+/* Fijo del mes: el día manda a la izquierda porque es lo que se busca. */
+.fijo-mes {
+  display: grid; grid-template-columns: 24px 1fr auto; gap: 12px;
+  align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--hair);
+}
+.fijo-dia { font-size: 11px; color: var(--faint); }
+.fijo-importe { font-size: 14px; color: var(--mut); }
+.fijo-mes.pendiente .fijo-dia, .fijo-mes.pendiente .fijo-importe { color: var(--acc); }
+
+/* En la lista de Fijos las filas son deliberadamente escuetas: nombre e
+   importe. Lo demás está en la ficha, a un toque. */
+.fijo {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px;
+  align-items: baseline; width: 100%; padding: 13px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.fijo-nombre { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fijo-monto { font-family: var(--serif); font-size: 19px; white-space: nowrap; }
+.fijo.dormido .fijo-nombre, .fijo.dormido .fijo-monto { color: var(--mut); }
+
+.grupo-dia { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 0 6px; }
+.grupo-total { font-family: var(--serif); font-size: 18px; }
+
+/* ------------------------------------------------------------------ chips */
+
+.chip {
+  padding: 7px 11px;
+  font-size: 12px;
+  border: 1px solid var(--hair);
+  color: var(--sec);
+  background: transparent;
+  white-space: nowrap;
+}
+.chip.activo { background: var(--ink); color: var(--invT); border-color: var(--ink); }
+.chip.pequeno { padding: 6px 9px; font-size: 11px; }
+.chip.dia { min-width: 32px; text-align: center; padding: 6px 8px; font-size: 11px; }
+.chip.ancho { padding: 10px 12px; }
+.chip.filtro { padding: 9px 11px; }
+
+.chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.chips.apretados { gap: 6px; }
+
+/* Etiqueta a la izquierda y chips a la derecha. En una sola columna los chips
+   caían debajo de su etiqueta y la ficha del fijo se hacía tres pantallas. */
+.chips-fila { display: grid; grid-template-columns: 50px 1fr; gap: 8px; align-items: start; }
+.chips-fila > .etiqueta { padding-top: 8px; }
+
+/* ---------------------------------------------------------------- botones */
+
+.boton {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  text-align: center;
   font-size: 14px;
-  color: #E8D6CB;
-  background: rgba(255, 138, 91, 0.08);
-  border: 1px solid rgba(255, 138, 91, 0.28);
-  border-radius: 999px;
-  padding: 5px 12px;
+  border: 1px solid transparent;
+}
+.boton.tinta { background: var(--ink); color: var(--invT); border-color: var(--ink); }
+.boton.contorno { border-color: var(--ink); }
+.boton.contorno.encendido { background: var(--ink); color: var(--invT); }
+.boton.peligro { border-color: var(--acc); color: var(--acc); }
+.boton.suave { border-color: var(--hair); color: var(--sec); font-size: 13px; padding: 13px; }
+.boton[disabled] { opacity: 0.35; }
+
+.boton-pequeno { align-self: flex-start; padding: 10px 13px; font-size: 12px; border: 1px solid var(--hair); color: var(--sec); }
+
+/* El pie de las vistas que no son pestaña: se pega abajo y lleva regla fuerte
+   encima para que el pulgar sepa que ahí acaba la lectura y empieza la acción. */
+.pie {
+  margin-top: auto;
+  padding: 16px var(--margen) calc(26px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pie.sin-linea { border-top: 0; }
+.pie-fila { display: flex; gap: 10px; align-items: stretch; }
+.pie-fila > .boton { flex: 1; }
+.pie-fila > .boton.estrecho { flex: 0 0 auto; width: auto; padding-left: 18px; padding-right: 18px; }
+
+/* ---------------------------------------------------------------- entradas */
+
+.entrada {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.entrada.fuerte { border-bottom-color: var(--ink); padding: 10px 0; }
+.entrada.grande { font-size: 16px; }
+.entrada.busca { font-size: 13px; padding: 6px 0; border-bottom: 0; }
+.entrada.meta { font-family: var(--serif); font-size: 21px; padding: 3px 0; }
+
+.anadir { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: stretch; }
+.anadir .boton { width: auto; padding: 11px 14px; font-size: 13px; border-color: var(--hair); color: var(--mut); }
+.anadir .boton.listo { background: var(--ink); color: var(--invT); border-color: var(--ink); }
+
+/* ---------------------------------------------------------------- teclado */
+
+.importe-grande {
+  padding: 20px var(--margen) 12px;
+  display: flex; align-items: baseline; gap: 8px;
+  border-bottom: 1px solid var(--ink);
+}
+.importe-signo { font-family: var(--serif); font-size: 30px; color: var(--mut); }
+.importe-numero { font-family: var(--serif); font-size: 62px; line-height: 0.85; letter-spacing: -0.02em; }
+.importe-numero.vacio { color: var(--hair); }
+
+/* Las líneas del teclado son el hueco de la rejilla, no bordes: así no se
+   duplican en el encuentro de dos teclas ni queda un pelo más gruesa. */
+.teclado {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--hair);
+  border: 1px solid var(--hair);
+  border-bottom: 0;
+}
+.tecla {
+  height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--serif);
+  font-size: 25px;
+  background: var(--bg);
+}
+.tecla:active { background: var(--hair); }
+
+.bloque-teclado { margin-top: auto; padding: 0 18px; }
+.bloque-guardar { padding: 14px 18px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
+.bloque-guardar.doble { grid-template-columns: 1fr 1fr; }
+
+.pie-anotar { padding: 10px var(--margen) 0; font-size: 11px; line-height: 1.5; color: var(--mut); text-align: left; width: 100%; }
+
+/* ------------------------------------------------------------------ metas */
+
+.meta { display: flex; flex-direction: column; gap: 7px; }
+.meta-cabeza { display: flex; align-items: center; gap: 10px; }
+.meta-cabeza .entrada { flex: 1; min-width: 0; }
+.quitar { flex: 0 0 auto; padding: 6px 2px; font-size: 11px; color: var(--acc); }
+.progreso { height: 7px; background: var(--hair); }
+.progreso > div { height: 100%; background: var(--ink); }
+.progreso.completa > div { background: var(--p3); }
+.progreso.fina { height: 5px; }
+
+.reparto-meta {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px; row-gap: 3px;
+  align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--hair);
+}
+.reparto-meta .nombre { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.reparto-meta .monto { font-family: var(--serif); font-size: 21px; }
+.reparto-meta .monto.vacio { color: var(--hair); }
+.reparto-meta .pista { font-size: 11px; color: var(--mut); }
+.reparto-meta .accion { font-size: 11px; color: var(--sec); text-align: right; }
+.reparto-meta .accion.quita { color: var(--acc); }
+
+/* ------------------------------------------------------------------ tabs */
+
+.tabs {
+  border-top: 1px solid var(--ink);
+  display: flex;
+  align-items: stretch;
+  background: var(--bg);
+}
+.tabs[hidden] { display: none; }
+.tabs-lista { flex: 1; display: flex; }
+.tab {
+  flex: 1;
+  padding: 16px 2px calc(26px + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--mut);
+  border-bottom: 3px solid transparent;
+}
+.tab.activo { color: var(--ink); border-bottom-color: var(--ink); }
+.tab-anotar {
+  padding: 16px 16px calc(26px + env(safe-area-inset-bottom));
+  background: var(--ink);
+  color: var(--invT);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: flex-start;
 }
 
-/* El signo de gasto e ingreso lleva su color: es lo que permite elegir sin
-   leer, que en un paso de dos opciones es toda la diferencia. */
-[data-tipo="Gasto"]   .signo { color: var(--gasto); }
-[data-tipo="Ingreso"] .signo { color: var(--ingreso); }
+/* -------------------------------------------------------------- deshacer */
 
-/* El selector de persona es un <select>, pero con el estilo de campo de texto
-   no había forma de saberlo: ninguna señal de que se despliegue. La flecha va
-   dibujada en el fondo porque la nativa de Android no se puede recolorear. */
-select.campo-input {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 44px;
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--texto-suave) 50%),
-    linear-gradient(135deg, var(--texto-suave) 50%, transparent 50%);
-  background-position: calc(100% - 22px) calc(50% + 2px), calc(100% - 16px) calc(50% + 2px);
-  background-size: 6px 6px, 6px 6px;
-  background-repeat: no-repeat;
+/* No es un aviso flotante: es una barra a ancho completo pegada sobre las
+   pestañas. Borrar no pide confirmación, así que el aviso tiene que ocupar
+   sitio de verdad y no poder pasarse por alto. */
+.deshacer {
+  padding: 12px var(--margen);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--ink);
+  color: var(--invT);
 }
+.deshacer[hidden] { display: none; }
+.deshacer-texto { font-size: 12px; }
+.deshacer-boton { padding: 8px 12px; font-size: 12px; border: 1px solid var(--invT); }
+
+/* ------------------------------------------------------------------ atajo */
+
+.tarjeta-atajo {
+  margin: 20px 20px 0;
+  padding: 18px;
+  background: var(--ink);
+  color: var(--invT);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.tarjeta-atajo .fila-alta { display: flex; justify-content: space-between; align-items: baseline; }
+.tarjeta-atajo .tenue { opacity: 0.7; color: inherit; }
+.tarjeta-atajo .rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.tarjeta-atajo .rejilla > button { padding: 14px 10px; text-align: center; font-size: 13px; border: 1px solid var(--invT); }
+
+/* --------------------------------------------------------------- vacíos */
+
+/* El estado vacío de una lista. La clase se llama así y no `.vacio` porque
+   `.vacio` ya significa otra cosa —un valor sin rellenar, como el $0 del
+   teclado— y las dos se pisaban: la cifra grande heredaba 40 px de aire y un
+   display:flex que no venía a cuento. */
+.vacio-lista { padding: 40px 0 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.vacio-lista .titulo { font-size: 26px; }
+.vacio-lista .boton { width: auto; padding: 13px 18px; font-size: 13px; }
+
+/* ------------------------------------------------------------ apariencia */
+
+.tres { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ink); }
+.tres > button { padding: 12px 8px; text-align: center; font-size: 13px; }
+.tres > button.activo { background: var(--ink); color: var(--invT); }
+
+.estado { flex: 0 0 auto; padding: 6px 10px; font-size: 11px; border: 1px solid var(--hair); color: var(--sec); }
+.estado.encendido { background: var(--ink); color: var(--invT); border-color: var(--ink); }
+
+/* Fila de lista editable: nombre, etiqueta tocable y "quitar", con el uso
+   debajo ocupando toda la anchura. */
+.editable {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 10px; row-gap: 4px; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid var(--hair);
+}
+.editable > .nombre { font-size: 15px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editable > .uso { grid-column: 1 / -1; font-size: 10px; color: var(--mut); }
+.editable .quitar { padding: 5px 2px; font-size: 13px; }
+
+/* ------------------------------------------------------------ transiciones
+
+   Discretas y solo de opacidad: nada que mueva las cifras de sitio. Quien
+   prefiere no ver animaciones, no las ve. */
+.pantalla.activa { animation: aparece 140ms ease-out; }
+@keyframes aparece { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pantalla.activa { animation: none; }
+}
+
+/* ------------------------------------------------------------------ avería */
+
+/* Se enseña cuando el HTML servido y el JS no son de la misma versión. Sin
+   esto, la app se quedaba muerta a mitad de un paso sin decir por qué. */
+#averia { padding: 40px var(--margen); display: flex; flex-direction: column; gap: 12px; }
+#averia[hidden] { display: none; }

@@ -13,7 +13,7 @@
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v18';
+const CACHE = 'gastos-v19';
 
 /* El mismo código de IndexedDB y de envío que usa la página. Se importa en vez
    de reescribirlo aquí: dos copias de la lógica de la cola acabarían
@@ -26,12 +26,20 @@ const ESENCIALES = [
   './index.html',
   './config.js',
   './css/estilos.css',
+  './css/fuentes.css',
+  './css/fuentes/newsreader-400.woff2',
+  './css/fuentes/newsreader-500.woff2',
+  './css/fuentes/plex-mono-400.woff2',
+  './css/fuentes/plex-mono-500.woff2',
+  './js/formato.js',
   './js/nucleo.js',
-  './js/ui.js',
-  './js/api.js',
-  './js/cola.js',
+  './js/vista.js',
+  './js/estado.js',
+  './js/mes.js',
+  './js/fijos.js',
+  './js/ahorro.js',
+  './js/anotar.js',
   './js/ajustes.js',
-  './js/resumen.js',
   './js/app.js',
   './manifest.json',
   './iconos/icono.svg',
