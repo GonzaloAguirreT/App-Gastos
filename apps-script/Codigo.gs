@@ -135,6 +135,19 @@ const TOPE_CIERRES = 12;
 function instalar() {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
 
+  /* Cronómetro por fases.
+   *
+   * Va con console.log y no con Logger.log a propósito: console.log sale al
+   * registro en cuanto se escribe, así que sobrevive a que la ejecución muera;
+   * Logger.log se vuelca al final y en un "Exceeded maximum execution time" no
+   * llega a volcarse nunca.
+   *
+   * Existe porque esto ya se ha muerto dos veces por tiempo y el registro solo
+   * decía que se había muerto, no dónde. Con esto, la última línea del registro
+   * es el sitio. */
+  const arranque = Date.now();
+  const paso = nombre => console.log(nombre + ' · ' + (Date.now() - arranque) + ' ms');
+
   /* Leer ANTES de tocar nada. Si algo falla a mitad, el libro se queda como
      estaba en vez de a medio migrar. */
   const movimientos = leerMovimientosParaMigrar(libro);
@@ -145,6 +158,7 @@ function instalar() {
   const reparto = leerTablaExistente(libro, HOJA_REPARTO, 6);
 
   const config = leerConfigActual(libro);
+  paso('leído el libro');
 
   /* Panel y Año se retiran ANTES de reescribir los datos, y no es por orden:
      es lo que hace que una segunda instalación termine.
@@ -156,6 +170,7 @@ function instalar() {
      con "Exceeded maximum execution time". Sin nadie mirando, la reescritura de
      los datos vuelve a costar lo que costaba. */
   retirarHojas(libro, [HOJA_PANEL, HOJA_ANIO]);
+  paso('retirados Panel y Año');
 
   /* El orden de aquí abajo es el de las DEPENDENCIAS, no el de las pestañas.
 
@@ -168,19 +183,30 @@ function instalar() {
      Antes no era así, y solo se salvó de milagro: en la primera instalación
      esas hojas no existían todavía, así que no había nada que borrar. */
   escribirListas(libro, listas);
+  paso('Listas');
   escribirMovimientos(libro, movimientos, listas.categorias);
+  paso('Movimientos');
   escribirFijos(libro, fijos);
+  paso('Fijos');
   escribirReparto(libro, reparto);
+  paso('Reparto');
   escribirMetas(libro, metas);
+  paso('Metas');
   escribirCierres(libro, cierres);
+  paso('Cierres');
   escribirConfig(libro, config);
+  paso('Config');
   prepararUuids(libro);
 
   retirarHojasViejas(libro);
+  paso('retiradas las hojas viejas');
   crearPanel(libro);
+  paso('Panel');
   crearAnio(libro);
+  paso('Año');
   ordenarPestanas(libro);
   instalarDisparadorDiario();
+  paso('pestañas y disparador');
 
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
   const aviso = (token
