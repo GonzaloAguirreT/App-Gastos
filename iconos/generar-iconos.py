@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Genera icono-192.png e icono-512.png a partir de las mismas formas que icono.svg.
+Genera los PNG del icono a partir de las mismas formas que icono.svg.
 
 Por qué no se convierte el SVG con una herramienta normal: eso obligaría a
 depender de ImageMagick, Inkscape o Pillow, y la premisa del proyecto es no
@@ -10,9 +10,20 @@ fuerza bruta con supermuestreo 3x3 para suavizar los bordes.
 
 Uso:  python3 iconos/generar-iconos.py
 
-Si cambias el icono, edita a la vez icono.svg y las constantes FORMAS de aquí:
-son dos fuentes de verdad para el mismo dibujo, no hay forma de evitarlo sin
-meter un conversor de SVG.
+Salen tres archivos, y el tercero no es un capricho:
+
+  icono-192.png, icono-512.png   el icono normal, con esquinas redondeadas
+  icono-maskable-512.png         para Android, a sangre y sin redondear
+
+Android recorta los iconos "maskable" con la forma que tenga configurada el
+lanzador —círculo, cuadrado, gota—. Si le das un PNG que YA lleva las esquinas
+redondeadas, aplica su recorte encima y el dibujo acaba más pequeño y metido
+hacia dentro. El maskable va con el fondo hasta el borde y las barras dentro
+del círculo central del 80%, que es la zona que ningún recorte se come.
+
+Si cambias el icono, edita a la vez icono.svg y las constantes de aquí: son dos
+fuentes de verdad para el mismo dibujo, y no hay forma de evitarlo sin meter un
+conversor de SVG.
 """
 
 import struct
@@ -21,15 +32,28 @@ from pathlib import Path
 
 # Mismos valores que icono.svg, en un lienzo de referencia de 512x512.
 LIENZO = 512
-FONDO = (0x0E, 0x10, 0x13)
-ACENTO = (0x4A, 0xDE, 0x80)
+
+# El campo va en coral y las barras en oscuro, y no al revés. Un icono casi
+# negro sobre un fondo de pantalla oscuro desaparece: hay que buscarlo entre
+# los demás. Con el campo de color se localiza de un vistazo, y el coral ya es
+# el color de la app, así que no inventa nada.
+FONDO = (0xFF, 0x8A, 0x5B)
+ACENTO = (0x14, 0x10, 0x0E)
 RADIO_FONDO = 112
 
 # (x, y, ancho, alto, radio)
 BARRAS = [
-    (152, 276, 56, 96, 20),
-    (228, 212, 56, 160, 20),
-    (304, 140, 56, 232, 20),
+    (112, 272, 72, 128, 26),
+    (220, 192, 72, 208, 26),
+    (328,  96, 72, 304, 26),
+]
+
+# Las mismas barras al 80% desde el centro, para el maskable: así el dibujo
+# entero cabe en el círculo central que ningún recorte del lanzador toca.
+BARRAS_MASKABLE = [
+    (141, 269, 58, 102, 21),
+    (227, 205, 58, 166, 21),
+    (314, 128, 58, 243, 21),
 ]
 
 MUESTRAS = 3  # 3x3 submuestras por píxel: suficiente para bordes limpios
@@ -46,17 +70,19 @@ def dentro_rect_redondeado(px, py, x, y, ancho, alto, radio):
     return dx * dx + dy * dy <= radio * radio
 
 
-def color_submuestra(px, py, escala):
+def color_submuestra(px, py, maskable):
     """Devuelve (r, g, b, a) de una submuestra en coordenadas del lienzo 512."""
-    for bx, by, ba, bh, br in BARRAS:
+    for bx, by, ba, bh, br in (BARRAS_MASKABLE if maskable else BARRAS):
         if dentro_rect_redondeado(px, py, bx, by, ba, bh, br):
             return ACENTO + (255,)
-    if dentro_rect_redondeado(px, py, 0, 0, LIENZO, LIENZO, RADIO_FONDO):
+    # En el maskable el fondo llega al borde: el redondeo lo pone Android.
+    radio = 0 if maskable else RADIO_FONDO
+    if dentro_rect_redondeado(px, py, 0, 0, LIENZO, LIENZO, radio):
         return FONDO + (255,)
     return (0, 0, 0, 0)
 
 
-def dibujar(tamano):
+def dibujar(tamano, maskable=False):
     """Genera las filas RGBA del icono al tamaño pedido."""
     escala = LIENZO / tamano
     paso = escala / MUESTRAS
@@ -69,7 +95,7 @@ def dibujar(tamano):
                 py = (fila * MUESTRAS + sy + 0.5) * paso
                 for sx in range(MUESTRAS):
                     px = (col * MUESTRAS + sx + 0.5) * paso
-                    cr, cg, cb, ca = color_submuestra(px, py, escala)
+                    cr, cg, cb, ca = color_submuestra(px, py, maskable)
                     # Se acumula premultiplicado para que el borde no tire a negro.
                     r += cr * ca
                     g += cg * ca
@@ -113,3 +139,7 @@ if __name__ == '__main__':
         ruta = destino / f'icono-{tamano}.png'
         escribir_png(ruta, tamano, dibujar(tamano))
         print(f'{ruta.name}: {ruta.stat().st_size} bytes')
+
+    ruta = destino / 'icono-maskable-512.png'
+    escribir_png(ruta, 512, dibujar(512, maskable=True))
+    print(f'{ruta.name}: {ruta.stat().st_size} bytes')

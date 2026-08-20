@@ -1,13 +1,16 @@
-<!-- Icono de la app: tres barras ascendentes sobre fondo oscuro.
+<!-- Icono de la app: tres barras ascendentes recortadas sobre un campo coral.
+     El campo va en color y las barras en oscuro, y no al revés: un icono casi
+     negro sobre un fondo de pantalla oscuro desaparece entre los demás y hay
+     que buscarlo. Con el campo de color se localiza de un vistazo.
      Sin degradados ni detalle fino a propósito: a 48px en la pantalla de inicio
-     de Android no se distingue nada más que la silueta.
-     Las barras quedan dentro del 60% central para que el recorte circular de
-     los iconos "maskable" de Android no se coma nada. -->
+     no se distingue nada más que la silueta.
+     Para la versión "maskable" de Android hay un archivo aparte que genera
+     generar-iconos.py, con el fondo a sangre y las barras encogidas al 80%. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="112" ry="112" fill="#0E1013"/>
-  <g fill="#4ADE80">
-    <rect x="152" y="276" width="56" height="96"  rx="20" ry="20"/>
-    <rect x="228" y="212" width="56" height="160" rx="20" ry="20"/>
-    <rect x="304" y="140" width="56" height="232" rx="20" ry="20"/>
+  <rect width="512" height="512" rx="112" ry="112" fill="#FF8A5B"/>
+  <g fill="#14100E">
+    <rect x="112" y="272" width="72" height="128" rx="26" ry="26"/>
+    <rect x="220" y="192" width="72" height="208" rx="26" ry="26"/>
+    <rect x="328" y="96"  width="72" height="304" rx="26" ry="26"/>
   </g>
 </svg>

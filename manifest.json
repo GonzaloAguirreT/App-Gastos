@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "Gastos",
   "short_name": "Gastos",
   "description": "Registro rápido de gastos e ingresos",
@@ -6,8 +7,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0E1013",
-  "theme_color": "#0E1013",
+  "background_color": "#14100E",
+  "theme_color": "#14100E",
   "lang": "es",
   "icons": [
     {
@@ -23,7 +24,7 @@
       "purpose": "any"
     },
     {
-      "src": "iconos/icono-512.png",
+      "src": "iconos/icono-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
