@@ -59,6 +59,7 @@ const ANOTAR = (() => {
     volverA = 'fijos';
     pintar();
     VISTA.ir('anotar');
+    mostrarControlesDelFijo();
   }
 
   /** Convertir un movimiento en fijo: se abre el alta con lo que ya sabemos de
@@ -70,6 +71,7 @@ const ANOTAR = (() => {
     digitos = String(Math.round(m.importe));
     dia = Number(m.fecha.slice(8)) || 10;
     pintar();
+    mostrarControlesDelFijo();
   }
 
   function editarMovimiento(m) {
@@ -96,6 +98,7 @@ const ANOTAR = (() => {
     volverA = 'fijo';
     pintar();
     VISTA.ir('anotar');
+    mostrarControlesDelFijo();
   }
 
   function editarPlan() { soloNumero('plan', ESTADO.estado().datos.config.plan, 'ajustes'); }
@@ -289,6 +292,20 @@ const ANOTAR = (() => {
     objetivo = null;
     categoria = primeraCategoria(tipo);
     pintar();
+    if (esFijo()) mostrarControlesDelFijo();
+  }
+
+  /**
+   * Baja el bloque hasta las tres filas de chips del fijo.
+   *
+   * Con una lista larga de categorías —y la lista la eliges tú— el Cada/Día/
+   * Hasta se queda por debajo del corte, y quien acaba de tocar "Es fijo" ve
+   * exactamente lo mismo que antes de tocarlo. El teclado no puede moverse de
+   * abajo, así que lo que se mueve es la vista.
+   */
+  function mostrarControlesDelFijo() {
+    const bloque = document.querySelector('#pantalla-anotar .desliza');
+    if (bloque) bloque.scrollTop = bloque.scrollHeight;
   }
 
   function cancelar() {

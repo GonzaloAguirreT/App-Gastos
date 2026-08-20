@@ -909,15 +909,26 @@ function leerCierres(libro) {
   if (!hoja) return [];
   return hoja.getRange(FILA_DATOS, 1, TOPE_CIERRES, 7).getValues()
     .filter(f => f[0])
-    .map(f => ({
-      mes: String(f[0]),
-      entrado: Number(f[1]) || 0,
-      gastado: Number(f[2]) || 0,
-      plan: Number(f[3]) || 0,
-      ahorrado: Number(f[4]) || 0,
-      repartido: Number(f[5]) || 0,
-      sinAsignar: Number(f[6]) || 0
-    }))
+    .map(f => {
+      const entrado = Number(f[1]) || 0;
+      const gastado = Number(f[2]) || 0;
+      const repartido = Number(f[5]) || 0;
+      /* Lo ahorrado se calcula aquí en vez de leer la celda, aunque la celda
+         lo tenga: es una fórmula, y una fórmula puede estar rota, vacía o
+         recién escrita y sin recalcular. Si eso pasara, la app enseñaría un
+         "Ahorrado 0" muy convencido justo encima de un entrado y un gastado
+         que no cuadran con él. Es la definición del número: no hace falta
+         preguntársela a nadie. */
+      return {
+        mes: String(f[0]),
+        entrado: entrado,
+        gastado: gastado,
+        plan: Number(f[3]) || 0,
+        ahorrado: entrado - gastado,
+        repartido: repartido,
+        sinAsignar: (entrado - gastado) - repartido
+      };
+    })
     .sort((a, b) => b.mes.localeCompare(a.mes));
 }
 

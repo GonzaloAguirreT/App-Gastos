@@ -214,7 +214,11 @@ const MES = (() => {
         fila('Salió', h('span.cifra', FMT.dinero(cierre.gastado)), null, { clases: 'alta' }),
         fila('Plan de ese mes', h('span.cifra', FMT.dinero(cierre.plan)), null, { clases: 'alta' })
       ]),
-      seccion('Lo anotado ese mes'),
+      /* Aquí sí entran las filas que escribieron los fijos, al revés que en el
+         Historial. Un mes cerrado se mira para auditarlo, y una lista que se
+         dejara fuera el arriendo no explicaría el "Salió" que tiene justo
+         encima. Por eso tampoco se llama "lo anotado": no lo anotó nadie. */
+      seccion('Todo lo del mes'),
       h('div.margen', movs.map(m => h('div.mov', [
         h('span.mov-nombre', m.categoria),
         h('span.mov-importe' + (m.tipo === 'Ingreso' ? '.entra' : ''),
