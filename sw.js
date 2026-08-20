@@ -13,7 +13,7 @@
 /* Subir esta versión invalida la caché entera y obliga a volver a descargar
    todos los archivos juntos. HAY QUE SUBIRLA EN CADA DESPLIEGUE que toque
    index.html, el CSS o el JS. Es el único mecanismo de actualización que hay. */
-const CACHE = 'gastos-v16';
+const CACHE = 'gastos-v17';
 
 /* El mismo código de IndexedDB y de envío que usa la página. Se importa en vez
    de reescribirlo aquí: dos copias de la lógica de la cola acabarían
@@ -36,7 +36,8 @@ const ESENCIALES = [
   './manifest.json',
   './iconos/icono.svg',
   './iconos/icono-192.png',
-  './iconos/icono-512.png'
+  './iconos/icono-512.png',
+  './iconos/icono-maskable-512.png'
 ];
 
 /* cache: 'reload' en cada descarga, y no es un detalle.
