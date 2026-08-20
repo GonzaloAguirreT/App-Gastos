@@ -69,9 +69,29 @@ const APP = (() => {
       ignorarBackoff: aMano
     });
     await ESTADO.refrescarPendientes();
-    if (resultado.enviados) await ESTADO.sincronizar({ silencioso: true });
-    else if (aMano) await ESTADO.sincronizar();
+
+    /* Releer solo cuando la cola queda vacía. Con algo aún pendiente, lo que
+       devuelve la hoja no incluye ese cambio, y pisar el estado con esa
+       respuesta haría desaparecer de la pantalla un gasto que sí se anotó. */
+    if (resultado.quedan === 0 && (resultado.enviados || aMano)) {
+      await ESTADO.sincronizar({ silencioso: !aMano });
+    }
     return resultado;
+  }
+
+  /**
+   * Programa un vaciado tras encolar algo.
+   *
+   * Dos intentos y no uno: el primero es inmediato, para lo que sale ya; el
+   * segundo espera a que venza la ventana de deshacer, que es la única razón
+   * por la que un apunte puede seguir en la cola sin que haya fallado nada.
+   * Sin el segundo, un borrado se quedaba esperando hasta que salías de la app.
+   */
+  let pendienteDeEnviar = null;
+  function programarEnvio() {
+    clearTimeout(pendienteDeEnviar);
+    vaciarCola();
+    pendienteDeEnviar = setTimeout(() => vaciarCola(), NUCLEO.MS_DESHACER + 500);
   }
 
   /* ------------------------------------------------------------ arranque */
@@ -86,6 +106,7 @@ const APP = (() => {
     document.getElementById('btn-anotar').addEventListener('click', () => ANOTAR.abrir());
 
     ESTADO.suscribir(pintarTodo);
+    ESTADO.cuandoSeEncole(programarEnvio);
     await ESTADO.iniciar();
     VISTA.aplicarTema(ESTADO.estado().ajustes.tema);
     pintarTodo();

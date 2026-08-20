@@ -1,21 +1,32 @@
 # Gastos
 
-PWA personal para anotar gastos e ingresos en menos de 10 segundos y mandarlos a
-una hoja de Google Sheets.
+App personal para llevar el mes entre dos: qué queda, qué falta por salir, qué
+se repite todos los meses y cuánto se está ahorrando. Lo escribe todo en una
+hoja de Google Sheets, que es la base de datos de verdad.
 
 Sin build step, sin frameworks, sin dependencias. Son archivos estáticos: se
 sirven tal cual desde GitHub Pages o desde `python3 -m http.server`.
 
 ---
 
-## Estado
+## Qué hay dentro
 
-| Fase | Qué incluye | Estado |
-|---|---|---|
-| 1 | Captura completa en local con `MODO_PRUEBA` | ✅ hecha |
-| 2 | Apps Script, token y envío real | ✅ hecha |
-| 3 | Offline, cola en IndexedDB y reintentos | ✅ hecha |
-| 4 | Pantalla de resumen y pulido | ✅ hecha |
+Cinco pestañas y un botón.
+
+| Pestaña | Para qué |
+|---|---|
+| **Mes** | El saldo disponible, cómo se reparte el gasto entre los dos y qué fijos faltan por cobrarse. También los meses ya cerrados, en modo lectura. |
+| **Historial** | Lo anotado a mano, agrupado por día con el subtotal del día, con buscador y filtro por persona. Tocar una fila abre su detalle. |
+| **Fijos** | Las reglas que escriben solas: arriendo, suministros, suscripciones, el sueldo. Con lo que cae en los próximos cuatro meses. |
+| **Ahorro** | Lo acumulado en los meses cerrados, las metas con su avance, y lo que queda sin asignar. |
+| **Ajustes** | Tema, plan del mes, avisos, las listas editables y el cierre del mes. |
+
+**Anotar** es el bloque negro a la derecha de la barra: teclado propio, sin coma
+decimal, con las categorías a un toque. El mismo teclado sirve para poner el
+plan del mes, el límite de aviso, el objetivo de una meta o cuánto va a esa meta
+en un reparto.
+
+La moneda es el peso chileno: enteros, miles con punto, símbolo delante.
 
 ---
 
@@ -23,417 +34,254 @@ sirven tal cual desde GitHub Pages o desde `python3 -m http.server`.
 
 Hazlo una vez y no vuelves a tocarlo. Tardas unos diez minutos.
 
-### 1. La hoja de cálculo
+### 1. Pegar el Apps Script
 
-Abre la hoja de Google Sheets que alimenta tu Excel, o crea una nueva. No hace
-falta que crees las pestañas ni las cabeceras a mano: lo hace el script en el
-paso 3.
-
-Lo que va a crear:
-
-- Una hoja **`Movimientos`** con estas seis columnas, en este orden:
-
-  | Fecha | Concepto | Importe | Cuenta | Tipo | Categoría | Usuario |
-  |---|---|---|---|---|---|---|
-  | `yyyy-mm-dd` | texto libre | número positivo | texto | `Ingreso` o `Gasto` | texto | texto |
-
-- Una hoja **`Año`** y doce hojas de mes, **`Enero`** a **`Diciembre`**:
-
-  | Hoja | Qué lleva |
-  |---|---|
-  | `Año` | Gasto de cada persona en cada mes, con el total del año y un gráfico de barras |
-  | `Enero`…`Diciembre` | Ingresos, gastos y lo que queda; el desglose por categoría de cada persona; y tres tortas: una por persona y otra del conjunto |
-
-  Son fórmulas, no datos volcados: se recalculan solas con cada fila que entra.
-  No escribas nada en ellas.
-
-  **Miran siempre el año en curso.** El 1 de enero las trece se ponen a cero y
-  empiezan el año nuevo. Lo anterior no se pierde —sigue entero en
-  `Movimientos`—, pero deja de verse en los paneles; si algún año quieres
-  conservarlo a la vista, duplica las hojas antes de que cambie el año.
-
-- Una hoja **`Suscripciones`** con los gastos recurrentes dados de alta. Ver
-  abajo.
-
-- Una hoja **`_uuids`**, oculta, donde se apuntan los identificadores de cada
-  movimiento para rechazar duplicados. No la borres ni la toques.
-
-> El identificador va en una hoja aparte y no en una séptima columna oculta de
-> `Movimientos` a propósito: una columna de más ensancha el rango que lee Power
-> Query y puede colarse en la tabla del Excel.
-
-### 2. Pegar el Apps Script
-
-1. En la hoja: **Extensiones → Apps Script**.
+1. En la hoja de cálculo: **Extensiones → Apps Script**.
 2. Borra lo que haya en `Código.gs` y pega entero el contenido de
    [`apps-script/Codigo.gs`](apps-script/Codigo.gs).
-3. Guarda (💾).
+3. Guarda.
 
-### 3. Crear las hojas
+### 2. El token
 
-En el editor de Apps Script, elige la función **`instalar`** en el desplegable
-de arriba y pulsa **▷ Ejecutar**.
+En **Configuración del proyecto → Propiedades del script**, añade una propiedad
+llamada `TOKEN` con una cadena larga y aleatoria. Es la única contraseña entre
+la app y la hoja.
 
-La primera vez Google te pedirá permisos: *Revisar permisos* → tu cuenta →
-*Configuración avanzada* → *Ir a (nombre del proyecto)* → *Permitir*. La
-pantalla de "Google no ha verificado esta aplicación" es normal: la aplicación
-sin verificar eres tú.
+No lo pongas en `config.js`: GitHub Pages sirve el repositorio tal cual y
+cualquiera podría leerlo. Tampoco en la hoja, que se comparte. Vive solo en las
+propiedades del script y en el IndexedDB de cada teléfono.
 
-Al terminar, vuelve a la hoja y comprueba que existe la pestaña `Movimientos`
-con sus cabeceras.
+### 3. Ejecutar `instalar()`
+
+En el editor de Apps Script, elige `instalar` y dale a ejecutar. Te pedirá
+permisos la primera vez.
+
+Deja el libro con diez pestañas:
+
+| Pestaña | Quién escribe | Qué es |
+|---|---|---|
+| `Panel` | nadie | El mes en curso, con la misma jerarquía que la pantalla Mes. La única celda editable es **B4**: el primer día del mes que quieres mirar. |
+| `Año` | nadie | Doce filas, una por mes, más el gasto por persona. De aquí leen los dos gráficos. |
+| `Movimientos` | la app | Una fila por apunte. Es la tabla que crece. |
+| `Fijos` | la app | Una fila por regla. |
+| `Metas` | la app | A qué se destina el ahorro. |
+| `Cierres` | la app | Una fila por mes cerrado, con su Total Ahorrado. |
+| `Reparto` | la app | Cada asignación de ahorro a una meta, una línea. |
+| `Listas` | la app | Personas, cuentas y categorías. Se editan desde Ajustes. |
+| `Config` | la app | Plan del mes, límite de aviso y qué avisos están activos. |
+| `_uuids` | la app | Oculta. Los identificadores ya recibidos, para no escribir dos veces lo mismo. |
+
+`instalar()` **migra y no borra**. Si el libro venía del formato anterior:
+
+- los movimientos conservan fecha, importe, cuenta, tipo, categoría y persona;
+  lo que era `Concepto` pasa a `Descripción`, que es lo que siempre fue;
+- el reparto (común o personal) de cada fila se deduce de su categoría;
+- las `Suscripciones` pasan a `Fijos`: la frecuencia en palabras se convierte a
+  meses y el "hasta" en fecha se convierte a cuotas;
+- las pestañas `Suscripciones` y `Enero`…`Diciembre` se retiran, ya migradas.
+
+Se puede volver a ejecutar las veces que haga falta: primero se lee todo, luego
+se reescribe. No duplica nada.
 
 ### 4. Desplegar como aplicación web
 
-1. **Implementar → Nueva implementación**.
-2. Engranaje ⚙ → **Aplicación web**.
-3. *Ejecutar como*: **Yo**.
-4. *Quién tiene acceso*: **Cualquier persona**.
-5. **Implementar**, y copia la **URL de la aplicación web**.
+**Implementar → Nueva implementación → Aplicación web**:
 
-Esa URL acaba en `/exec`. Es la que necesitas.
+- Ejecutar como: **yo**
+- Quién tiene acceso: **Cualquier persona**
 
-> Cuidado con dos URLs que se parecen y no valen: la que acaba en `/dev` (solo
-> funciona con tu sesión iniciada) y la de la barra de direcciones del editor.
+Copia la URL, la que acaba en `/exec`.
 
-### 5. El token
+> "Cualquier persona" suena peor de lo que es: sin el token, la Web App contesta
+> `Token no válido` y nada más. Es lo que permite que la app hable con la hoja
+> sin obligar a iniciar sesión en Google desde el móvil.
 
-El token sustituye a la autenticación: sin él, cualquiera que diera con tu URL
-podría escribir en tu hoja.
+**Cada vez que cambies `Codigo.gs` hay que crear una implementación nueva o
+editar la existente.** Guardar en el editor no basta: la URL sigue sirviendo el
+código del último despliegue. Es la causa más frecuente de "pero si ya lo
+arreglé".
 
-1. Abre la app (ver más abajo), toca el icono de barras de la cabecera y,
-   abajo del resumen, **Ajustes**.
-2. Pulsa **Generar un token nuevo** y **copia** lo que sale.
-3. En el editor de Apps Script: **Configuración del proyecto** (el engranaje de
-   la izquierda) → abajo del todo, **Propiedades del script** → *Añadir
-   propiedad*.
-   - Propiedad: `TOKEN`
-   - Valor: lo que copiaste
-4. **Guardar propiedades del script**.
+### 5. Servir la app
 
-> Si cambias el token, hay que cambiarlo en los dos sitios. Si no coinciden, el
-> script rechaza todo y no escribe nada.
+GitHub Pages, rama `main`, carpeta raíz. O en local:
 
-### 6. Configurar la app
-
-De vuelta en Ajustes, en el móvil o en el ordenador:
-
-1. Pega la URL del paso 4 en **URL del Apps Script**.
-2. El token del paso 5 ya debería estar en su campo.
-3. Pulsa **Probar conexión**. Tiene que decir "Conectado".
-4. **Guardar**.
-
-Estos dos valores se quedan guardados en ese dispositivo y no salen de él. Si
-usas la app en el móvil y en el ordenador, hay que configurar los dos.
-
-**Si "Probar conexión" falla**, el mensaje te dice por dónde va:
-
-| Mensaje | Qué mirar |
-|---|---|
-| `Token no válido` | El token de la app y el de las Propiedades del Script no coinciden |
-| `El endpoint no devuelve JSON` | El despliegue no es "Cualquier persona", o la URL acaba en `/dev` |
-| `Failed to fetch` | La URL está mal escrita, no hay red, o el despliegue pide iniciar sesión |
-| `No existe la hoja Movimientos` | Falta ejecutar `instalar()` (paso 3) |
-
-Para distinguir un `Failed to fetch` de un problema de despliegue: **pega la URL
-del `/exec` en el navegador con `?token=TU_TOKEN` al final**. Si sale un JSON, el
-despliegue está bien. Si te pide iniciar sesión, el acceso no quedó en
-"Cualquier persona" — corrígelo y vuelve a implementar **con versión nueva**, que
-si no sigue publicada la anterior.
-
-### 7. Tus cuentas y categorías
-
-Edita [`config.js`](config.js) y sustituye las listas de ejemplo por las tuyas.
-
-> Tienen que coincidir **palabra por palabra** con las listas de la hoja de
-> configuración de tu Excel. Si aquí pone "Tarjeta de crédito" y allí "Tarjeta
-> crédito", los SUMIFS del panel dan cero y no salta ningún error en ninguna
-> parte.
-
-`ENDPOINT` y `TOKEN` se quedan vacíos en ese archivo a propósito: GitHub Pages
-sirve páginas públicas y el token sería legible por cualquiera.
-
----
-
-## Servir la app
-
-### GitHub Pages
-
-**Settings → Pages → Deploy from a branch → `main` / `(root)`**. La URL queda en
-`https://<tu-usuario>.github.io/<repositorio>/`. Es HTTPS, así que el service
-worker y la instalación funcionan.
-
-Cada vez que se fusiona un cambio en `main`, Pages lo republica en un par de
-minutos.
-
-### En local
-
-```bash
+```sh
 python3 -m http.server 8000
 ```
 
-`http://localhost:8000` en el ordenador. `localhost` cuenta como origen seguro,
-así que el service worker se registra y puedes simular el modo avión desde
-DevTools → Network → Offline.
+### 6. Conectar el teléfono
 
-Para verlo en el móvil sin desplegar: cable USB, `chrome://inspect` en el
-ordenador, *Port forwarding* 8000 → `localhost:8000`, y en el móvil entras a
-`http://localhost:8000`.
+Al abrirla por primera vez pide la URL del script y el token, comprueba la
+conexión y sigue con dos pasos más: quiénes anotan y qué fijos ya hay en la
+hoja. Se puede repetir desde **Ajustes → Conexión con la hoja**.
 
-> No sirve entrar desde el móvil a `http://192.168.x.x:8000`. Chrome considera
-> esa IP un origen inseguro y no registra el service worker ni ofrece instalar.
-
-### Instalar en Android
-
-1. Abre la URL de Pages en **Chrome**.
-2. Menú ⋮ → **Instalar aplicación**.
-3. Ábrela desde el icono. No debe verse la barra de direcciones.
-
-Si pone "Añadir acceso directo" en vez de "Instalar", Chrome no ha detectado el
-manifest o el service worker: recarga un par de veces y mira DevTools →
-Application.
+Para instalarla: Chrome → menú → **Añadir a pantalla de inicio**. Desde ahí se
+abre a pantalla completa y con su propio icono, y el icono lleva un acceso
+directo a **Anotar** que abre el teclado sin pasar por el mes.
 
 ---
 
-## Cómo funciona la captura
+## El contrato de la hoja
 
-Pasos encadenados, cada uno avanza solo al elegir:
+Si cambias un nombre de columna aquí, cámbialo también en `Codigo.gs`.
 
-1. **Importe** — teclado numérico, foco automático. Acepta coma o punto. Debajo,
-   dos botones que además **eligen la rama**: `Frecuente` (se repite solo) o
-   `Puntual` (solo esta vez). Enter equivale a `Puntual`.
-2. **Tipo** — Gasto / Ingreso. Un toque.
-3. **Categoría** — rejilla, distinta según la rama y el tipo. Un toque.
-4. **Cuenta** — rejilla. Un toque. La última usada aparece resaltada, pero el
-   paso no se salta.
-5. **Concepto** — opcional. "Guardar" o Enter.
+**`Movimientos`** — cabecera en la fila 1.
 
-Total en un puntual: **teclear el importe + 5 toques**. Los frecuentes meten tres
-preguntas más entre la categoría y la cuenta —cada cuánto, qué día y hasta
-cuándo—, y a cambio no vuelves a anotarlo nunca.
+| A | B | C | D | E | F | G | H | I | J | K |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Fecha | Mes | Tipo | Categoría | Descripción | Importe | Cuenta | Persona | Reparto | Origen | UUID |
 
-### Frecuentes y puntuales
+`Mes` es una fórmula, no la escribas. `Origen` es `app` si lo tecleó una persona
+y `fijo` si lo generó una regla. `Reparto` es `Común` o `Personal`.
 
-La pregunta va en el primer paso, con el importe recién tecleado y el pulgar ya
-abajo, porque es la que cambia lo que ocurre después:
+**`Fijos`** — cabecera en la fila 1.
 
-| | Puntual | Frecuente |
-|---|---|---|
-| Qué es | una fila | una regla |
-| Qué escribe | un movimiento | uno cada mes, trimestre o año |
-| Dónde vive | `Movimientos` | `Suscripciones`, y de ahí a `Movimientos` |
-| Categorías | Alimentación, Restaurantes… | Suscripciones, Arriendo, Suministros… |
+| A | B | C | D | E | F | G | H | I | J | K | L | M | N |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| UUID | Tipo | Concepto | Importe | Día | Cada (meses) | Cuotas | Restantes | Cuenta | Persona | Reparto | Activo | Próximo cargo | Último cargo |
 
-Los dos admiten gasto e ingreso: la nómina se da de alta una vez como ingreso
-frecuente y aparece sola cada mes.
+`Próximo cargo` **lo calcula el backend**: es la fuente de "qué cae en
+septiembre". `Cuotas` vacío es indefinido.
 
-Preguntarlo al principio evita el error caro —anotar el alquiler como gasto
-suelto y tener que repetirlo los doce meses— sin costar ningún toque de más: los
-dos botones ocupan el sitio del antiguo "Siguiente".
+El `Concepto` de un fijo es una categoría de la lista y no texto libre: el día
+que se cobre, esa palabra se escribe en la columna `Categoría` de
+`Movimientos`, y si no existe en `Listas` el panel la suma en ninguna parte.
 
-La fecha se asume hoy y se cambia tocándola en la cabecera. "Atrás" está visible
-en todos los pasos menos el primero.
+**`Metas`**, **`Cierres`**, **`Reparto`**, **`Listas`** y **`Config`** llevan la
+cabecera en la fila 4 y los datos desde la 5.
 
-Al guardar hay 5 segundos para deshacer. Si sales de la app durante esa ventana,
-el movimiento se envía en vez de perderse.
+En `Listas`, la columna **G** decide si un gasto de esa categoría cuenta como
+común: es la regla de "el arriendo sí, la ropa no", y evita tener que
+contestarlo en cada movimiento.
 
-### Resumen del mes
+Lo guardado en cada meta **no es un campo**: sale de sumar sus líneas en
+`Reparto`. Así el ahorro siempre se puede auditar y nunca hay un total que no
+cuadre con nada.
 
-El icono de barras de la cabecera abre el resumen: ingresos, gastos y ahorro del
-mes en curso, y los diez últimos movimientos. Nunca se pone por delante de la
-captura — la app siempre arranca en el paso del importe.
+---
 
-Los traspasos no cuentan en los totales, y en la lista se distingue cuál sale y
-cuál entra: sin eso, las dos filas de una misma transferencia se leen idénticas.
+## Cómo se cobran los fijos
 
-**Sin conexión enseña lo último que recibió, y lo dice**: *"Sin conexión. Datos
-de hace 2 h, puede que desactualizados."* Un resumen viejo sin avisar es peor
-que no enseñar nada, porque se toman decisiones con él.
+Un fijo no escribe filas por adelantado. El día que llega `Próximo cargo`, un
+disparador diario:
 
-Si hay movimientos en la cola aparece un botón para reintentar el envío, y desde
-aquí se entra a los Ajustes.
+1. escribe una fila en `Movimientos` con `Origen = fijo` y el UUID
+   `fijo-<uuid>-<yyyy-mm>`, que es lo que evita duplicados;
+2. pone `Último cargo` en hoy y adelanta `Próximo cargo` tantos meses como diga
+   `Cada`;
+3. si tenía cuotas, descuenta una, y al llegar a cero desactiva la regla.
 
-### Sin cobertura
+Un cargo trimestral aparece **entero en su mes**, sin prorratear: el dinero sale
+de golpe y el mes en que sale es el que te deja sin saldo.
 
-**Un movimiento anotado no se pierde nunca.** Al pulsar Guardar se escribe en
-IndexedDB *antes* de intentar nada más: aunque se apague el móvil en el instante
-siguiente, la fila sigue ahí al volver a abrir la app.
+El mismo disparador cierra el mes anterior la primera madrugada de cada mes. Ese
+es el "se cierra solo la última noche" que promete la app: una PWA no se
+despierta sola, así que quien lo hace es la hoja. También se puede cerrar a mano
+desde Ajustes.
 
-Si no hay red, el movimiento se queda en la cola y aparece un **contador ámbar
-en la cabecera** con cuántos quedan por enviar. Tocarlo fuerza un intento.
+---
 
-La cola se vacía sola en cuanto hay conexión, por cuatro caminos:
+## Las acciones del backend
 
-| Cuándo | Qué pasa |
+Todas por `POST` con `Content-Type: text/plain`, incluida la lectura.
+
+| Acción | Qué hace |
 |---|---|
-| Al arrancar la app | Se intenta lo que quedara de la sesión anterior |
-| Al volver la red (`online`) | Se intenta 2 segundos después |
-| Cada minuto, con la app abierta | Se intenta lo que ya haya cumplido su espera |
-| Al recuperar la red **con la app cerrada** | Background Sync despierta al service worker |
+| `mes` | Devuelve todo lo que la app necesita: config, listas, movimientos, fijos, metas y cierres |
+| `movimientos` | Escribe una o varias filas |
+| `movimiento-edita` · `movimiento-baja` | Corrige o borra una fila |
+| `fijo` · `fijo-baja` | Alta, edición o baja de una regla |
+| `fijo-cargo` | Marca un fijo como cobrado del mes, o deshace la marca |
+| `cerrar-mes` | Escribe la fila de `Cierres` con lo que entró y lo que salió |
+| `reparto` | Escribe las líneas de asignación del ahorro |
+| `metas` | Reescribe la tabla de metas |
+| `config` | Escribe plan, límite, avisos y las listas |
 
-Los dos segundos de espera tras `online` no son un capricho: ese evento salta en
-cuanto hay interfaz de red, que saliendo del metro es antes de que haya conexión
-de verdad.
+Tres cosas que no se pueden cambiar:
 
-Tras un fallo, cada movimiento espera cada vez más antes del siguiente intento
-—5, 10, 20 segundos… hasta 5 minutos— para no gastar batería reintentando sin
-cobertura. Esa espera **se ignora** cuando vuelve la red o cuando fuerzas tú el
-envío: existe para no machacar, no para retrasar.
-
-> El último de esos cuatro caminos, Background Sync, solo lo tiene Chromium. En
-> Firefox la cola se vacía igual, pero hay que abrir la app.
-
-### Quién gasta
-
-La columna `Usuario` **no se toca desde la captura**. Cada teléfono se configura
-una vez en Ajustes —Gonzalo en el suyo, Camila en el suyo— y a partir de ahí se
-estampa solo en cada movimiento, hasta que se cambie en Ajustes.
-
-Es deliberado: la app existe para no tener que decidir nada más que el importe, y
-una decisión que se repite en cada gasto es exactamente lo que hay que quitar de
-en medio. Si un día anotas algo del otro, se corrige en la hoja, que tiene lista
-desplegable en esa columna.
-
-La lista de usuarios está en `config.js` y **tiene que decir lo mismo** que la
-constante `USUARIOS` de `Codigo.gs`: de ahí salen las columnas del panel.
-
-> Al cambiar los nombres, el que cada teléfono tenga guardado deja de existir. La
-> app lo detecta al arrancar y lo reemplaza emparejando por el nombre de pila;
-> `instalar()` hace lo propio con las filas ya escritas en la hoja. Sin eso, los
-> movimientos se seguirían escribiendo con un usuario que ya no está en la lista
-> y el panel los sumaría como cero sin dar ningún error.
-
-### Movimientos frecuentes
-
-Al elegir `Frecuentes` en el primer paso, la app pregunta tres cosas más: **cada
-cuánto se repite** (mensual, trimestral o anual), **qué día del mes** cae, y
-**durante cuánto tiempo** (de 3 meses a 3 años, o indefinida).
-
-El día se pregunta —en vez de deducirlo de la fecha de la cabecera, que es la de
-hoy— porque dar de alta el alquiler un día 17 lo dejaba cobrándose todos los 17,
-y para corregirlo había que acordarse de tocar la fecha *antes* de empezar. La
-pregunta cambia según el tipo: *¿Qué día se paga?* en un gasto, *¿Qué día se
-cobra?* en un ingreso. Viene sugerido el día de la fecha elegida.
-
-> El 31 vale para todos los meses: las fechas se recortan al último día del mes
-> que toque —31 ene, 28 feb, 31 mar— y se calculan siempre desde el inicio, así
-> que no se desvían con los años.
-
-Si el día elegido **ya pasó** este mes, el primer cobro se escribe en el acto:
-si hoy es 17 y el alquiler se paga el 3, el de este mes ya lo has pagado. Si aún
-no ha llegado, espera al disparador.
-
-Lo que se guarda **no es un movimiento**, es una definición en la hoja
-`Suscripciones`. Un disparador diario del Apps Script escribe el cobro el día
-que toca, y el primero se escribe en el acto al darla de alta.
-
-La columna `Tipo` de esa hoja decide el signo de cada cobro, así que un ingreso
-frecuente —la nómina— escribe filas de `Ingreso` y no de `Gasto`. Vacía se
-interpreta como `Gasto`, que es lo que eran todas antes de que existiera.
-
-Se hace así y no escribiendo todos los cobros por adelantado por dos motivos:
-con duración indefinida no hay un número de filas que escribir, y si cancelas la
-suscripción te quedarían meses de gastos fantasma que borrar a mano.
-
-**Para cancelar un frecuente**, desmarca su casilla `Activa` en la hoja. Deja
-de cobrar a partir de ese momento y los cobros ya escritos se quedan como están,
-que es lo correcto: ocurrieron.
-
-Cada cobro lleva un identificador derivado de la suscripción y de su fecha, así
-que el disparador puede ejecutarse mil veces sin duplicar nada.
-
-> Las fechas se calculan siempre desde el día de inicio, nunca sumando un mes al
-> cobro anterior. Encadenar sumas desvía la fecha —31 de enero pasa a 28 de
-> febrero y de ahí a 28 de marzo— y a los dos años estarías cobrando el día que
-> no es.
-
-### Traspasos entre cuentas
-
-**La app ya no los captura.** Existieron —un tercer botón junto a Gasto e
-Ingreso— y se quitaron a petición: en el uso real no aparecían, y el botón
-ocupaba sitio en el paso que más se toca.
-
-Lo que sí sigue en pie es el tratamiento de la categoría `Traspaso`, para las
-filas que escribas a mano en la hoja. Mover 200 € de la corriente al ahorro no
-es un gasto ni un ingreso: ese dinero no ha entrado ni salido de tu patrimonio,
-solo ha cambiado de sitio, y contarlo como gasto te haría el mes 200 € más caro
-de lo que fue. Por eso los totales del mes y las fórmulas del panel descuentan
-esa categoría, y el resumen la pinta sin signo.
-
-> Si montas el panel en el Excel, acuérdate de excluir la categoría `Traspaso`
-> de los SUMIFS de ingresos y gastos. Para los saldos por cuenta, en cambio,
-> tiene que contar.
+- **`Content-Type: text/plain`**, porque Apps Script no contesta al preflight
+  `OPTIONS` y la petición tiene que ser "simple" para el navegador.
+- **Lectura por POST**, porque un `fetch` contra `doGet` muere en la redirección
+  a `script.googleusercontent.com`, que se lleva por delante las cabeceras CORS.
+- **Deduplicación por UUID**, porque la cola reintenta.
 
 ---
 
-## Detalles que conviene no romper
+## Cómo está hecha la app
 
-**El `Content-Type` del envío es `text/plain`, y es a propósito.** Apps Script no
-contesta a las peticiones OPTIONS de preflight. Usar `application/json` haría que
-el navegador mandara ese preflight, y el envío fallaría con un error de CORS que
-no dice nada útil. Está comentado en [`js/api.js`](js/api.js).
+Sin empaquetador. El orden de los `<script>` en `index.html` es el de las
+dependencias.
 
-**Las lecturas también van por POST, aunque suene al revés.** El `doGet` existe y
-funciona si pegas la URL en el navegador con `?token=…`, pero un `fetch` contra
-él desde la app muere con `Failed to fetch`: Apps Script responde con una
-redirección a `script.googleusercontent.com` y ese salto se lleva por delante las
-cabeceras de CORS. Por eso el resumen se pide con un POST y `accion: 'resumen'`,
-que al ser petición simple sí llega. `doGet` se queda como herramienta de
-diagnóstico manual.
+| Archivo | Qué hace |
+|---|---|
+| `config.js` | La semilla: listas, frecuencias, colores. En cuanto hay hoja, manda la hoja. |
+| `js/formato.js` | Funciones puras: dinero, fechas, meses. |
+| `js/nucleo.js` | IndexedDB, la cola y las peticiones. **Lo importa también el service worker**, así que no puede tocar el DOM. |
+| `js/vista.js` | Constructor de nodos, navegación entre pantallas y barra de deshacer. |
+| `js/estado.js` | El modelo y el cálculo del mes. |
+| `js/mes.js` · `fijos.js` · `ahorro.js` · `anotar.js` · `ajustes.js` | Una pantalla, un módulo. |
+| `js/app.js` | Arranque, pestañas y cuándo hablar con la hoja. |
 
-**El importe siempre viaja positivo.** El signo lo da la columna Tipo. El campo
-de importe filtra el signo menos según escribes, así que no hay forma de meter
-un negativo.
+Cada pantalla se repinta entera cuando cambia algo. Con listas de decenas de
+filas cuesta menos que llevar la cuenta de qué cambió, y no se puede
+desincronizar, que es el error que de verdad duele.
 
-**Los duplicados se rechazan por UUID.** Cada movimiento lleva un identificador
-generado en el móvil. Si el mismo llega dos veces, el script responde que todo
-va bien pero escribe una sola fila. Sin esto, un reintento duplicaría un gasto.
+**Toda escritura hace dos cosas**: cambia el estado en memoria para que la
+pantalla responda al instante, y encola la operación. La hoja es la verdad, pero
+la verdad puede tardar; la app no.
 
-**Hay que subir la versión de caché en cada despliegue.** En [`sw.js`](sw.js),
-la constante `CACHE` (`gastos-v3`, `gastos-v4`…). Es el único mecanismo de
-actualización que tiene la app: mientras esa cadena no cambie, los móviles que
-ya la tengan instalada seguirán con la versión que tienen, aunque Pages sirva
-otra cosa.
+### Offline
 
-Los archivos se cachean todos juntos en el `install` y **no se refrescan por
-separado**. Esto es deliberado y viene de un fallo real: la versión anterior
-refrescaba cada archivo por su cuenta en segundo plano, y la app acabó con el
-`index.html` de una versión y el `app.js` de otra — mostraba el botón de ajustes
-pero ejecutaba código que no sabía qué hacer con él. O toda la versión vieja, o
-toda la nueva; nunca una mezcla.
+Los apuntes van a una cola en IndexedDB y salen cuando hay red. Si el navegador
+soporta Background Sync, salen incluso con la app cerrada. Un banner en Mes dice
+cuántos quedan y permite reintentar a mano.
 
-Al detectar una versión nueva, la app se recarga sola. Si estás a media captura
-no lo hace: avisa con un aviso y espera al siguiente arranque, porque recargar
-te borraría el importe tecleado.
+Borrar no pide confirmación: sale una barra negra a ancho completo con
+**Deshacer** durante siete segundos, que son los mismos que la orden espera en
+la cola. Mientras el aviso está en pantalla, la hoja todavía no se ha enterado.
 
----
+### El service worker
 
-## Regenerar los iconos
+`sw.js` cachea el esqueleto entero de una vez. `CACHE` **hay que subirlo en cada
+despliegue** que toque el HTML, el CSS o el JS: es el único mecanismo de
+actualización que hay.
 
-```bash
-python3 iconos/generar-iconos.py
-```
+Todos los archivos entran juntos en el `install`, con `cache: 'reload'` para
+saltarse la caché HTTP del navegador. O tienes la versión entera vieja, o la
+entera nueva; nunca una mezcla. El precio es que tras un despliegue hay que
+abrir la app dos veces: la primera la descarga, la segunda ya la sirve.
 
-Escribe `icono-192.png` e `icono-512.png` sin dependencias externas. Si cambias
-el dibujo hay que tocar `icono.svg` y las constantes del script a la vez.
+La versión que está sirviendo se ve en **Ajustes → Versión**.
 
 ---
 
-## Estructura
+## Cambiar cosas
 
-```
-index.html              una sola pantalla
-config.js               cuentas, categorías, moneda
-config.ejemplo.js       documentación del formato
-sw.js                   service worker
-manifest.json           instalación en Android
-css/estilos.css
-js/nucleo.js            IndexedDB y envío. Lo comparten la página y el sw
-js/ui.js                DOM, transiciones, toast
-js/api.js               lo que solo necesita la página
-js/cola.js              reintentos, indicador de pendientes
-js/ajustes.js           endpoint, token y su pantalla
-js/resumen.js           totales del mes y últimos movimientos
-js/app.js               máquina de estados de los pasos
-iconos/                 SVG, PNG y el generador
-apps-script/Codigo.gs   backend: doPost, doGet e instalar()
-```
+**Categorías, cuentas y personas** se editan desde Ajustes y viven en la hoja.
+Lo de `config.js` es solo la semilla del primer arranque y el respaldo sin red.
+
+**El plan del mes, el límite y los avisos** también viven en la hoja: son de los
+dos. El tema, quién anota en este teléfono y su cuenta habitual se quedan en el
+móvil.
+
+**La moneda**: `SIMBOLO` y `DECIMALES` en `config.js`, y el formato `#,##0` en
+`Codigo.gs`.
+
+**Los colores** son variables CSS en `css/estilos.css`. El tema claro se define
+entero en `:root`; el oscuro solo redefine los mismos nombres, dos veces: en
+`@media (prefers-color-scheme: dark)` para quien no ha elegido nada, y en
+`[data-tema="oscuro"]` para quien sí. Ninguno puede tener su única definición
+dentro de uno de esos bloques.
+
+**Las fuentes** están autoalojadas en `css/fuentes/`. No se enlazan desde Google
+Fonts porque una app que se abre sin red tiene que poder pintarse entera.
+
+---
+
+## Lo que no hace
+
+- **No calcula quién debe a quién.** Enseña quién gastó cuánto y qué es común,
+  pero no liquida. El dato está, si algún día hace falta.
+- **No prorratea.** Un cargo trimestral no se reparte entre tres meses.
+- **No manda notificaciones al sistema.** Los avisos se pintan dentro de la app.
+- **No lee tu banco.** Todo se teclea, o lo escribe un fijo.

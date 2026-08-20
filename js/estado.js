@@ -19,6 +19,10 @@
 const ESTADO = (() => {
 
   const oyentes = [];
+  /* Alguien tiene que enterarse de que hay algo nuevo en la cola para intentar
+     enviarlo. Antes no lo hacía nadie: el gasto se quedaba en el teléfono hasta
+     que salías de la app y volvías, y mientras tanto la hoja no sabía nada. */
+  let alEncolar = null;
 
   const datosVacios = {
     hoy: FMT.iso(),
@@ -51,6 +55,7 @@ const ESTADO = (() => {
 
   function emitir() { oyentes.forEach(f => f()); }
   function suscribir(f) { oyentes.push(f); }
+  function cuandoSeEncole(f) { alEncolar = f; }
 
   /* ------------------------------------------------------------ lectura */
 
@@ -307,6 +312,7 @@ const ESTADO = (() => {
     await NUCLEO.encolar([fila], fila.uuid, accion, esperarDeshacer);
     pendientes = await NUCLEO.contar();
     emitir();
+    if (alEncolar) alEncolar();
     return fila.uuid;
   }
 
@@ -329,6 +335,7 @@ const ESTADO = (() => {
     await NUCLEO.encolar([fila], fila.uuid, 'movimientos', false);
     pendientes = await NUCLEO.contar();
     emitir();
+    if (alEncolar) alEncolar();
     return fila;
   }
 
@@ -355,6 +362,7 @@ const ESTADO = (() => {
     await NUCLEO.encolar([{ uuid: orden, objetivo: uuidMov }], orden, 'movimiento-baja', true);
     pendientes = await NUCLEO.contar();
     emitir();
+    if (alEncolar) alEncolar();
 
     return async () => {
       await NUCLEO.borrarGrupo(orden);
@@ -379,6 +387,7 @@ const ESTADO = (() => {
     await NUCLEO.encolar([{ uuid: orden, objetivo: uuidFijo }], orden, 'fijo-baja', true);
     pendientes = await NUCLEO.contar();
     emitir();
+    if (alEncolar) alEncolar();
 
     return async () => {
       await NUCLEO.borrarGrupo(orden);
@@ -484,7 +493,7 @@ const ESTADO = (() => {
   }
 
   return {
-    suscribir, estado, configurada, uuid,
+    suscribir, cuandoSeEncole, estado, configurada, uuid,
     hoy, mesEnCurso, persona, colorPersona, repartoDe, categoriasDe,
     caeEn, cargadoEn, fijosDelMes, diaDeCargo, movimientosDe, resumen,
     proximosMeses, acumulado, sinAsignar, metasCalculadas,
