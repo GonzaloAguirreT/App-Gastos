@@ -145,7 +145,7 @@ body {
   inset: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 16px 12px;
+  padding: 0 16px calc(12px + 7dvh);
   opacity: 0;
   transform: translateX(12px);
   pointer-events: none;
@@ -172,11 +172,21 @@ body {
 /* Al retroceder, la entrada viene del lado contrario. */
 .paso.atras { transform: translateX(-12px); }
 
-/* Mitad superior: contexto. Mitad inferior: cosas que se tocan.
-   El contenido se pega a la parte de abajo para que la pregunta quede junto a
-   las opciones que responde, en vez de flotando en mitad del hueco. */
+/* El grupo de pregunta y opciones sube, en vez de quedar pegado al borde de
+   abajo con un agujero negro por encima.
+
+   Sube con un desplazamiento y no centrándolo. Centrado, el hueco se reparte a
+   partes iguales y abajo quedaban 159px muertos —medidos— justo en la zona
+   donde mejor llega el pulgar: se gana estética y se pierde alcance. Con el
+   desplazamiento el bloque se levanta lo justo y el grueso del hueco sigue
+   arriba, que es donde no estorba.
+
+   En dvh y no en porcentaje: el padding en % se calcula sobre el ANCHO, no
+   sobre el alto, así que en un móvil estrecho no subiría casi nada. */
+.paso { justify-content: flex-end; }
+
 .paso-cuerpo {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -186,8 +196,9 @@ body {
   gap: 12px;
 }
 
-/* El importe es la excepción: es el protagonista del paso y va centrado. */
-#paso-importe .paso-cuerpo { justify-content: center; }
+/* El importe es la excepción: es el protagonista del paso, ocupa el hueco
+   entero y sus dos botones se quedan abajo del todo. */
+#paso-importe .paso-cuerpo { flex: 1 1 auto; justify-content: center; }
 
 .paso-acciones {
   flex: 0 0 auto;
@@ -200,11 +211,29 @@ body {
   justify-content: flex-end;
 }
 
+/* Pregunta y "Atrás" comparten línea. Antes "Atrás" caía suelto entre la
+   pregunta y la rejilla, y partía la relación entre lo que se pregunta y lo
+   que la responde. */
+.paso-encabezado {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
 .pregunta {
   margin: 0;
   font-size: 20px;
   color: var(--texto-suave);
+  /* Ocupa el resto de la línea y se centra en ella, así que la pregunta queda
+     en el eje de la pantalla aunque "Atrás" esté a su izquierda. */
+  flex: 1 1 auto;
+  text-align: center;
 }
+
+/* En el paso del importe no hay pregunta, y "Atrás" está oculto: sin esto la
+   línea vacía dejaría un hueco entre el importe y los botones. */
+#paso-importe .paso-encabezado { display: none; }
 
 /* ---------- Paso 1: importe ---------- */
 
@@ -396,9 +425,9 @@ body {
   color: var(--texto-suave);
   font: inherit;
   font-size: 16px;
-  padding: 0 18px 0 14px;
+  padding: 0 16px 0 12px;
   min-height: 48px;
-  margin-bottom: 8px;
+  flex: 0 0 auto;
 }
 
 .btn-atras .flecha {
@@ -500,9 +529,13 @@ body {
   min-height: 48px;
 }
 
+/* Sin subrayado: el subrayado es de los enlaces de una página web y aquí canta.
+   Lo que dice que se puede tocar es el color y el borde. */
 .btn-secundario {
   align-self: flex-start;
-  text-decoration: underline;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 10px 16px;
   margin-top: -12px;   /* recupera el hueco que deja el gap del contenedor */
 }
 
@@ -661,8 +694,10 @@ body {
   color: var(--acento);
 }
 
-/* Un ahorro negativo es el único dato de la app que conviene que moleste. */
-.total-ahorro .total-cifra.negativo { color: #FF9E9E; }
+/* Un ahorro negativo es el único dato de la app que conviene que moleste, pero
+   con el color que ya significa "gasto" en el resto de pantallas. Antes era un
+   rosa que no estaba en la paleta y contaba una tercera historia. */
+.total-ahorro .total-cifra.negativo { color: var(--gasto); }
 
 .subtitulo {
   margin: 6px 0 0;
@@ -716,7 +751,8 @@ body {
   white-space: nowrap;
 }
 
-.mov-importe.ingreso { color: var(--acento); }
+.mov-importe.gasto { color: var(--gasto); }
+.mov-importe.ingreso { color: var(--ingreso); }
 .mov-importe.traspaso { color: var(--texto-suave); }
 
 .lista-vacia {
@@ -837,3 +873,18 @@ select.campo-input { appearance: none; }
    leer, que en un paso de dos opciones es toda la diferencia. */
 [data-tipo="Gasto"]   .signo { color: var(--gasto); }
 [data-tipo="Ingreso"] .signo { color: var(--ingreso); }
+
+/* El selector de persona es un <select>, pero con el estilo de campo de texto
+   no había forma de saberlo: ninguna señal de que se despliegue. La flecha va
+   dibujada en el fondo porque la nativa de Android no se puede recolorear. */
+select.campo-input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--texto-suave) 50%),
+    linear-gradient(135deg, var(--texto-suave) 50%, transparent 50%);
+  background-position: calc(100% - 22px) calc(50% + 2px), calc(100% - 16px) calc(50% + 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}

@@ -98,10 +98,13 @@ const UI = (() => {
       seccion.classList.toggle('atras', atras && !activo);
     });
 
-    // El botón "Atrás" es uno solo y se muda al paso activo, en lugar de
-    // repetirlo cinco veces en el HTML. Va dentro del bloque de acciones para
-    // que no se solape con los botones grandes de la mitad inferior.
-    document.querySelector(`#paso-${nombre} .paso-acciones`).prepend(el.btnAtras);
+    /* El botón "Atrás" es uno solo y se muda al paso activo, en lugar de
+       repetirlo siete veces en el HTML. Va en la misma línea que la pregunta:
+       suelto entre la pregunta y la rejilla partía la relación entre lo que se
+       pregunta y lo que la responde, y parecía puesto ahí por accidente. */
+    const destino = document.querySelector(`#paso-${nombre} .paso-encabezado`)
+                 || document.querySelector(`#paso-${nombre} .paso-acciones`);
+    destino.prepend(el.btnAtras);
     el.btnAtras.classList.toggle('hueco', nombre === 'importe');
   }
 

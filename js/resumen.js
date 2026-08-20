@@ -19,6 +19,7 @@ const RESUMEN = (() => {
     ingresos: document.getElementById('total-ingresos'),
     gastos: document.getElementById('total-gastos'),
     ahorro: document.getElementById('total-ahorro'),
+    etiquetaAhorro: document.getElementById('etiqueta-ahorro'),
     lista: document.getElementById('lista-movimientos'),
     reintentar: document.getElementById('btn-reintentar'),
     ajustes: document.getElementById('btn-abrir-ajustes')
@@ -26,15 +27,23 @@ const RESUMEN = (() => {
 
   function dinero(cantidad) {
     const n = Number(cantidad) || 0;
-    return n.toFixed(2).replace('.', ',') + ' ' + CONFIG.MONEDA;
+    /* El menos tipográfico (−) y no el guion (-): en la misma pantalla conviven
+       esta cifra y las de la lista, y con dos signos distintos —uno más corto y
+       más alto que el otro— la diferencia se nota. */
+    return n.toFixed(2).replace('-', '−').replace('.', ',') + ' ' + CONFIG.MONEDA;
   }
 
   function pintarTotales(mes) {
     el.ingresos.textContent = dinero(mes.ingresos);
     el.gastos.textContent = dinero(mes.gastos);
+    const enNumeros = Number(mes.ahorro);
     el.ahorro.textContent = dinero(mes.ahorro);
     // El ahorro es el único que puede ser negativo, y entonces hay que verlo.
-    el.ahorro.classList.toggle('negativo', Number(mes.ahorro) < 0);
+    el.ahorro.classList.toggle('negativo', enNumeros < 0);
+    /* Y deja de llamarse ahorro: un número negativo bajo la palabra "Ahorro" es
+       una etiqueta que miente. Cuando gastas más de lo que entra, eso es lo que
+       pone. */
+    if (el.etiquetaAhorro) el.etiquetaAhorro.textContent = enNumeros < 0 ? 'Déficit' : 'Ahorro';
   }
 
   function pintarMovimientos(movimientos) {
