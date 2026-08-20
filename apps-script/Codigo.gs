@@ -39,6 +39,10 @@ const HOJA_REPARTO = 'Reparto';
 const HOJA_LISTAS = 'Listas';
 const HOJA_CONFIG = 'Config';
 
+/* El plan del mes, tal y como lo citan las fórmulas de Panel y de Año. Es la
+   celda y no el rango con nombre a propósito: ver ponerNombre(). */
+const REF_PLAN = HOJA_CONFIG + '!$B$4';
+
 /* Los UUID van en una hoja aparte y no en una columna oculta de Movimientos.
    Una columna oculta ensancha igual el rango que lee cualquier consulta
    externa y puede colarse donde no toca. */
@@ -346,8 +350,11 @@ function escribirConfig(libro) {
   ]);
   hoja.getRange('A15:C15').setFontWeight('bold');
 
-  /* Nombres definidos para poder escribir PLAN en vez de Config!$B$4 en las
-     fórmulas del panel: si un día se mueve la celda, se arregla en un sitio. */
+  /* Los nombres definidos son una comodidad para quien escriba sus propias
+     fórmulas en la hoja: PLAN se lee mejor que Config!$B$4. Las fórmulas que
+     escribe este script NO los usan —usan la celda directamente— para que, si
+     alguna vez no se pudieran crear, la consecuencia fuera perder una comodidad
+     y no un panel entero lleno de #¿NOMBRE?. */
   ponerNombre(libro, 'PLAN', hoja.getRange('B4'));
   ponerNombre(libro, 'LIMITE', hoja.getRange('B7'));
 
@@ -569,7 +576,7 @@ function crearPanel(libro) {
 
   hoja.getRange('A6:F8').setValues([
     ['SALDO DISPONIBLE', '', '', 'PLAN DEL MES', '', 'AHORRO PROYECTADO'],
-    ['=PLAN-B10-B11', '', '', '=PLAN', '', '=B9-B10-B11'],
+    ['=' + REF_PLAN + '-B10-B11', '', '', '=' + REF_PLAN, '', '=B9-B10-B11'],
     ['plan − gastado − por venir', '', '', 'se edita en Config', '', 'entrado − gastado − por venir']
   ]);
 
@@ -593,7 +600,8 @@ function crearPanel(libro) {
     hoja.getRange(f, 2).setFormula('=IF($A' + f + '=""' + s + '""' + s +
       'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
       enElMes + '))');
-    hoja.getRange(f, 3).setFormula('=IF(OR($A' + f + '=""' + s + 'PLAN=0)' + s + '""' + s + '$B' + f + '/PLAN)');
+    hoja.getRange(f, 3).setFormula('=IF(OR($A' + f + '=""' + s + REF_PLAN + '=0)' + s + '""' + s +
+      '$B' + f + '/' + REF_PLAN + ')');
     hoja.getRange(f, 4).setFormula('=IF($A' + f + '=""' + s + '""' + s +
       'COUNTIFS(' + M + '!$H:$H' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s + enElMes + '))');
   }
@@ -672,7 +680,7 @@ function crearAnio(libro) {
     hoja.getRange(f, 3).setFormula(suma('Gasto'));
     hoja.getRange(f, 4).setFormula('=B' + f + '-C' + f);
     hoja.getRange(f, 5).setFormula('=IFERROR(VLOOKUP(TEXT(A' + f + s + '"yyyy-mm")' + s +
-      HOJA_CIERRES + '!$A:$D' + s + '4' + s + 'FALSE)' + s + 'PLAN)');
+      HOJA_CIERRES + '!$A:$D' + s + '4' + s + 'FALSE)' + s + REF_PLAN + ')');
     hoja.getRange(f, 6).setFormula('=IF(E' + f + '=0' + s + '""' + s + 'C' + f + '/E' + f + ')');
     hoja.getRange(f, 7).setFormula(suma('Gasto', M + '!$I:$I' + s + '"Común"'));
     hoja.getRange(f, 8).setFormula(suma('Gasto', M + '!$I:$I' + s + '"Personal"'));
@@ -1445,9 +1453,29 @@ function titular(hoja, titulo, explicacion) {
   hoja.getRange('A2').setValue(explicacion).setFontColor('#666666');
 }
 
+/**
+ * Crea o rehace un rango con nombre.
+ *
+ * Se pregunta si existe en vez de intentar borrarlo y recoger los trozos, y no
+ * es una manía: `removeNamedRange` sobre un nombre que no existe lanza
+ * excepción, y un try/catch alrededor NO la atrapa. Apps Script agrupa las
+ * escrituras y las manda en el siguiente flush, así que la excepción salta
+ * lejos de aquí.
+ *
+ * Pasó de verdad en la primera instalación: el error apareció dentro de
+ * `formatoSeguro` y el registro dijo «No se pudo dar formato "#,##0" a B4: el
+ * intervalo denominado "PLAN" no existe», señalando a un sitio que no tenía
+ * nada que ver. Y como el lote se aborta al fallar, se perdió todo lo que iba
+ * detrás: los dos nombres y el bloque de controles de Config.
+ *
+ * El flush del final es para que, si alguna vez falla, falle aquí.
+ */
 function ponerNombre(libro, nombre, rango) {
-  try { libro.removeNamedRange(nombre); } catch (e) { /* no existía */ }
+  libro.getNamedRanges().forEach(function (existente) {
+    if (existente.getName() === nombre) existente.remove();
+  });
   libro.setNamedRange(nombre, rango);
+  SpreadsheetApp.flush();
 }
 
 /**
