@@ -144,18 +144,41 @@ function instalar() {
   const cierres = leerTablaExistente(libro, HOJA_CIERRES, 8);
   const reparto = leerTablaExistente(libro, HOJA_REPARTO, 6);
 
+  const config = leerConfigActual(libro);
+
+  /* Panel y Año se retiran ANTES de reescribir los datos, y no es por orden:
+     es lo que hace que una segunda instalación termine.
+
+     Las dos hojas son cientos de SUMIFS sobre columnas enteras. Mientras
+     existen, cada vez que se borra y se reescribe Movimientos, Sheets recalcula
+     todas. La primera instalación tardó minuto y medio porque esas hojas aún no
+     existían; la segunda se pasó de los seis minutos que da Apps Script y murió
+     con "Exceeded maximum execution time". Sin nadie mirando, la reescritura de
+     los datos vuelve a costar lo que costaba. */
+  retirarHojas(libro, [HOJA_PANEL, HOJA_ANIO]);
+
+  /* El orden de aquí abajo es el de las DEPENDENCIAS, no el de las pestañas.
+
+     hojaLimpia borra la hoja y la vuelve a crear, y en Sheets borrar una hoja
+     convierte en #REF! toda fórmula que la citaba —recrearla con el mismo
+     nombre no las recupera—. Así que ninguna hoja puede escribirse antes que
+     otra a la que apunte: Metas y Cierres citan Reparto, y Config cita
+     Movimientos, Fijos, Metas y Cierres.
+
+     Antes no era así, y solo se salvó de milagro: en la primera instalación
+     esas hojas no existían todavía, así que no había nada que borrar. */
   escribirListas(libro, listas);
-  escribirConfig(libro);
   escribirMovimientos(libro, movimientos, listas.categorias);
   escribirFijos(libro, fijos);
+  escribirReparto(libro, reparto);
   escribirMetas(libro, metas);
   escribirCierres(libro, cierres);
-  escribirReparto(libro, reparto);
+  escribirConfig(libro, config);
   prepararUuids(libro);
-  crearPanel(libro);
-  crearAnio(libro);
 
   retirarHojasViejas(libro);
+  crearPanel(libro);
+  crearAnio(libro);
   ordenarPestanas(libro);
   instalarDisparadorDiario();
 
@@ -326,8 +349,9 @@ function escribirListas(libro, listas) {
   hoja.setColumnWidth(1, 150).setColumnWidth(3, 170).setColumnWidth(5, 170);
 }
 
-function escribirConfig(libro) {
-  const previo = leerConfigActual(libro);
+/** `previo` llega de fuera: para cuando se llama a esto, Config ya se va a
+ *  borrar, así que lo que había hay que haberlo leído antes. */
+function escribirConfig(libro, previo) {
   const hoja = hojaLimpia(libro, HOJA_CONFIG);
   titular(hoja, 'Config',
     'Lo que la app lee al arrancar. El token NO va aquí: vive solo en el teléfono.');
@@ -412,7 +436,11 @@ function escribirMovimientos(libro, movimientos, categorias) {
     hoja.getRange(2, 1, filas.length, 11).setValues(filas);
   }
 
-  const ultima = Math.max(hoja.getLastRow(), 2);
+  /* La última fila se cuenta, no se pregunta. getLastRow() puede venir inflado
+     por la sonda que sep() escribe en Z200 para averiguar el separador: aunque
+     se borre acto seguido, Sheets no siempre encoge el rango usado, y entonces
+     se escribirían doscientas fórmulas del mes sobre filas vacías. */
+  const ultima = movimientos.length + 1;
   ponerFormulaMes(hoja, 2, ultima);
   formatoSeguro(hoja.getRange(2, 1, ultima - 1, 1), 'yyyy-mm-dd');
   formatoSeguro(hoja.getRange(2, 6, ultima - 1, 1), '#,##0');
@@ -458,25 +486,32 @@ function escribirMetas(libro, metas) {
   hoja.getRange(FILA_CABECERA, 1, 1, 8).setValues([CABECERAS_METAS]).setFontWeight('bold');
 
   const s = sep(hoja);
+
+  /* Por bloques y no celda a celda. Cada getRange().setValue() es una operación
+     que cruza al servicio de Sheets; entre esta función, Cierres, Panel y Año
+     salían más de setecientas y la instalación no cabía en los seis minutos que
+     da Apps Script. Un setValues por bloque son cuatro. */
+  const datos = [], formulas = [];
   for (var i = 0; i < TOPE_METAS; i++) {
     const f = FILA_DATOS + i;
     const previa = metas[i];
-    if (previa) {
-      hoja.getRange(f, 1).setValue(previa[0]);
-      hoja.getRange(f, 2).setValue(previa[1]);
-      hoja.getRange(f, 6).setValue(previa[5] || i + 1);
-      hoja.getRange(f, 7).setValue(previa[6] !== false);
-      hoja.getRange(f, 8).setValue(previa[7] || '');
-    }
+    datos.push(previa
+      ? [previa[0], previa[1], previa[5] || i + 1, previa[6] !== false, previa[7] || '']
+      : ['', '', '', false, '']);
     /* Lo guardado NO es un campo: sale de sumar las líneas de Reparto de esa
        meta. Así el ahorro siempre se puede auditar y nunca hay un total que no
        cuadre con nada. */
-    hoja.getRange(f, 3).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'SUMIF(' + HOJA_REPARTO + '!$C:$C' + s + '$A' + f + s + HOJA_REPARTO + '!$D:$D))');
-    hoja.getRange(f, 4).setFormula('=IF($A' + f + '=""' + s + '""' + s + 'MAX(0' + s + '$B' + f + '-$C' + f + '))');
-    hoja.getRange(f, 5).setFormula('=IF(OR($A' + f + '=""' + s + '$B' + f + '=0)' + s + '""' + s +
-      'MIN(1' + s + '$C' + f + '/$B' + f + '))');
+    formulas.push([
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'SUMIF(' + HOJA_REPARTO + '!$C:$C' + s + '$A' + f + s + HOJA_REPARTO + '!$D:$D))',
+      '=IF($A' + f + '=""' + s + '""' + s + 'MAX(0' + s + '$B' + f + '-$C' + f + '))',
+      '=IF(OR($A' + f + '=""' + s + '$B' + f + '=0)' + s + '""' + s +
+        'MIN(1' + s + '$C' + f + '/$B' + f + '))'
+    ]);
   }
+  hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).setValues(datos.map(d => [d[0], d[1]]));
+  hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).setValues(datos.map(d => [d[2], d[3], d[4]]));
+  hoja.getRange(FILA_DATOS, 3, TOPE_METAS, 3).setFormulas(formulas);
 
   hoja.getRange('G5:G' + (FILA_DATOS + TOPE_METAS - 1)).insertCheckboxes();
   formatoSeguro(hoja.getRange('B5:D'), '#,##0');
@@ -489,11 +524,13 @@ function escribirCierres(libro, cierres) {
   titular(hoja, 'Meses cerrados', 'Una fila por mes cerrado. La escribe la app: no la edites a mano.');
   hoja.getRange(FILA_CABECERA, 1, 1, 8).setValues([CABECERAS_CIERRES]).setFontWeight('bold');
 
-  cierres.slice(0, TOPE_CIERRES).forEach((c, i) => {
-    const f = FILA_DATOS + i;
-    hoja.getRange(f, 1, 1, 4).setValues([[c[0], c[1], c[2], c[3]]]);
-    hoja.getRange(f, 8).setValue(c[7] || new Date());
-  });
+  const previos = cierres.slice(0, TOPE_CIERRES);
+  if (previos.length) {
+    hoja.getRange(FILA_DATOS, 1, previos.length, 4)
+        .setValues(previos.map(c => [c[0], c[1], c[2], c[3]]));
+    hoja.getRange(FILA_DATOS, 8, previos.length, 1)
+        .setValues(previos.map(c => [c[7] || new Date()]));
+  }
 
   ponerFormulasCierre(hoja, FILA_DATOS, FILA_DATOS + TOPE_CIERRES - 1);
   formatoSeguro(hoja.getRange('B5:G'), '#,##0');
@@ -503,12 +540,16 @@ function escribirCierres(libro, cierres) {
 
 function ponerFormulasCierre(hoja, desde, hasta) {
   const s = sep(hoja);
+  const formulas = [];
   for (var f = desde; f <= hasta; f++) {
-    hoja.getRange(f, 5).setFormula('=IF($A' + f + '=""' + s + '""' + s + '$B' + f + '-$C' + f + ')');
-    hoja.getRange(f, 6).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'SUMIF(' + HOJA_REPARTO + '!$A:$A' + s + '$A' + f + s + HOJA_REPARTO + '!$D:$D))');
-    hoja.getRange(f, 7).setFormula('=IF($A' + f + '=""' + s + '""' + s + '$E' + f + '-$F' + f + ')');
+    formulas.push([
+      '=IF($A' + f + '=""' + s + '""' + s + '$B' + f + '-$C' + f + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'SUMIF(' + HOJA_REPARTO + '!$A:$A' + s + '$A' + f + s + HOJA_REPARTO + '!$D:$D))',
+      '=IF($A' + f + '=""' + s + '""' + s + '$E' + f + '-$F' + f + ')'
+    ]);
   }
+  hoja.getRange(desde, 5, formulas.length, 3).setFormulas(formulas);
 }
 
 function escribirReparto(libro, lineas) {
@@ -531,14 +572,18 @@ function prepararUuids(libro) {
   hoja.hideSheet();
 }
 
-/** Las pestañas del formato anterior, una vez migradas. Se retiran para que no
- *  queden dos sitios con la misma verdad. */
-function retirarHojasViejas(libro) {
-  const fuera = [HOJA_SUSCRIPCIONES_VIEJA].concat(MESES_VIEJOS);
-  fuera.forEach(nombre => {
+/** Quita las hojas que existan de una lista, y calla sobre las que no. */
+function retirarHojas(libro, nombres) {
+  nombres.forEach(nombre => {
     const hoja = libro.getSheetByName(nombre);
     if (hoja) libro.deleteSheet(hoja);
   });
+}
+
+/** Las pestañas del formato anterior, una vez migradas. Se retiran para que no
+ *  queden dos sitios con la misma verdad. */
+function retirarHojasViejas(libro) {
+  retirarHojas(libro, [HOJA_SUSCRIPCIONES_VIEJA].concat(MESES_VIEJOS));
 }
 
 function ordenarPestanas(libro) {
@@ -602,47 +647,58 @@ function crearPanel(libro) {
 
   hoja.getRange('A15:D15').setValues([['QUIÉN GASTÓ', 'GASTADO', '% DEL PLAN', 'MOVIMIENTOS']])
       .setFontWeight('bold');
+  const porPersona = [];
   for (var i = 0; i < TOPE_PERSONAS; i++) {
     const f = 16 + i;
     const origen = HOJA_LISTAS + '!$A' + (FILA_DATOS + i);
-    hoja.getRange(f, 1).setFormula('=IF(' + origen + '=""' + s + '""' + s + origen + ')');
-    hoja.getRange(f, 2).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
-      enElMes + '))');
-    hoja.getRange(f, 3).setFormula('=IF(OR($A' + f + '=""' + s + REF_PLAN + '=0)' + s + '""' + s +
-      '$B' + f + '/' + REF_PLAN + ')');
-    hoja.getRange(f, 4).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'COUNTIFS(' + M + '!$H:$H' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s + enElMes + '))');
+    porPersona.push([
+      '=IF(' + origen + '=""' + s + '""' + s + origen + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
+        enElMes + '))',
+      '=IF(OR($A' + f + '=""' + s + REF_PLAN + '=0)' + s + '""' + s + '$B' + f + '/' + REF_PLAN + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'COUNTIFS(' + M + '!$H:$H' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s + enElMes + '))'
+    ]);
   }
+  hoja.getRange(16, 1, TOPE_PERSONAS, 4).setFormulas(porPersona);
 
   const filaCat = 16 + TOPE_PERSONAS + 1;
   hoja.getRange(filaCat, 1, 1, 4).setValues([['POR CATEGORÍA', 'GASTADO', '% DEL GASTO', 'REPARTO']])
       .setFontWeight('bold');
+  const porCategoria = [];
   for (var j = 0; j < TOPE_CATEGORIAS; j++) {
     const f = filaCat + 1 + j;
     const origen = HOJA_LISTAS + '!$E' + (FILA_DATOS + j);
-    hoja.getRange(f, 1).setFormula('=IF(' + origen + '=""' + s + '""' + s + origen + ')');
-    hoja.getRange(f, 2).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'SUMIFS(' + M + '!$F:$F' + s + M + '!$D:$D' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s +
-      enElMes + '))');
-    hoja.getRange(f, 3).setFormula('=IF(OR($A' + f + '=""' + s + '$B$10=0)' + s + '""' + s + '$B' + f + '/$B$10)');
-    hoja.getRange(f, 4).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'IFERROR(VLOOKUP($A' + f + s + HOJA_LISTAS + '!$E:$G' + s + '3' + s + 'FALSE)' + s + '""))');
+    porCategoria.push([
+      '=IF(' + origen + '=""' + s + '""' + s + origen + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'SUMIFS(' + M + '!$F:$F' + s + M + '!$D:$D' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s +
+        enElMes + '))',
+      '=IF(OR($A' + f + '=""' + s + '$B$10=0)' + s + '""' + s + '$B' + f + '/$B$10)',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'IFERROR(VLOOKUP($A' + f + s + HOJA_LISTAS + '!$E:$G' + s + '3' + s + 'FALSE)' + s + '""))'
+    ]);
   }
+  hoja.getRange(filaCat + 1, 1, TOPE_CATEGORIAS, 4).setFormulas(porCategoria);
 
   const filaFijos = filaCat + TOPE_CATEGORIAS + 2;
   hoja.getRange(filaFijos, 1, 1, 4).setValues([['FIJOS DE ESTE MES', 'DÍA', 'IMPORTE', 'ESTADO']])
       .setFontWeight('bold');
+  const fijosDelMes = [];
   for (var k = 0; k < 12; k++) {
     const f = filaFijos + 1 + k;
     const fila = 2 + k;
-    hoja.getRange(f, 1).setFormula('=IF(' + HOJA_FIJOS + '!$C' + fila + '=""' + s + '""' + s + HOJA_FIJOS + '!$C' + fila + ')');
-    hoja.getRange(f, 2).setFormula('=IF($A' + f + '=""' + s + '""' + s + HOJA_FIJOS + '!$E' + fila + ')');
-    hoja.getRange(f, 3).setFormula('=IF($A' + f + '=""' + s + '""' + s + HOJA_FIJOS + '!$D' + fila + ')');
-    hoja.getRange(f, 4).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'IF(' + HOJA_FIJOS + '!$M' + fila + '<TODAY()' + s + '"cargado"' + s +
-      '"pendiente · "&TEXT(' + HOJA_FIJOS + '!$M' + fila + s + '"dd/mm")))');
+    fijosDelMes.push([
+      '=IF(' + HOJA_FIJOS + '!$C' + fila + '=""' + s + '""' + s + HOJA_FIJOS + '!$C' + fila + ')',
+      '=IF($A' + f + '=""' + s + '""' + s + HOJA_FIJOS + '!$E' + fila + ')',
+      '=IF($A' + f + '=""' + s + '""' + s + HOJA_FIJOS + '!$D' + fila + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'IF(' + HOJA_FIJOS + '!$M' + fila + '<TODAY()' + s + '"cargado"' + s +
+        '"pendiente · "&TEXT(' + HOJA_FIJOS + '!$M' + fila + s + '"dd/mm")))'
+    ]);
   }
+  hoja.getRange(filaFijos + 1, 1, 12, 4).setFormulas(fijosDelMes);
 
   formatoSeguro(hoja.getRange('A7'), '#,##0');
   formatoSeguro(hoja.getRange('D7:F7'), '#,##0');
@@ -674,6 +730,7 @@ function crearAnio(libro) {
     ['MES', 'ENTRADO', 'GASTADO', 'AHORRO', 'PLAN', '% DEL PLAN', 'COMÚN', 'PERSONAL']
   ]).setFontWeight('bold');
 
+  const meses = [];
   for (var m = 1; m <= 12; m++) {
     const f = FILA_DATOS + m - 1;
     /* El límite superior es el mes siguiente. Para diciembre eso es el mes 13,
@@ -684,37 +741,45 @@ function crearAnio(libro) {
     const suma = (tipo, extra) => '=SUMIFS(' + M + '!$F:$F' + s + rango + s + M + '!$C:$C' + s +
       '"' + tipo + '"' + (extra ? s + extra : '') + ')';
 
-    hoja.getRange(f, 1).setFormula('=' + desde);
-    hoja.getRange(f, 2).setFormula(suma('Ingreso'));
-    hoja.getRange(f, 3).setFormula(suma('Gasto'));
-    hoja.getRange(f, 4).setFormula('=B' + f + '-C' + f);
-    hoja.getRange(f, 5).setFormula('=IFERROR(VLOOKUP(TEXT(A' + f + s + '"yyyy-mm")' + s +
-      HOJA_CIERRES + '!$A:$D' + s + '4' + s + 'FALSE)' + s + REF_PLAN + ')');
-    hoja.getRange(f, 6).setFormula('=IF(E' + f + '=0' + s + '""' + s + 'C' + f + '/E' + f + ')');
-    hoja.getRange(f, 7).setFormula(suma('Gasto', M + '!$I:$I' + s + '"Común"'));
-    hoja.getRange(f, 8).setFormula(suma('Gasto', M + '!$I:$I' + s + '"Personal"'));
+    meses.push([
+      '=' + desde,
+      suma('Ingreso'),
+      suma('Gasto'),
+      '=B' + f + '-C' + f,
+      '=IFERROR(VLOOKUP(TEXT(A' + f + s + '"yyyy-mm")' + s +
+        HOJA_CIERRES + '!$A:$D' + s + '4' + s + 'FALSE)' + s + REF_PLAN + ')',
+      '=IF(E' + f + '=0' + s + '""' + s + 'C' + f + '/E' + f + ')',
+      suma('Gasto', M + '!$I:$I' + s + '"Común"'),
+      suma('Gasto', M + '!$I:$I' + s + '"Personal"')
+    ]);
   }
+  hoja.getRange(FILA_DATOS, 1, 12, 8).setFormulas(meses);
 
   const total = FILA_DATOS + 12;
   hoja.getRange(total, 1).setValue('Total año');
-  ['B', 'C', 'D', 'G', 'H'].forEach(col => {
-    hoja.getRange(col + total).setFormula('=SUM(' + col + FILA_DATOS + ':' + col + (total - 1) + ')');
-  });
+  const sumaColumna = col => '=SUM(' + col + FILA_DATOS + ':' + col + (total - 1) + ')';
+  hoja.getRange(total, 2, 1, 3)
+      .setFormulas([[sumaColumna('B'), sumaColumna('C'), sumaColumna('D')]]);
+  hoja.getRange(total, 7, 1, 2)
+      .setFormulas([[sumaColumna('G'), sumaColumna('H')]]);
 
   const filaPersonas = total + 2;
   hoja.getRange(filaPersonas, 1, 1, 3).setValues([['POR PERSONA, EN EL AÑO', 'GASTADO', '% DEL TOTAL']])
       .setFontWeight('bold');
+  const delAnio = [];
   for (var i = 0; i < TOPE_PERSONAS; i++) {
     const f = filaPersonas + 1 + i;
     const origen = HOJA_LISTAS + '!$A' + (FILA_DATOS + i);
-    hoja.getRange(f, 1).setFormula('=IF(' + origen + '=""' + s + '""' + s + origen + ')');
-    hoja.getRange(f, 2).setFormula('=IF($A' + f + '=""' + s + '""' + s +
-      'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
-      M + '!$A:$A' + s + '">="&DATE(YEAR(TODAY())' + s + '1' + s + '1)' + s +
-      M + '!$A:$A' + s + '"<"&DATE(YEAR(TODAY())+1' + s + '1' + s + '1)))');
-    hoja.getRange(f, 3).setFormula('=IF(OR($A' + f + '=""' + s + '$C$' + total + '=0)' + s + '""' + s +
-      '$B' + f + '/$C$' + total + ')');
+    delAnio.push([
+      '=IF(' + origen + '=""' + s + '""' + s + origen + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
+        M + '!$A:$A' + s + '">="&DATE(YEAR(TODAY())' + s + '1' + s + '1)' + s +
+        M + '!$A:$A' + s + '"<"&DATE(YEAR(TODAY())+1' + s + '1' + s + '1)))',
+      '=IF(OR($A' + f + '=""' + s + '$C$' + total + '=0)' + s + '""' + s + '$B' + f + '/$C$' + total + ')'
+    ]);
   }
+  hoja.getRange(filaPersonas + 1, 1, TOPE_PERSONAS, 3).setFormulas(delAnio);
 
   formatoSeguro(hoja.getRange(FILA_DATOS, 1, 12, 1), 'mmmm');
   formatoSeguro(hoja.getRange(FILA_DATOS, 2, 13, 4), '#,##0');
@@ -1524,6 +1589,9 @@ function formatoSeguro(rango, formato) {
 var SEPARADOR = null;
 function sep(hoja) {
   if (SEPARADOR !== null) return SEPARADOR;
+  /* La sonda va en la última columna y en una fila alta para no pisar nada.
+     Quien la llame debe contar sus filas en vez de preguntar por getLastRow:
+     ver escribirMovimientos. */
   const sonda = hoja.getRange(200, 26);
   sonda.setFormula('=SUM(1,1)');
   SpreadsheetApp.flush();
