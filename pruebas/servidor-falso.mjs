@@ -20,6 +20,10 @@ import path from 'node:path';
 
 const RAIZ = path.dirname(new URL('.', import.meta.url).pathname);
 const RECHAZA = process.argv.includes('--rechaza');
+/* Reproduce una hoja cuya columna de mes NO se forzó a texto: Sheets convirtió
+   "2026-08" en el 1 de agosto y al leerlo vuelve como una fecha en crudo. Las
+   filas escritas antes del arreglo del backend siguen así. */
+const MES_COMO_FECHA = process.argv.includes('--mes-como-fecha');
 const PUERTO = 8300;
 
 const hoy = () => new Date().toISOString().slice(0, 10);
@@ -71,7 +75,12 @@ function libroNuevo() {
       { nombre: 'Viaje a Japón', objetivo: 3000000, guardado: 400000, orden: 1, activa: true },
       { nombre: 'Fondo de emergencia', objetivo: 2000000, guardado: 150000, orden: 2, activa: true }
     ],
-    cierres: []
+    cierres: MES_COMO_FECHA
+      ? [{ mes: 'Sat Aug 01 2026 00:00:00 GMT+0200 (hora de verano de Europa central)',
+           entrado: 0, gastado: 53376, plan: 1600000,
+           ahorrado: 1600000 - 53376, repartido: 0, sinAsignar: 1600000 - 53376,
+           movimientos: [] }]
+      : []
   };
 }
 
@@ -218,5 +227,6 @@ http.createServer((req, res) => {
   res.end(fs.readFileSync(f));
 }).listen(PUERTO, () => {
   console.log('servidor falso en http://localhost:' + PUERTO +
-              (RECHAZA ? '  (modo despliegue viejo: rechaza todo menos "mes")' : ''));
+              (RECHAZA ? '  (modo despliegue viejo: rechaza todo menos "mes")' : '') +
+              (MES_COMO_FECHA ? '  (con un mes cerrado guardado como fecha)' : ''));
 });

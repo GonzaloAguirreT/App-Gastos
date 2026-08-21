@@ -11,6 +11,9 @@ node pruebas/ahorro-proyectado.mjs         # la resta del ahorro, con el plan de
 
 node pruebas/servidor-falso.mjs --rechaza & # backend de un despliegue viejo
 node pruebas/cola-y-avisos.mjs             # un fallo de envío tiene que verse
+
+node pruebas/servidor-falso.mjs --mes-como-fecha &
+node pruebas/mes-como-fecha.mjs            # un mes guardado como fecha se lee igual
 ```
 
 **El servidor hay que reiniciarlo entre pruebas.** Guarda el libro en memoria, y

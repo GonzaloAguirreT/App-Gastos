@@ -276,6 +276,10 @@ const ESTADO = (() => {
     if (!salida.cuentas || !salida.cuentas.length) salida.cuentas = base.cuentas;
     if (!salida.categorias || !salida.categorias.length) salida.categorias = base.categorias;
     salida.config = Object.assign({}, base.config, nuevos.config || {});
+    /* El mes de un cierre viene de una celda, y Sheets convierte "2026-08" en
+       una fecha de verdad al guardarla. Se normaliza al entrar para que ninguna
+       pantalla tenga que preguntarse de qué tipo es lo que le han dado. */
+    salida.cierres = (salida.cierres || []).map(c => Object.assign({}, c, { mes: FMT.aMes(c.mes) }));
     return salida;
   }
 
