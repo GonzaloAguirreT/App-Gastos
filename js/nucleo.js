@@ -228,7 +228,15 @@ const NUCLEO = (() => {
     } catch (_) {
       throw new Error('El endpoint no devuelve JSON. Revisa que el despliegue sea "Cualquier persona" y que la URL acabe en /exec');
     }
-    if (!datos.ok) throw new Error(datos.error || 'Error desconocido del backend');
+    if (!datos.ok) {
+      /* Marcado a propósito. Un "no" del servidor NO es falta de conexión: la
+         petición ha ido y ha vuelto. Sin distinguirlo, la app enseñaba "Sin
+         conexión" con cobertura de sobra y mandaba a buscar un problema de red
+         que no existía. */
+      const fallo = new Error(datos.error || 'Error desconocido del backend');
+      fallo.delServidor = true;
+      throw fallo;
+    }
     return datos;
   }
 
@@ -269,7 +277,7 @@ const NUCLEO = (() => {
       return { enviados: 0, fallidos: listos.length, quedan: registros.length };
     }
 
-    let enviados = 0, fallidos = 0;
+    let enviados = 0, fallidos = 0, motivo = '';
 
     /* El orden importa: los grupos se envían por antigüedad. Editar un
        movimiento antes de haberlo dado de alta dejaría el cambio sin destino. */
@@ -285,11 +293,12 @@ const NUCLEO = (() => {
         enviados += registrosDelGrupo.length;
       } catch (error) {
         fallidos += registrosDelGrupo.length;
+        motivo = String(error.message || error);
         await posponer(registrosDelGrupo, error);
       }
     }
 
-    return { enviados, fallidos, quedan: await contar() };
+    return { enviados, fallidos, motivo, quedan: await contar() };
   }
 
   /** Backoff exponencial con tope. Sin esto, sin cobertura la app se pasaría el

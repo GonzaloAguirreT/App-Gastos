@@ -288,7 +288,10 @@ const ESTADO = (() => {
       ultimoFallo = '';
       return true;
     } catch (error) {
-      enLinea = false;
+      /* Si el error lo manda el backend, hay conexión: la petición ha llegado y
+         ha vuelto con un "no". Marcarlo como sin conexión hacía que la app
+         culpara a la cobertura de un problema que estaba contando el servidor. */
+      enLinea = Boolean(error.delServidor);
       ultimoFallo = String(error.message || error);
       return false;
     } finally {
