@@ -53,6 +53,43 @@ const FMT = (() => {
 
   function mesDe(isoFecha) { return String(isoFecha).slice(0, 7); }
 
+  /**
+   * Cualquier cosa que pretenda ser un mes, convertida en 'yyyy-mm'.
+   *
+   * La hoja no siempre devuelve el texto que se escribió. Al guardar "2026-08"
+   * en una celda, Sheets lo reconoce como agosto de 2026 y lo guarda como FECHA
+   * de verdad; al leerlo vuelve como "Sat Aug 01 2026 00:00:00 GMT+0200". Con
+   * eso, nombreMes hacía split('-') sobre una cadena sin guiones, sacaba NaN, y
+   * la pantalla de Ahorro enseñaba un mes cerrado llamado "Undefined Sat Aug 01
+   * 2026 00:00:00 GMT+0200 (hora de verano de Europa central)".
+   *
+   * Se arregla aquí y no en cada pantalla porque por aquí pasan todas: quien
+   * recibe un mes no tiene por qué saber de dónde vino ni con qué formato.
+   */
+  const MESES_JS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function aMes(valor) {
+    if (valor instanceof Date) {
+      return valor.getFullYear() + '-' + String(valor.getMonth() + 1).padStart(2, '0');
+    }
+    const texto = String(valor || '');
+    if (/^\d{4}-\d{2}/.test(texto)) return texto.slice(0, 7);
+
+    /* El mes se lee del propio texto, sin pasarlo por new Date().
+       "Sat Aug 01 2026 00:00:00 GMT+0200" es la medianoche del 1 de agosto en
+       la zona de la hoja; convertirlo a Date y preguntarle el mes al navegador
+       devuelve JULIO si el teléfono está en otra zona, porque esa medianoche
+       cae a las 22:00 del día anterior. El nombre del mes ya está escrito ahí:
+       no hace falta calcularlo. */
+    const partes = texto.match(/\b([A-Z][a-z]{2})\s+\d{1,2}\s+(\d{4})\b/);
+    if (partes) {
+      const i = MESES_JS.indexOf(partes[1]);
+      if (i !== -1) return partes[2] + '-' + String(i + 1).padStart(2, '0');
+    }
+    return '';
+  }
+
   /** El mes en curso desplazado n meses: mesMas('2026-11', 3) → '2027-02'. */
   function mesMas(mes, n) {
     const [a, m] = mes.split('-').map(Number);
@@ -66,14 +103,15 @@ const FMT = (() => {
     return (a2 * 12 + m2) - (a1 * 12 + m1);
   }
 
-  function nombreMes(mes) { return MESES[Number(mes.split('-')[1]) - 1]; }
+  function nombreMes(mes) { return MESES[Number(aMes(mes).split('-')[1]) - 1] || ''; }
 
   function nombreMesAnio(mes) {
-    return `${nombreMes(mes)} ${mes.split('-')[0]}`;
+    const m = aMes(mes);
+    return m ? `${nombreMes(m)} ${m.split('-')[0]}` : '';
   }
 
   function diasDelMes(mes) {
-    const [a, m] = mes.split('-').map(Number);
+    const [a, m] = aMes(mes).split('-').map(Number);
     return new Date(a, m, 0).getDate();
   }
 
@@ -105,7 +143,7 @@ const FMT = (() => {
 
   return {
     MESES, DIAS_SEMANA,
-    dinero, miles, iso, fecha, mesDe, mesMas, mesesEntre,
+    dinero, miles, iso, fecha, mesDe, aMes, mesMas, mesesEntre,
     nombreMes, nombreMesAnio, diasDelMes, diaDelMes, cap, etiquetaDia, frecuencia
   };
 })();

@@ -8,9 +8,16 @@ si algo falla.
 node pruebas/servidor-falso.mjs &          # backend que funciona, en el 8300
 node pruebas/botones.mjs                   # nada de lo pulsable puede estar muerto
 node pruebas/ahorro-proyectado.mjs         # la resta del ahorro, con el plan dentro
+node pruebas/cerrar-y-reabrir.mjs         # cerrar a mitad de mes no, y reabrir sí
 
 node pruebas/servidor-falso.mjs --rechaza & # backend de un despliegue viejo
 node pruebas/cola-y-avisos.mjs             # un fallo de envío tiene que verse
+
+node pruebas/servidor-falso.mjs --mes-como-fecha &
+node pruebas/mes-como-fecha.mjs            # un mes guardado como fecha se lee igual
+
+node pruebas/servidor-falso.mjs --mes-viejo &
+node pruebas/meses-navegables.mjs          # a qué meses llegan las flechas
 ```
 
 **El servidor hay que reiniciarlo entre pruebas.** Guarda el libro en memoria, y

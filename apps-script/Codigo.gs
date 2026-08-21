@@ -577,6 +577,12 @@ function escribirMetas(libro, metas) {
 
 function escribirCierres(libro, cierres) {
   const hoja = hojaLimpia(libro, HOJA_CIERRES);
+  /* La columna del mes, como TEXTO y antes de escribir nada.
+     "2026-08" es un mes para nosotros y una fecha para Sheets: guardado sin
+     más se convierte en el 1 de agosto de 2026, y al leerlo vuelve como
+     "Sat Aug 01 2026 00:00:00 GMT+0200". La app enseñaba entonces un mes
+     cerrado llamado "Undefined Sat Aug 01 2026...". */
+  formatoSeguro(hoja.getRange('A' + FILA_DATOS + ':A'), '@');
   titular(hoja, 'Meses cerrados', 'Una fila por mes cerrado. La escribe la app: no la edites a mano.');
   hoja.getRange(FILA_CABECERA, 1, 1, 8).setValues([CABECERAS_CIERRES]).setFontWeight('bold');
 
@@ -616,6 +622,8 @@ function ponerFormulasCierre(hoja, desde, hasta) {
 
 function escribirReparto(libro, lineas) {
   const hoja = hojaLimpia(libro, HOJA_REPARTO);
+  // Mismo motivo que en Cierres: el mes es texto, no una fecha.
+  formatoSeguro(hoja.getRange('A' + FILA_DATOS + ':A'), '@');
   titular(hoja, 'Reparto del ahorro',
     'Cada línea es una asignación de un mes cerrado a una meta. Lo escribe la app.');
   hoja.getRange(FILA_CABECERA, 1, 1, 6).setValues([CABECERAS_REPARTO]).setFontWeight('bold');
@@ -941,6 +949,7 @@ function despachar(peticion) {
     case 'fijo-baja':    return bajaFijo(datos);
     case 'fijo-cargo':   return marcarCargo(datos);
     case 'cerrar-mes':   return cerrarMes(datos.mes, datos.uuid);
+    case 'cierre-baja':  return reabrirMes(datos.mes);
     case 'reparto':      return guardarReparto(datos);
     case 'metas':        return guardarMetas(datos.metas || []);
     case 'config':       return guardarConfig(datos);
@@ -1069,7 +1078,7 @@ function leerCierres(libro) {
          que no cuadran con él. Es la definición del número: no hace falta
          preguntársela a nadie. */
       return {
-        mes: String(f[0]),
+        mes: mesDeCelda(f[0]),
         entrado: entrado,
         gastado: gastado,
         plan: plan,
@@ -1256,8 +1265,14 @@ function cerrarMes(mes, uuid) {
 
   const libro = SpreadsheetApp.getActiveSpreadsheet();
   const hoja = libro.getSheetByName(HOJA_CIERRES);
-  const yaEsta = buscarEnColumna(hoja, 1, FILA_DATOS, TOPE_CIERRES, mes);
-  if (yaEsta) return { ok: true, escritos: 0, duplicados: 1 };
+  /* Se compara mes contra mes, no texto contra texto: las filas escritas antes
+     de forzar la columna a texto guardan una fecha de verdad, y comparar
+     "2026-08" con "Sat Aug 01 2026..." no casa nunca. Sin esto, el mismo mes se
+     cerraría dos veces. */
+  const meses = hoja.getRange(FILA_DATOS, 1, TOPE_CIERRES, 1).getValues();
+  if (meses.some(f => f[0] && mesDeCelda(f[0]) === mes)) {
+    return { ok: true, escritos: 0, duplicados: 1 };
+  }
 
   /* Antes de cerrar se cobran los fijos que quedaban del mes: si el mes se
      cierra el día 1 y quedaba el recibo del 28 sin marcar, el total tiene que
@@ -1271,6 +1286,8 @@ function cerrarMes(mes, uuid) {
 
   // La fila 5 es la del mes más reciente: los cierres se leen de arriba abajo.
   hoja.insertRowBefore(FILA_DATOS);
+  // Texto antes de escribir, o Sheets guarda "2026-08" como el 1 de agosto.
+  formatoSeguro(hoja.getRange(FILA_DATOS, 1), '@');
   hoja.getRange(FILA_DATOS, 1, 1, 4).setValues([[mes, entrado, gastado, plan]]);
   hoja.getRange(FILA_DATOS, 8).setValue(new Date());
   ponerFormulasCierre(hoja, FILA_DATOS, FILA_DATOS);
@@ -1295,6 +1312,34 @@ function cobrarFijosDelMes(mes) {
   return cobrados;
 }
 
+/**
+ * Deshacer un cierre: quita su fila de Cierres y el mes vuelve a estar en curso.
+ *
+ * Existe porque cerrar un mes a mitad deja la app en un callejón sin salida —la
+ * pantalla Mes pasa a solo lectura y, sin ningún otro mes, las dos flechas se
+ * apagan—. La app ya no deja cerrar a mitad, pero quien lo hizo antes necesita
+ * poder salir sin editar la hoja a mano.
+ *
+ * Las líneas de Reparto de ese mes NO se tocan: si se repartió el ahorro, ese
+ * dinero ya está asignado a metas y borrarlo aquí descuadraría el libro mayor.
+ * Se quitan a mano si hace falta, que es una decisión, no un efecto secundario.
+ */
+function reabrirMes(mes) {
+  if (!/^\d{4}-\d{2}$/.test(String(mes))) return { ok: false, error: 'Mes no válido: ' + mes };
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = libro.getSheetByName(HOJA_CIERRES);
+  if (!hoja) return { ok: false, error: 'No existe la hoja ' + HOJA_CIERRES };
+
+  const meses = hoja.getRange(FILA_DATOS, 1, TOPE_CIERRES, 1).getValues();
+  for (var i = 0; i < meses.length; i++) {
+    if (meses[i][0] && mesDeCelda(meses[i][0]) === mes) {
+      hoja.deleteRow(FILA_DATOS + i);
+      return { ok: true, escritos: 1, mes: mes };
+    }
+  }
+  return { ok: true, escritos: 0, mes: mes };
+}
+
 function guardarReparto(datos) {
   if (datos.uuid && uuidYaRegistrado(datos.uuid)) return { ok: true, escritos: 0, duplicados: 1 };
 
@@ -1308,6 +1353,8 @@ function guardarReparto(datos) {
   if (!lineas.length) return { ok: true, escritos: 0 };
 
   const fila = primeraFilaLibreDesde(hoja, FILA_DATOS);
+  // Igual que en Cierres: el mes es texto, o Sheets lo convierte en una fecha.
+  formatoSeguro(hoja.getRange(fila, 1, lineas.length, 1), '@');
   hoja.getRange(fila, 1, lineas.length, 6).setValues(lineas);
   formatoSeguro(hoja.getRange(fila, 2, lineas.length, 1), 'yyyy-mm-dd hh:mm');
   formatoSeguro(hoja.getRange(fila, 4, lineas.length, 1), '#,##0');
@@ -1488,6 +1535,19 @@ function diaDelMes(mes, dia) {
   const partes = String(mes).split('-');
   const tope = new Date(Number(partes[0]), Number(partes[1]), 0).getDate();
   return mes + '-' + dosDigitos(Math.min(Number(dia) || 1, tope));
+}
+
+/**
+ * El mes de una celda, venga como texto o como fecha.
+ *
+ * Las filas escritas antes de forzar la columna A a texto quedaron con una
+ * fecha de verdad dentro. Se leen igual en vez de obligar a rehacerlas.
+ */
+function mesDeCelda(valor) {
+  if (valor instanceof Date) {
+    return Utilities.formatDate(valor, zonaDeLaHoja(), 'yyyy-MM');
+  }
+  return String(valor || '').slice(0, 7);
 }
 
 function mesDe(fecha) { return iso(fecha).slice(0, 7); }

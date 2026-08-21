@@ -20,10 +20,22 @@ import path from 'node:path';
 
 const RAIZ = path.dirname(new URL('.', import.meta.url).pathname);
 const RECHAZA = process.argv.includes('--rechaza');
+/* Reproduce una hoja cuya columna de mes NO se forzó a texto: Sheets convirtió
+   "2026-08" en el 1 de agosto y al leerlo vuelve como una fecha en crudo. Las
+   filas escritas antes del arreglo del backend siguen así. */
+const MES_COMO_FECHA = process.argv.includes('--mes-como-fecha');
+/* Un mes pasado con gastos que nunca se cerró. Sus movimientos siguen en la
+   hoja y el backend los manda, así que la app tiene que poder llegar a él. */
+const MES_VIEJO = process.argv.includes('--mes-viejo');
 const PUERTO = 8300;
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const mesDe = iso => iso.slice(0, 7);
+const mesAtras = (m, n) => {
+  const [a, x] = m.split('-').map(Number);
+  const t = a * 12 + (x - 1) - n;
+  return Math.floor(t / 12) + '-' + String((t % 12) + 1).padStart(2, '0');
+};
 const mesSiguiente = m => {
   const [a, n] = m.split('-').map(Number);
   return n === 12 ? (a + 1) + '-01' : a + '-' + String(n + 1).padStart(2, '0');
@@ -50,6 +62,11 @@ function libroNuevo() {
       { nombre: 'Sueldo', tipo: 'Ingreso', reparto: 'Personal' }
     ],
     movimientos: [
+      ...(MES_VIEJO ? [{
+        uuid: 'm-viejo', fecha: mesAtras(mesDe(hoy()), 3) + '-14', tipo: 'Gasto',
+        categoria: 'Viajes', descripcion: 'Vuelos', importe: 480000,
+        cuenta: 'Tarjeta Credito', persona: 'Camila', reparto: 'Común', origen: 'app'
+      }] : []),
       { uuid: 'm-1', fecha: hoy(), tipo: 'Gasto', categoria: 'Alimentación',
         descripcion: 'Feria', importe: 24000, cuenta: 'Cuenta Corriente',
         persona: 'Camila', reparto: 'Común', origen: 'app' },
@@ -71,7 +88,12 @@ function libroNuevo() {
       { nombre: 'Viaje a Japón', objetivo: 3000000, guardado: 400000, orden: 1, activa: true },
       { nombre: 'Fondo de emergencia', objetivo: 2000000, guardado: 150000, orden: 2, activa: true }
     ],
-    cierres: []
+    cierres: MES_COMO_FECHA
+      ? [{ mes: 'Sat Aug 01 2026 00:00:00 GMT+0200 (hora de verano de Europa central)',
+           entrado: 0, gastado: 53376, plan: 1600000,
+           ahorrado: 1600000 - 53376, repartido: 0, sinAsignar: 1600000 - 53376,
+           movimientos: [] }]
+      : []
   };
 }
 
@@ -163,6 +185,12 @@ function despachar(p) {
       return { ok: true, cierre: libro.cierres[libro.cierres.length - 1] };
     }
 
+    case 'cierre-baja': {
+      const antes = libro.cierres.length;
+      libro.cierres = libro.cierres.filter(c => c.mes !== d.mes);
+      return { ok: true, escritos: antes - libro.cierres.length };
+    }
+
     case 'reparto':
       (d.lineas || []).forEach(l => {
         const m = libro.metas.find(x => x.nombre === l.meta);
@@ -218,5 +246,7 @@ http.createServer((req, res) => {
   res.end(fs.readFileSync(f));
 }).listen(PUERTO, () => {
   console.log('servidor falso en http://localhost:' + PUERTO +
-              (RECHAZA ? '  (modo despliegue viejo: rechaza todo menos "mes")' : ''));
+              (RECHAZA ? '  (modo despliegue viejo: rechaza todo menos "mes")' : '') +
+              (MES_COMO_FECHA ? '  (con un mes cerrado guardado como fecha)' : '') +
+              (MES_VIEJO ? '  (con un mes pasado sin cerrar)' : ''));
 });
