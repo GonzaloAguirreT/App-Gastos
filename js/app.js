@@ -1,500 +1,186 @@
 /**
- * Orquestador: máquina de estados de los pasos y guardado.
+ * Arranque y pegamento.
  *
- * El flujo es deliberadamente rígido —importe, tipo, categoría, cuenta,
- * concepto— porque el objetivo no es la flexibilidad sino no tener que pensar:
- * siempre los mismos gestos en los mismos sitios.
- *
- * La única bifurcación está en el primer paso, y es de fondo, no de forma: un
- * PUNTUAL es una fila y se acabó; un FRECUENTE es una regla que seguirá
- * escribiendo filas sola cada mes. Preguntarlo con el importe recién tecleado
- * evita el error caro —anotar el alquiler como gasto suelto y repetirlo doce
- * veces— sin costar ningún toque de más: los dos botones ocupan el sitio del
- * antiguo "Siguiente".
+ * Aquí no hay lógica de negocio: se enciende el service worker, se comprueba
+ * que el HTML y el JS sean de la misma versión, se cablean las pestañas y se
+ * decide cuándo hablar con la hoja.
  */
-(() => {
+const APP = (() => {
 
-  const PASOS_BASE = ['importe', 'tipo', 'categoria', 'cuenta', 'concepto'];
-  const CLAVE_ULTIMA_CUENTA = 'gastos.ultimaCuenta';
-  const MS_DESHACER = NUCLEO.MS_DESHACER;
+  /* Cada pantalla del rediseño tiene su hueco en index.html. Si falta uno, lo
+     que hay cargado es un index.html de otra versión: pasa cuando el service
+     worker sirve una mezcla, y antes se manifestaba como una app que se moría
+     en silencio a mitad de un toque. Mejor decirlo en voz alta. */
+  const HUECOS = [
+    'pantalla-mes', 'pantalla-historial', 'pantalla-detalle', 'pantalla-fijos',
+    'pantalla-fijo', 'pantalla-ahorro', 'pantalla-reparto', 'pantalla-anotar',
+    'pantalla-ajustes', 'pantalla-categorias', 'pantalla-cuentas', 'pantalla-atajo',
+    'pantalla-conectar', 'pantalla-quienes', 'pantalla-detectados',
+    'tabs', 'deshacer', 'deshacer-texto', 'deshacer-boton', 'btn-anotar'
+  ];
 
-  /* Quién usa este teléfono. Se elige UNA vez en Ajustes y se estampa en todos
-     los movimientos. No se puede cambiar desde la captura a propósito: la app
-     existe para no tener que decidir nada más que el importe, y una decisión
-     que se repite en cada gasto es exactamente lo que hay que quitar de en
-     medio.
+  function faltan() { return HUECOS.filter(id => !document.getElementById(id)); }
 
-     Se declara ANTES que `movimiento`: movimientoVacio() lo lee, y con `let`
-     una variable no existe hasta su línea. Al revés, el módulo entero reventaba
-     al cargarse y la app no arrancaba. */
-  let usuarioDelTelefono = CONFIG.USUARIOS[0] || '';
-
-  let indice = 0;
-  let movimiento = movimientoVacio();
-
-  /* Lo último guardado, solo para poder deshacerlo. El movimiento en sí ya está
-     en IndexedDB desde el instante en que pulsas Guardar: esto es una copia
-     para repintar la pantalla si te arrepientes, no el dato bueno. Si cierras
-     la app durante la ventana de deshacer, esta variable desaparece y el
-     movimiento se envía igual, que es justo lo que queremos. */
-  let ultimoGuardado = null;
-  let temporizadorEnvio = null;
-
-  function movimientoVacio() {
-    return {
-      fecha: UI.hoyISO(),
-      concepto: '',
-      importe: '',
-      cuenta: '',
-      tipo: '',
-      categoria: '',
-      frecuente: false,   // lo decide el primer paso
-      frecuencia: '',     // solo en los frecuentes
-      dia: 0,             // día del mes en que se cobra o se paga
-      duracion: null,     // {etiqueta, meses}; meses null = indefinida
-      usuario: usuarioDelTelefono
-    };
+  function avisarDeVersionMezclada(ids) {
+    const caja = document.getElementById('averia');
+    if (!caja) return;
+    caja.hidden = false;
+    caja.innerHTML =
+      '<h2 class="titulo">La app está a medias entre dos versiones</h2>' +
+      '<p class="nota">Cierra la app del todo y vuelve a abrirla. Si sigue igual, ábrela dos ' +
+      'veces seguidas: la primera se descarga la versión nueva y la segunda ya la sirve.</p>' +
+      '<p class="nota">Faltan: ' + ids.join(', ') + '</p>';
+    document.querySelector('.app').style.display = 'none';
   }
 
-  /* Un frecuente no es el movimiento de hoy: es uno que se repetirá. Por eso
-     pregunta dos cosas más, y por eso lo que se envía no es una fila sino una
-     definición que el backend usa para escribir cada cobro cuando toque. */
-  function esFrecuente() {
-    return movimiento.frecuente === true;
-  }
+  /* -------------------------------------------------------------- pintar */
 
-  /* La lista de pasos no es fija: crece cuando el movimiento lo pide. Las dos
-     preguntas del frecuente se intercalan tras la categoría, que es donde ya se
-     sabe de qué se trata. */
-  function pasos() {
-    const lista = PASOS_BASE.slice();
-    if (esFrecuente()) lista.splice(3, 0, 'frecuencia', 'dia', 'duracion');
-    return lista;
-  }
+  let pintando = false;
 
-  /* ------------------------------------------------------------------ pasos */
-
-  function irA(nuevoIndice, atras = false) {
-    const lista = pasos();
-    indice = nuevoIndice;
-    const nombre = lista[indice];
-
-    if (nombre === 'categoria') pintarCategorias();
-    if (nombre === 'frecuencia') pintarFrecuencias();
-    if (nombre === 'dia') pintarDias();
-    if (nombre === 'duracion') pintarDuraciones();
-    if (nombre === 'cuenta') pintarCuentas();
-
-    /* En el paso del importe la ficha se esconde: el número gigante del campo
-       ya es la ficha, y enseñarlo dos veces en la misma pantalla sobra. */
-    UI.pintarFicha(movimiento, CONFIG.MONEDA, nombre !== 'importe');
-    UI.mostrarPaso(nombre, atras);
-    UI.pintarMigas(indice, lista.length);
-
-    // El teclado solo se abre si el navegador considera que venimos de un gesto
-    // del usuario. En Android es irregular; si no se abre, un toque en el campo
-    // lo resuelve. No hay forma fiable de forzarlo desde una PWA.
-    if (nombre === 'importe') UI.el.inputImporte.focus();
-    if (nombre === 'concepto') UI.el.inputConcepto.focus();
-  }
-
-  function siguiente() { if (indice < pasos().length - 1) irA(indice + 1); }
-  function atras() { if (indice > 0) irA(indice - 1, true); }
-
-  function reiniciar() {
-    movimiento = movimientoVacio();
-    UI.el.inputImporte.value = '';
-    UI.el.inputConcepto.value = '';
-    UI.habilitarRamas(false);
-    UI.pintarFecha(movimiento.fecha);
-    irA(0);
-  }
-
-
-  /* ---------------------------------------------------------------- importe */
-
-  /** Acepta "12,5", "12.5" y "12". Devuelve "12.50" o null si no es válido.
-   *  Siempre positivo: el signo lo pone la columna Tipo, nunca el importe. */
-  function normalizarImporte(texto) {
-    const limpio = String(texto).trim().replace(',', '.');
-    if (!limpio) return null;
-    const numero = Number.parseFloat(limpio);
-    if (!Number.isFinite(numero) || numero <= 0) return null;
-    return Math.abs(numero).toFixed(2);
-  }
-
-  function alEscribirImporte() {
-    const campo = UI.el.inputImporte;
-    // Filtra en caliente: dígitos y un único separador decimal. Con
-    // inputmode="decimal" el teclado de Android sigue ofreciendo otras teclas.
-    let valor = campo.value.replace(/[^\d.,]/g, '');
-    const partes = valor.split(/[.,]/);
-    if (partes.length > 2) valor = partes[0] + ',' + partes.slice(1).join('');
-    if (partes.length === 2) valor = partes[0] + ',' + partes[1].slice(0, 2);
-    campo.value = valor;
-
-    UI.habilitarRamas(normalizarImporte(valor) !== null);
-  }
-
-  /**
-   * Los dos botones del primer paso: confirman el importe y eligen la rama.
-   *
-   * @param {boolean} frecuente true = se repetirá solo; false = solo esta vez.
-   */
-  function confirmarImporte(frecuente) {
-    const importe = normalizarImporte(UI.el.inputImporte.value);
-    if (importe === null) return;
-
-    // Cambiar de rama invalida lo contestado: las listas de categorías son
-    // distintas y las dos preguntas del frecuente dejan de existir.
-    if (movimiento.frecuente !== frecuente) {
-      movimiento.categoria = '';
-      movimiento.frecuencia = '';
-      movimiento.dia = 0;
-      movimiento.duracion = null;
-    }
-    movimiento.frecuente = frecuente;
-    movimiento.importe = importe;
-    UI.el.inputImporte.blur(); // cierra el teclado antes de mostrar las rejillas
-    siguiente();
-  }
-
-  /* --------------------------------------------------- tipo, categoría, cuenta */
-
-  function elegirTipo(tipo) {
-    // Al cambiar de tipo, la categoría elegida deja de valer: las listas de
-    // gasto e ingreso no tienen nada que ver.
-    if (movimiento.tipo !== tipo) movimiento.categoria = '';
-    movimiento.tipo = tipo;
-    siguiente();
-  }
-
-  /** Paso 3: categoría. Cuatro listas posibles, según rama y tipo. */
-  function pintarCategorias() {
-    UI.el.preguntaCategoria.textContent = esFrecuente()
-      ? (movimiento.tipo === 'Ingreso' ? 'Ingreso frecuente' : 'Gasto frecuente')
-      : 'Categoría';
-
-    UI.pintarOpciones(UI.el.rejillaCategorias, categoriasDe(movimiento), categoria => {
-      movimiento.categoria = categoria;
-      siguiente();
-    }, movimiento.categoria);
-  }
-
-  function categoriasDe(m) {
-    if (m.frecuente) {
-      return m.tipo === 'Ingreso'
-        ? CONFIG.CATEGORIAS_FRECUENTES_INGRESO
-        : CONFIG.CATEGORIAS_FRECUENTES_GASTO;
-    }
-    return m.tipo === 'Ingreso' ? CONFIG.CATEGORIAS_INGRESO : CONFIG.CATEGORIAS_GASTO;
-  }
-
-  function pintarFrecuencias() {
-    UI.pintarOpciones(UI.el.rejillaFrecuencias, CONFIG.FRECUENCIAS, frecuencia => {
-      movimiento.frecuencia = frecuencia;
-      siguiente();
-    }, movimiento.frecuencia);
-  }
-
-  /**
-   * Día del mes en que cae el cobro.
-   *
-   * Antes lo marcaba la fecha de la cabecera, que es la de hoy: dar de alta el
-   * alquiler un día 17 lo dejaba cobrándose todos los 17, y para corregirlo
-   * había que acordarse de tocar la fecha ANTES de empezar. Ahora se pregunta.
-   *
-   * El 31 vale para todos los meses: el backend recorta al último día del mes
-   * que toque —31 ene, 28 feb, 31 mar— y calcula siempre desde el inicio, así
-   * que la fecha no se desvía con los años.
-   */
-  function pintarDias() {
-    UI.el.preguntaDia.textContent = movimiento.tipo === 'Ingreso'
-      ? '¿Qué día se cobra?'
-      : '¿Qué día se paga?';
-
-    const dias = [];
-    for (var d = 1; d <= 31; d++) dias.push(String(d));
-
-    // Sugerido: el día de la fecha elegida. Suele ser el bueno —das de alta la
-    // suscripción el día que te la han cobrado— y ahorra buscar en la rejilla.
-    const sugerido = String(movimiento.dia || Number(movimiento.fecha.slice(8, 10)));
-
-    UI.pintarOpciones(UI.el.rejillaDias, dias, dia => {
-      movimiento.dia = Number(dia);
-      siguiente();
-    }, sugerido);
-  }
-
-  /** Cambia el día de un yyyy-mm-dd, sin salirse del mes: pedir el 31 en
-   *  febrero da el 28, no el 3 de marzo. */
-  function conDia(iso, dia) {
-    const [anio, mes] = iso.split('-').map(Number);
-    const ultimo = new Date(anio, mes, 0).getDate();
-    const elegido = String(Math.min(dia, ultimo)).padStart(2, '0');
-    return `${iso.slice(0, 7)}-${elegido}`;
-  }
-
-  function pintarDuraciones() {
-    const etiquetas = CONFIG.DURACIONES.map(d => d.etiqueta);
-    UI.pintarOpciones(UI.el.rejillaDuraciones, etiquetas, etiqueta => {
-      movimiento.duracion = CONFIG.DURACIONES.filter(d => d.etiqueta === etiqueta)[0];
-      siguiente();
-    }, movimiento.duracion ? movimiento.duracion.etiqueta : null);
-  }
-
-  /** Paso 4: cuenta. */
-  function pintarCuentas() {
-    UI.el.preguntaCuenta.textContent = 'Cuenta';
-    const ultima = localStorage.getItem(CLAVE_ULTIMA_CUENTA);
-    UI.pintarOpciones(UI.el.rejillaCuentas, CONFIG.CUENTAS, cuenta => {
-      movimiento.cuenta = cuenta;
-      localStorage.setItem(CLAVE_ULTIMA_CUENTA, cuenta);
-      siguiente();
-    }, movimiento.cuenta || ultima);
-  }
-
-  /* --------------------------------------------------------------- guardado */
-
-  /** Convierte lo capturado en la fila que va a la hoja. */
-  function filasDe(m) {
-    return [{
-      fecha: m.fecha,
-      concepto: m.concepto,
-      importe: m.importe,
-      usuario: m.usuario,
-      cuenta: m.cuenta,
-      tipo: m.tipo,
-      categoria: m.categoria,
-      uuid: API.uuid()
-    }];
-  }
-
-  function faltaAlgo() {
-    if (!movimiento.importe || !movimiento.tipo) return true;
-    if (esFrecuente() && (!movimiento.frecuencia || !movimiento.dia || !movimiento.duracion)) return true;
-    return !movimiento.categoria || !movimiento.cuenta;
-  }
-
-  /** Lo que se envía de un frecuente: la definición, no un movimiento. El
-   *  backend calcula la fecha de fin y escribe cada cobro el día que toca. */
-  function suscripcionDe(m) {
-    return {
-      uuid: API.uuid(),
-      concepto: m.concepto,
-      importe: m.importe,
-      cuenta: m.cuenta,
-      categoria: m.categoria,
-      usuario: m.usuario,
-      // Va el tipo porque un frecuente también puede ser un ingreso —la nómina,
-      // un piso alquilado—, y de él depende el signo de cada cobro que escriba
-      // el disparador. Sin esto todos entrarían como gasto.
-      tipo: m.tipo,
-      frecuencia: m.frecuencia,
-      /* El inicio se arma con el día elegido, no con la fecha de la cabecera.
-         Si ese día ya pasó este mes, el backend escribe el cobro al instante,
-         que es lo correcto: si hoy es 17 y el alquiler se paga el 3, el de este
-         mes ya lo has pagado. Si aún no ha llegado, espera al disparador. */
-      inicio: conDia(m.fecha, m.dia),
-      duracionMeses: m.duracion ? m.duracion.meses : null
-    };
-  }
-
-  async function guardar() {
-    if (faltaAlgo()) {
-      UI.toast('Falta algún dato del movimiento');
-      return;
-    }
-
-    movimiento.concepto = UI.el.inputConcepto.value.trim();
-    const accion = esFrecuente() ? 'suscripcion' : 'movimientos';
-    const filas = esFrecuente() ? [suscripcionDe(movimiento)] : filasDe(movimiento);
-    const grupo = filas[0].uuid;   // el uuid de la primera fila identifica al lote
-
-    /* A disco ANTES de nada. Este es el punto en el que el movimiento deja de
-       poder perderse: aunque se vaya la batería en el segundo siguiente, la
-       fila ya está en IndexedDB y saldrá al arrancar la app. Lo que viene
-       después —el aviso, el envío, los reintentos— puede fallar sin
-       consecuencias. */
+  /** Repinta todas las pantallas. Es fuerza bruta a propósito: con listas de
+   *  decenas de filas cuesta menos que llevar la cuenta de qué cambió, y no se
+   *  puede desincronizar, que es el error que de verdad duele. */
+  function pintarTodo() {
+    if (pintando) return;
+    pintando = true;
     try {
-      await NUCLEO.encolar(filas, grupo, accion);
-    } catch (error) {
-      // Si ni siquiera se puede escribir en disco, hay que decirlo claramente:
-      // es el único caso en el que un movimiento se pierde de verdad.
-      console.error('No se pudo encolar el movimiento:', error);
-      UI.toast(`NO se ha guardado (${error.message}). Vuelve a anotarlo.`, { ms: 7000 });
-      return;
+      MES.pintar();
+      FIJOS.pintar();
+      AHORRO.pintar();
+      AJUSTES.pintar();
+      if (VISTA.actual() === 'anotar') ANOTAR.pintar();
+    } finally {
+      pintando = false;
     }
-
-    ultimoGuardado = { origen: { ...movimiento }, grupo };
-    COLA.pintarIndicador();
-
-    UI.vibrar(20);
-    const importeMostrado = UI.formatearImporte(movimiento.importe, CONFIG.MONEDA);
-    const CADA = { Mensual: 'al mes', Trimestral: 'cada trimestre', Anual: 'al año' };
-    const texto = esFrecuente()
-      ? `${movimiento.categoria} de ${importeMostrado} ${CADA[movimiento.frecuencia] || ''}, día ${movimiento.dia}`.trim()
-      : `Guardado ${importeMostrado}`;
-    UI.toast(texto, { ms: MS_DESHACER, alDeshacer: deshacer });
-
-    // Pasada la ventana de deshacer, se intenta enviar. Si no hay red no pasa
-    // nada: sigue en la cola y se reintenta solo.
-    clearTimeout(temporizadorEnvio);
-    temporizadorEnvio = setTimeout(() => {
-      ultimoGuardado = null;
-      COLA.procesar();
-    }, MS_DESHACER);
-
-    // Vuelta al paso 1 inmediatamente. No hay pantalla intermedia que cerrar.
-    reiniciar();
   }
 
-  async function deshacer() {
-    clearTimeout(temporizadorEnvio);
-    const descartado = ultimoGuardado;
-    ultimoGuardado = null;
-    if (!descartado) return;
+  /* ---------------------------------------------------------------- cola */
 
-    await NUCLEO.borrarGrupo(descartado.grupo);
-    COLA.pintarIndicador();
+  /**
+   * Intenta vaciar la cola y, si algo salió, vuelve a leer la hoja.
+   *
+   * Releer no es un capricho: el backend calcula cosas que la app no puede
+   * —el próximo cargo de un fijo, las cuotas restantes, lo guardado en cada
+   * meta— y hasta que no las devuelve, la pantalla enseña la versión optimista.
+   */
+  async function vaciarCola({ aMano = false } = {}) {
+    const resultado = await NUCLEO.procesar({
+      ignorarDeshacer: aMano,
+      ignorarBackoff: aMano
+    });
+    await ESTADO.refrescarPendientes();
 
-    // Se recupera el movimiento en el paso del concepto para poder corregirlo
-    // en vez de tener que teclearlo otra vez.
-    movimiento = { ...descartado.origen };
-    UI.el.inputImporte.value = movimiento.importe.replace('.', ',');
-    UI.el.inputConcepto.value = movimiento.concepto;
-    UI.habilitarRamas(true);
-    UI.pintarFecha(movimiento.fecha);
-    irA(pasos().indexOf('concepto'), true);
-    UI.toast('Movimiento recuperado');
-  }
-
-  /* ----------------------------------------------------------------- fecha */
-
-  function abrirSelectorFecha() {
-    const campo = UI.el.inputFecha;
-    if (typeof campo.showPicker === 'function') {
-      try { campo.showPicker(); return; } catch (_) { /* cae al click */ }
+    /* Releer solo cuando la cola queda vacía. Con algo aún pendiente, lo que
+       devuelve la hoja no incluye ese cambio, y pisar el estado con esa
+       respuesta haría desaparecer de la pantalla un gasto que sí se anotó. */
+    if (resultado.quedan === 0 && (resultado.enviados || aMano)) {
+      await ESTADO.sincronizar({ silencioso: !aMano });
     }
-    campo.click();
+    return resultado;
   }
 
-  /* ---------------------------------------------------------------- arranque */
-
-  function conectarEventos() {
-    UI.el.inputImporte.addEventListener('input', alEscribirImporte);
-    /* Enter en el teclado va por "Puntuales": es la rama de todos los días, y
-       la que no tiene consecuencias si te equivocas —una fila suelta, no una
-       regla que sigue cobrando sola—. */
-    UI.el.inputImporte.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); confirmarImporte(false); }
-    });
-    UI.el.btnFrecuentes.addEventListener('click', () => confirmarImporte(true));
-    UI.el.btnPuntuales.addEventListener('click', () => confirmarImporte(false));
-
-    document.querySelectorAll('[data-tipo]').forEach(boton => {
-      boton.addEventListener('click', () => elegirTipo(boton.dataset.tipo));
-    });
-
-    UI.el.inputConcepto.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); guardar(); }
-    });
-    UI.el.btnGuardar.addEventListener('click', guardar);
-    UI.el.btnAtras.addEventListener('click', atras);
-
-    UI.el.btnFecha.addEventListener('click', abrirSelectorFecha);
-    UI.el.inputFecha.addEventListener('change', () => {
-      // Un input date vacío (cancelar el selector) no debe borrar la fecha.
-      if (!UI.el.inputFecha.value) return;
-      movimiento.fecha = UI.el.inputFecha.value;
-      UI.pintarFecha(movimiento.fecha);
-    });
-
-    /* Al salir de la app ya no puedes deshacer, así que la espera de cinco
-       segundos deja de tener sentido y se envía lo que haya. El movimiento no
-       corre peligro en ningún caso —está en disco desde que pulsaste Guardar—,
-       pero cuanto antes llegue a la hoja, mejor. */
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        clearTimeout(temporizadorEnvio);
-        ultimoGuardado = null;
-        COLA.procesar({ ignorarDeshacer: true, ignorarBackoff: true });
-      }
-    });
+  /**
+   * Programa un vaciado tras encolar algo.
+   *
+   * Dos intentos y no uno: el primero es inmediato, para lo que sale ya; el
+   * segundo espera a que venza la ventana de deshacer, que es la única razón
+   * por la que un apunte puede seguir en la cola sin que haya fallado nada.
+   * Sin el segundo, un borrado se quedaba esperando hasta que salías de la app.
+   */
+  let pendienteDeEnviar = null;
+  function programarEnvio() {
+    clearTimeout(pendienteDeEnviar);
+    vaciarCola();
+    pendienteDeEnviar = setTimeout(() => vaciarCola(), NUCLEO.MS_DESHACER + 500);
   }
+
+  /* ------------------------------------------------------------ arranque */
 
   async function iniciar() {
-    /* Antes de nada: que el HTML cargado sea de esta misma versión. Si no lo
-       es, la app se rompería a mitad de un paso sin decir por qué, y desde
-       fuera es indistinguible de un fallo cualquiera. Mejor pararse y pedir lo
-       único que lo arregla. */
-    const faltan = UI.elementosQueFaltan();
-    if (faltan.length) {
-      console.error('Versiones mezcladas. Faltan estos elementos en el HTML:', faltan);
-      UI.toast('La app está a medias entre dos versiones. Ciérrala del todo y vuelve a abrirla.',
-               { ms: 20000 });
-      return;
+    const ids = faltan();
+    if (ids.length) { avisarDeVersionMezclada(ids); return; }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => VISTA.ir(tab.dataset.tab));
+    });
+    document.getElementById('btn-anotar').addEventListener('click', () => ANOTAR.abrir());
+
+    ESTADO.suscribir(pintarTodo);
+    ESTADO.cuandoSeEncole(programarEnvio);
+    await ESTADO.iniciar();
+    VISTA.aplicarTema(ESTADO.estado().ajustes.tema);
+    pintarTodo();
+
+    // Sin endpoint no hay nada que enseñar: la primera pantalla es la conexión.
+    if (!ESTADO.configurada()) {
+      AJUSTES.abrirOnboarding();
+    } else {
+      /* El atajo del manifiesto abre directamente el teclado. Es la promesa de
+         la pantalla Atajo: un toque en el icono y ya estás tecleando, sin
+         pasar por el mes. */
+      if (new URLSearchParams(location.search).get('anotar')) ANOTAR.abrir();
+      await ESTADO.sincronizar({ silencioso: true });
+      vaciarCola();
     }
 
-    UI.el.moneda.textContent = CONFIG.MONEDA;
-    conectarEventos();
-    reiniciar();
-
-    // Primero la migración de ajustes, que puede traer el token de localStorage,
-    // y solo después la cola: si no, el primer vaciado creería que no hay
-    // configuración y pospondría todo sin motivo.
-    await AJUSTES.iniciar();
-    usuarioDelTelefono = (await AJUSTES.leer()).usuario || CONFIG.USUARIOS[0] || '';
-    movimiento.usuario = usuarioDelTelefono;
-
-    COLA.iniciar();
-    RESUMEN.iniciar();
-
-    if (CONFIG.MODO_PRUEBA) {
-      console.info('MODO_PRUEBA activo: nada se envía, todo va a la consola.');
-    } else if (!await AJUSTES.configurado()) {
-      // Sin endpoint ni token no hay dónde escribir. Mejor pedirlos al entrar
-      // que dejar que el primer gasto se quede atascado en la cola.
-      AJUSTES.abrir();
-    }
-
-    if ('serviceWorker' in navigator) {
-      // El registro falla y no pasa nada si se sirve desde un origen inseguro
-      // (http:// que no sea localhost). Ver README.
-      navigator.serviceWorker.register('sw.js').catch(e =>
-        console.warn('Service worker no registrado:', e.message));
-
-      vigilarActualizaciones();
-    }
+    escuchar();
+    registrarServiceWorker();
   }
 
-  /**
-   * Cuando se despliega una versión nueva, el service worker se la descarga por
-   * detrás pero la pestaña abierta sigue con la vieja hasta que se recarga.
-   * Sin esto hay que cerrar y abrir la app para ver los cambios, y no hay forma
-   * de saber que hace falta.
-   */
-  function vigilarActualizaciones() {
-    // En la primera instalación no hay controlador previo, y no hay nada viejo
-    // que sustituir: recargar ahí sería un parpadeo gratuito.
-    const habiaControlador = Boolean(navigator.serviceWorker.controller);
-    let yaRecargando = false;
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!habiaControlador || yaRecargando) return;
-
-      // Recargar a media captura borraría el importe tecleado. Si estás en
-      // mitad de algo, se avisa y la versión nueva espera al siguiente arranque.
-      const aMedias = indice !== 0 || UI.el.inputImporte.value || ultimoGuardado;
-      if (aMedias) {
-        UI.toast('Hay una versión nueva. Se aplicará al reabrir la app.', { ms: 5000 });
-        return;
+  function escuchar() {
+    /* Al volver a la app: vaciar lo pendiente y refrescar. Es el momento en que
+       más probable es que haya red y que los números estén viejos. */
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        vaciarCola();
+        ESTADO.sincronizar({ silencioso: true });
       }
+    });
 
-      yaRecargando = true;
-      location.reload();
+    window.addEventListener('online', () => {
+      ESTADO.marcarConexion(true);
+      vaciarCola({ aMano: true });
+    });
+    window.addEventListener('offline', () => ESTADO.marcarConexion(false));
+
+    /* Al salir se intenta vaciar sin esperar la ventana de deshacer: si ya no
+       puedes deshacerlo, no tiene sentido retenerlo. */
+    window.addEventListener('pagehide', () => {
+      NUCLEO.procesar({ ignorarDeshacer: true, ignorarBackoff: true });
+    });
+
+    VISTA.cuandoCambie(nombre => {
+      if (nombre === 'anotar') ANOTAR.pintar();
     });
   }
 
+  function registrarServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('sw.js').then(registro => {
+      /* Background Sync: el navegador nos despierta cuando vuelve a haber red,
+         aunque la app esté cerrada. Es el único camino para que un gasto
+         anotado sin cobertura llegue a la hoja sin acordarse de abrir la app. */
+      if (registro.sync) registro.sync.register('enviar-cola').catch(() => {});
+    }).catch(() => { /* sin service worker la app funciona, solo que sin caché */ });
+
+    /* La versión que sirve el service worker, para poder mirar el móvil y
+       saber si tiene la última o una cacheada de hace tres despliegues. Ha
+       ahorrado ya varios diagnósticos a ciegas. */
+    navigator.serviceWorker.addEventListener('message', evento => {
+      if (evento.data && evento.data.version) {
+        version = evento.data.version;
+        AJUSTES.pintar();
+      }
+    });
+    navigator.serviceWorker.ready.then(registro => {
+      if (registro.active) registro.active.postMessage('version');
+    });
+  }
+
+  let version = '';
+  function versionServida() { return version; }
+
   document.addEventListener('DOMContentLoaded', iniciar);
+
+  return { vaciarCola, pintarTodo, versionServida };
 })();

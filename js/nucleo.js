@@ -17,7 +17,7 @@ const NUCLEO = (() => {
   const COLA = 'cola';
   const AJUSTES = 'ajustes';
 
-  const MS_DESHACER = 5000;
+  const MS_DESHACER = 7000;
   const MAX_ESPERA = 5 * 60 * 1000;   // tope del backoff: 5 minutos
 
   /* ---------------------------------------------------------- IndexedDB */
@@ -27,7 +27,7 @@ const NUCLEO = (() => {
       const solicitud = indexedDB.open(BD, VERSION_BD);
       solicitud.onupgradeneeded = () => {
         const bd = solicitud.result;
-        // La clave es el uuid del movimiento: reencolar dos veces el mismo
+        // La clave es el uuid del apunte: reencolar dos veces el mismo
         // sobrescribe en vez de duplicar.
         if (!bd.objectStoreNames.contains(COLA)) bd.createObjectStore(COLA, { keyPath: 'uuid' });
         if (!bd.objectStoreNames.contains(AJUSTES)) bd.createObjectStore(AJUSTES);
@@ -56,73 +56,61 @@ const NUCLEO = (() => {
     });
   }
 
-  /* ------------------------------------------------------------ ajustes */
+  /* ------------------------------------------------------------ ajustes
+
+     Aquí solo vive lo que es DE ESTE TELÉFONO: la conexión, quién anota en él,
+     su cuenta habitual y el tema. El plan del mes, el límite de aviso y qué
+     avisos están activos son de los dos, así que viven en la hoja: si Camila
+     sube el plan, Gonzalo tiene que verlo subido. */
+
+  const AJUSTES_POR_DEFECTO = {
+    endpoint: '',
+    token: '',
+    persona: '',
+    cuenta: '',
+    tema: 'sistema',
+    onboarding: false
+  };
 
   async function leerAjustes() {
     const guardados = await conTienda(AJUSTES, 'readonly', t => t.get('config'));
     const a = guardados || {};
-    return {
+    return Object.assign({}, AJUSTES_POR_DEFECTO, a, {
       endpoint: a.endpoint || CONFIG.ENDPOINT || '',
-      token: a.token || CONFIG.TOKEN || '',
-      usuario: usuarioValido(a.usuario)
-    };
+      token: a.token || CONFIG.TOKEN || ''
+    });
   }
 
-  /**
-   * Devuelve un nombre que exista de verdad en la lista de usuarios.
-   *
-   * Hace falta porque el nombre guardado sobrevive a los cambios de config.js.
-   * Cuando "Gonzalo Aguirre" pasó a ser "Gonzalo", los teléfonos siguieron
-   * estampando el nombre viejo: el valor guardado ganaba a la lista nueva, y las
-   * filas se escribían con un usuario que ya no existía. En la hoja se veían
-   * bien; en el panel, sumaban cero.
-   *
-   * Se intenta emparejar por el nombre de pila antes de rendirse al primero de
-   * la lista, porque es el tipo de cambio más probable.
-   */
-  function usuarioValido(guardado) {
-    const lista = CONFIG.USUARIOS || [];
-    const nombre = String(guardado || '').trim();
-
-    if (!nombre) return lista[0] || '';
-    if (lista.indexOf(nombre) !== -1) return nombre;
-
-    const pila = nombre.split(' ')[0];
-    for (var i = 0; i < lista.length; i++) {
-      if (lista[i].split(' ')[0] === pila) return lista[i];
-    }
-    return lista[0] || '';
+  /** Guarda solo lo que le pasas, sin pisar el resto. Antes recibía el objeto
+   *  entero y cualquier pantalla que se olvidara de un campo lo borraba. */
+  async function guardarAjustes(cambios) {
+    const actuales = await conTienda(AJUSTES, 'readonly', t => t.get('config')) || {};
+    const nuevos = Object.assign({}, actuales, cambios);
+    await conTienda(AJUSTES, 'readwrite', t => t.put(nuevos, 'config'));
+    return Object.assign({}, AJUSTES_POR_DEFECTO, nuevos);
   }
 
-  function guardarAjustes(ajustes) {
-    return conTienda(AJUSTES, 'readwrite', t => t.put({
-      endpoint: (ajustes.endpoint || '').trim(),
-      token: (ajustes.token || '').trim(),
-      usuario: (ajustes.usuario || '').trim()
-    }, 'config'));
+  /* El último mes recibido se guarda entero para poder pintar la app sin red.
+     Va en la misma tienda que los ajustes porque es lo mismo: un dato suelto
+     que sobrevive entre sesiones y no forma parte de la cola. */
+  function guardarMes(datos) {
+    return conTienda(AJUSTES, 'readwrite', t => t.put({ datos, recibido: Date.now() }, 'mes'));
   }
 
-  /* El último resumen recibido se guarda para poder enseñar algo sin red. Va en
-     la misma tienda que los ajustes porque es lo mismo: un dato suelto que
-     sobrevive entre sesiones y no forma parte de la cola. */
-  function guardarResumen(datos) {
-    return conTienda(AJUSTES, 'readwrite', t => t.put({ datos, recibido: Date.now() }, 'resumen'));
-  }
-
-  function leerResumen() {
-    return conTienda(AJUSTES, 'readonly', t => t.get('resumen'));
+  function leerMes() {
+    return conTienda(AJUSTES, 'readonly', t => t.get('mes'));
   }
 
   /* --------------------------------------------------------------- cola */
 
   /**
-   * Mete filas en la cola. Todas las de una misma llamada comparten `grupo`,
-   * que es lo que permite deshacer un traspaso entero y enviar sus dos filas
-   * en la misma petición.
+   * Mete apuntes en la cola. Todos los de una misma llamada comparten `grupo`,
+   * que es lo que permite deshacer una operación entera y enviar sus filas en
+   * la misma petición.
    *
-   * `enviarDespues` es lo que implementa la ventana de deshacer: la fila está
-   * a salvo en disco desde el primer instante, pero no sale hasta que pasan los
-   * cinco segundos. Si cierras la app en ese rato, el movimiento no se pierde.
+   * `esperarDeshacer` es lo que implementa la ventana de deshacer: el apunte
+   * está a salvo en disco desde el primer instante, pero no sale hasta que
+   * pasan los siete segundos. Si cierras la app en ese rato, no se pierde.
    */
   async function encolar(filas, grupo, accion, esperarDeshacer = true) {
     const ahora = Date.now();
@@ -130,10 +118,9 @@ const NUCLEO = (() => {
       uuid: fila.uuid,
       fila: fila,
       grupo: grupo,
-      /* Qué hay que hacer con esto al enviarlo: escribir movimientos o dar de
-         alta una suscripción. Va en cada registro y no en una cola aparte para
-         que los reintentos, el backoff y el Background Sync valgan para ambos
-         sin duplicar nada. */
+      /* Qué hay que hacer con esto al enviarlo. Va en cada registro y no en una
+         cola aparte para que los reintentos, el backoff y el Background Sync
+         valgan para todas las acciones sin duplicar nada. */
       accion: accion || 'movimientos',
       creado: ahora,
       /* Dos esperas distintas y separadas a propósito:
@@ -172,9 +159,6 @@ const NUCLEO = (() => {
    * manda. El backend contesta con mensajes en claro y aquí se guardaban sin
    * que nadie los mirara, así que había que ir a adivinar al registro de
    * ejecuciones de Google.
-   *
-   * Se coge el del intento más reciente, que es el que describe la situación
-   * de ahora.
    */
   async function ultimoError() {
     const registros = await todos();
@@ -195,43 +179,44 @@ const NUCLEO = (() => {
 
   /* -------------------------------------------------------------- envío */
 
-  async function enviar(filas, ajustes, accion) {
-    if (CONFIG.MODO_PRUEBA) {
-      console.log('[MODO_PRUEBA] no se envía nada. Filas:', filas);
-      return { ok: true, prueba: true };
-    }
-
+  /**
+   * Una petición al Apps Script. Todo va por POST, incluida la lectura: el
+   * doGet muere en la redirección de Google, que se lleva por delante las
+   * cabeceras CORS.
+   *
+   * Y todo va con Content-Type text/plain, porque Apps Script no contesta al
+   * preflight OPTIONS: la petición tiene que ser "simple" para el navegador.
+   */
+  async function pedir(accion, carga, ajustes) {
     const config = ajustes || await leerAjustes();
     if (!config.endpoint || !config.token) throw new Error('Falta configurar el endpoint o el token');
 
-    /* text/plain a propósito: Apps Script no contesta al preflight OPTIONS, así
-       que la petición tiene que ser "simple". Ver el README. */
     const respuesta = await fetch(config.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(accion === 'suscripcion'
-        ? { token: config.token, accion: 'suscripcion', suscripcion: filas[0] }
-        : { token: config.token, movimientos: filas }),
+      body: JSON.stringify(Object.assign({ token: config.token, accion: accion }, carga)),
       redirect: 'follow'
     });
 
     return interpretar(respuesta);
   }
 
-  async function consultar(ajustes, cuantos = 10) {
-    const config = ajustes || await leerAjustes();
-    if (!config.endpoint || !config.token) throw new Error('Falta configurar el endpoint o el token');
+  /** Envía un grupo de la cola. Cada acción tiene su forma en el cuerpo; el
+   *  resto es idéntico, por eso comparten `pedir`. */
+  function enviar(filas, ajustes, accion) {
+    if (CONFIG.MODO_PRUEBA) {
+      console.log('[MODO_PRUEBA] no se envía nada:', accion, filas);
+      return Promise.resolve({ ok: true, prueba: true });
+    }
+    if (accion === 'movimientos') return pedir('movimientos', { movimientos: filas }, ajustes);
+    // Las demás acciones mandan un solo apunte por grupo.
+    return pedir(accion, { datos: filas[0] }, ajustes);
+  }
 
-    // La lectura va por POST igual que la escritura: el doGet muere en la
-    // redirección de Apps Script, que se lleva por delante las cabeceras CORS.
-    const respuesta = await fetch(config.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: config.token, accion: 'resumen', n: cuantos }),
-      redirect: 'follow'
-    });
-
-    return interpretar(respuesta);
+  /** Lee el mes entero: movimientos, fijos, metas, listas y config. Es la única
+   *  lectura de la app; todo lo que se ve sale de aquí. */
+  function consultarMes(mes, ajustes) {
+    return pedir('mes', mes ? { mes } : {}, ajustes);
   }
 
   async function interpretar(respuesta) {
@@ -252,8 +237,8 @@ const NUCLEO = (() => {
   /**
    * Intenta enviar lo que haya en la cola.
    *
-   * @param {boolean} ignorarDeshacer saltarse la ventana de cinco segundos. Se
-   *        usa al salir de la app: si ya no puedes deshacer, no hay que esperar.
+   * @param {boolean} ignorarDeshacer saltarse la ventana de deshacer. Se usa al
+   *        salir de la app: si ya no puedes deshacer, no hay que esperar.
    * @param {boolean} ignorarBackoff saltarse la espera tras un fallo. Se usa
    *        cuando vuelve la red o cuando lo pides tú: el backoff existe para no
    *        machacar la batería sin cobertura, no para retrasar el momento en
@@ -269,8 +254,8 @@ const NUCLEO = (() => {
       (ignorarBackoff || (r.reintentarEn || 0) <= ahora));
     if (!listos.length) return { enviados: 0, fallidos: 0, quedan: registros.length };
 
-    // Las filas de un traspaso van juntas en la misma petición: media
-    // transferencia escrita descuadraría las dos cuentas.
+    // Las filas de un mismo grupo van juntas en la misma petición: medio
+    // reparto escrito descuadraría el ahorro.
     const grupos = new Map();
     listos.forEach(r => {
       if (!grupos.has(r.grupo)) grupos.set(r.grupo, []);
@@ -286,7 +271,11 @@ const NUCLEO = (() => {
 
     let enviados = 0, fallidos = 0;
 
-    for (const registrosDelGrupo of grupos.values()) {
+    /* El orden importa: los grupos se envían por antigüedad. Editar un
+       movimiento antes de haberlo dado de alta dejaría el cambio sin destino. */
+    const ordenados = [...grupos.values()].sort((a, b) => (a[0].creado || 0) - (b[0].creado || 0));
+
+    for (const registrosDelGrupo of ordenados) {
       try {
         await enviar(registrosDelGrupo.map(r => r.fila), ajustes,
                      registrosDelGrupo[0].accion);
@@ -317,8 +306,8 @@ const NUCLEO = (() => {
 
   return {
     MS_DESHACER,
-    leerAjustes, guardarAjustes, guardarResumen, leerResumen,
+    leerAjustes, guardarAjustes, guardarMes, leerMes,
     encolar, todos, contar, borrar, borrarGrupo, ultimoError,
-    enviar, consultar, procesar
+    pedir, enviar, consultarMes, procesar
   };
 })();

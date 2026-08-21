@@ -1,283 +1,85 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <!-- viewport-fit=cover + los safe-area-inset del CSS: sin esto, en móviles con
-       gesto de navegación el botón de guardar queda debajo de la barra del sistema. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#14100E">
-  <meta name="color-scheme" content="dark">
-  <title>Gastos</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="iconos/icono-192.png">
-  <link rel="stylesheet" href="css/estilos.css">
+<meta charset="utf-8">
+<!-- viewport-fit=cover es lo que deja usar env(safe-area-inset-*): sin él el
+     móvil reserva las franjas del sistema por su cuenta y la barra de pestañas
+     queda flotando sobre una banda de color que no es la nuestra. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Lo actualiza VISTA.aplicarTema al arrancar; este valor es el del papel,
+     que es el tema que ve quien no ha elegido nada con el móvil en claro. -->
+<meta name="theme-color" content="#F4F0E8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Gastos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="iconos/icono-192.png">
+<link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
 
-  <header class="cabecera">
-    <!-- La fecha no es un paso del flujo: se asume hoy y se cambia tocándola. -->
-    <button type="button" id="btn-fecha" class="btn-fecha" aria-label="Cambiar fecha">
-      <span id="txt-fecha">hoy</span>
-    </button>
-    <!-- Input real de fecha, invisible: solo existe para abrir el selector nativo. -->
-    <input type="date" id="input-fecha" class="input-fecha-oculto" tabindex="-1" aria-hidden="true">
+<div class="app">
 
+  <!-- Arriba solo aire: el sistema ya pinta la hora y las pestañas ya dicen
+       dónde estás. -->
+  <div class="aire"></div>
 
-    <ol class="migas" id="migas" aria-label="Progreso"></ol>
+  <!-- Cada pantalla la pinta entera su módulo. El HTML solo reserva el hueco:
+       así no hay dos sitios (aquí y en el JS) donde pueda estar la verdad. -->
+  <section class="pantalla activa" id="pantalla-mes"></section>
+  <section class="pantalla" id="pantalla-historial"></section>
+  <section class="pantalla" id="pantalla-detalle"></section>
+  <section class="pantalla" id="pantalla-fijos"></section>
+  <section class="pantalla" id="pantalla-fijo"></section>
+  <section class="pantalla" id="pantalla-ahorro"></section>
+  <section class="pantalla" id="pantalla-reparto"></section>
+  <section class="pantalla" id="pantalla-anotar"></section>
+  <section class="pantalla" id="pantalla-ajustes"></section>
+  <section class="pantalla" id="pantalla-categorias"></section>
+  <section class="pantalla" id="pantalla-cuentas"></section>
+  <section class="pantalla" id="pantalla-atajo"></section>
+  <section class="pantalla" id="pantalla-conectar"></section>
+  <section class="pantalla" id="pantalla-quienes"></section>
+  <section class="pantalla" id="pantalla-detectados"></section>
 
-    <!-- Movimientos anotados que aún no han llegado a la hoja. Oculto mientras
-         no haya ninguno: en el caso normal no debe haber nada que mirar. -->
-    <button type="button" id="btn-pendientes" class="chip-pendientes" hidden
-            aria-label="Movimientos pendientes de enviar. Tocar para reintentar">
-      <span id="num-pendientes">0</span><span class="flecha" aria-hidden="true">↑</span>
-    </button>
-
-    <!-- El resumen ocupa el hueco de la cabecera y los ajustes pasan a estar
-         dentro de él: los ajustes se tocan una vez en la vida y el resumen cada
-         pocos días. Quien más se usa, más cerca. -->
-    <button type="button" id="btn-resumen" class="btn-icono" aria-label="Resumen del mes">
-      <!-- Tres barras, las mismas del icono de la app. -->
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <rect x="4"  y="13" width="4" height="7"  rx="1.5" fill="currentColor"/>
-        <rect x="10" y="9"  width="4" height="11" rx="1.5" fill="currentColor"/>
-        <rect x="16" y="4"  width="4" height="16" rx="1.5" fill="currentColor"/>
-      </svg>
-    </button>
-  </header>
-
-  <!-- La ficha ocupa el hueco de la mitad superior, que hasta ahora era negro
-       vacío, y va enseñando el movimiento tal y como lo vas construyendo: el
-       importe en cuanto lo tecleas, y debajo lo que ya has contestado. Sirve
-       para lo mismo que servía el resumen del último paso —comprobar antes de
-       guardar— pero durante todo el recorrido, no solo al final. -->
-  <section class="ficha" id="ficha" aria-live="polite" aria-label="Movimiento en curso">
-    <p class="ficha-importe" id="ficha-importe"></p>
-    <ul class="ficha-datos" id="ficha-datos"></ul>
-  </section>
-
-  <main class="pasos" id="pasos">
-
-    <!-- Paso 1: importe. Va primero porque es lo único que siempre hay que teclear. -->
-    <section class="paso" id="paso-importe" data-paso="1" aria-label="Importe">
-      <div class="paso-cuerpo">
-        <div class="campo-importe">
-          <!-- type="text" en vez de type="number": number no deja controlar la coma
-               decimal en Android y además muestra flechitas inútiles. -->
-          <input type="text" id="input-importe" class="input-importe"
-                 inputmode="decimal" enterkeyhint="next" autocomplete="off"
-                 placeholder="0,00" aria-label="Importe">
-          <span class="moneda" id="moneda">€</span>
-        </div>
-      </div>
-      <!-- Los dos botones sustituyen al antiguo "Siguiente" y de paso preguntan
-           lo único que cambia el resto del recorrido: si esto pasa una vez o si
-           se repetirá solo. Preguntarlo aquí, con el importe recién tecleado y
-           el pulgar ya abajo, no cuesta ningún toque de más. -->
-      <div class="paso-acciones">
-        <div class="rejilla rejilla-2">
-          <button type="button" class="btn btn-opcion btn-alto btn-rama" id="btn-frecuentes" disabled>
-            Frecuente
-          </button>
-          <button type="button" class="btn btn-opcion btn-alto btn-rama" id="btn-puntuales" disabled>
-            Puntual
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Paso 2: tipo. Un toque y avanza. -->
-    <section class="paso" id="paso-tipo" data-paso="2" aria-label="Tipo">
-      <div class="paso-cuerpo"></div>
-      <div class="paso-acciones">
-        <div class="paso-encabezado">
-          <p class="pregunta">¿Gasto o ingreso?</p>
-        </div>
-        <div class="rejilla rejilla-2">
-          <button type="button" class="btn btn-opcion btn-alto" data-tipo="Gasto">
-            <span class="signo">−</span>Gasto
-          </button>
-          <button type="button" class="btn btn-opcion btn-alto" data-tipo="Ingreso">
-            <span class="signo">+</span>Ingreso
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Paso 3: categoría. La lista depende de la rama y del tipo. -->
-    <section class="paso" id="paso-categoria" data-paso="3" aria-label="Categoría">
-      <div class="paso-cuerpo"></div>
-      <div class="paso-acciones">
-        <div class="paso-encabezado">
-          <p class="pregunta" id="pregunta-categoria">Categoría</p>
-        </div>
-        <div class="rejilla rejilla-2 rejilla-scroll" id="rejilla-categorias"></div>
-      </div>
-    </section>
-
-    <!-- Solo en los frecuentes: cada cuánto y hasta cuándo. Se intercalan aquí
-         porque son propiedades del movimiento, no del pago. -->
-    <section class="paso" id="paso-frecuencia" data-paso="s1" aria-label="Frecuencia">
-      <div class="paso-cuerpo"></div>
-      <div class="paso-acciones">
-        <div class="paso-encabezado">
-          <p class="pregunta">¿Cada cuánto se repite?</p>
-        </div>
-        <div class="rejilla rejilla-2" id="rejilla-frecuencias"></div>
-      </div>
-    </section>
-
-    <section class="paso" id="paso-dia" data-paso="s2" aria-label="Día del mes">
-      <div class="paso-cuerpo"></div>
-      <div class="paso-acciones">
-        <div class="paso-encabezado">
-          <p class="pregunta" id="pregunta-dia">¿Qué día del mes?</p>
-        </div>
-        <div class="rejilla rejilla-dias rejilla-scroll" id="rejilla-dias"></div>
-      </div>
-    </section>
-
-    <section class="paso" id="paso-duracion" data-paso="s3" aria-label="Duración">
-      <div class="paso-cuerpo"></div>
-      <div class="paso-acciones">
-        <div class="paso-encabezado">
-          <p class="pregunta">¿Durante cuánto tiempo?</p>
-        </div>
-        <div class="rejilla rejilla-2" id="rejilla-duraciones"></div>
-      </div>
-    </section>
-
-    <!-- Paso 4: cuenta. -->
-    <section class="paso" id="paso-cuenta" data-paso="4" aria-label="Cuenta">
-      <div class="paso-cuerpo"></div>
-      <div class="paso-acciones">
-        <div class="paso-encabezado">
-          <p class="pregunta" id="pregunta-cuenta">Cuenta</p>
-        </div>
-        <div class="rejilla rejilla-2 rejilla-scroll" id="rejilla-cuentas"></div>
-      </div>
-    </section>
-
-    <!-- Paso 5: concepto, opcional. Enter también guarda. -->
-    <section class="paso" id="paso-concepto" data-paso="5" aria-label="Concepto">
-      <div class="paso-cuerpo">
-        <input type="text" id="input-concepto" class="input-concepto"
-               enterkeyhint="done" autocomplete="off" placeholder="Concepto (opcional)"
-               aria-label="Concepto">
-      </div>
-      <div class="paso-acciones">
-        <button type="button" class="btn btn-primario btn-guardar" id="btn-guardar">Guardar</button>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Un único botón "Atrás" que la app mueve al paso activo. -->
-  <!-- Se muda al paso activo en vez de repetirlo en cada uno. Lleva flecha y
-       borde porque sin ellos se leía como una etiqueta y nadie lo tocaba. -->
-  <button type="button" class="btn-atras hueco" id="btn-atras" aria-label="Volver al paso anterior">
-    <span class="flecha" aria-hidden="true">←</span> Atrás
-  </button>
-
-  <!-- Resumen del mes. Se alimenta del backend y guarda lo último que recibió,
-       para poder enseñar algo cuando no hay red. -->
-  <section class="pantalla" id="pantalla-resumen" aria-label="Resumen" hidden>
-    <header class="cabecera">
-      <h1 class="titulo" id="titulo-resumen">Resumen</h1>
-      <button type="button" id="btn-cerrar-resumen" class="btn-texto">Cerrar</button>
-    </header>
-
-    <div class="pantalla-cuerpo">
-      <p class="aviso-cache" id="aviso-cache" hidden></p>
-
-      <div class="totales">
-        <div class="total">
-          <span class="total-etiqueta">Ingresos</span>
-          <span class="total-cifra" id="total-ingresos">—</span>
-        </div>
-        <div class="total">
-          <span class="total-etiqueta">Gastos</span>
-          <span class="total-cifra" id="total-gastos">—</span>
-        </div>
-        <div class="total total-ahorro">
-          <span class="total-etiqueta" id="etiqueta-ahorro">Ahorro</span>
-          <span class="total-cifra" id="total-ahorro">—</span>
-        </div>
-      </div>
-
-      <h2 class="subtitulo">Últimos movimientos</h2>
-      <ul class="lista-movimientos" id="lista-movimientos"></ul>
-    </div>
-
-    <div class="pantalla-acciones pantalla-acciones-resumen">
-      <button type="button" id="btn-reintentar" class="btn" hidden>Reintentar envío</button>
-      <button type="button" id="btn-abrir-ajustes" class="btn-texto">Ajustes</button>
-    </div>
-  </section>
-
-  <!-- Ajustes: tapa la captura entera mientras está abierta. Solo se entra a
-       propósito, y en el primer arranque si aún no hay endpoint ni token. -->
-  <section class="pantalla" id="pantalla-ajustes" aria-label="Ajustes" hidden>
-    <header class="cabecera">
-      <h1 class="titulo">Ajustes</h1>
-      <button type="button" id="btn-cerrar-ajustes" class="btn-texto">Cerrar</button>
-    </header>
-
-    <div class="pantalla-cuerpo">
-      <label class="campo">
-        <span class="campo-etiqueta">Quién usa este teléfono</span>
-        <select id="select-usuario" class="campo-input"></select>
-        <span class="campo-ayuda">Se estampa solo en cada movimiento, sin volver
-          a preguntarlo. Si anota el otro, cámbialo aquí.</span>
-      </label>
-
-      <label class="campo">
-        <span class="campo-etiqueta">URL del Apps Script</span>
-        <input type="url" id="input-endpoint" class="campo-input" autocomplete="off"
-               inputmode="url" placeholder="https://script.google.com/macros/s/…/exec">
-        <span class="campo-ayuda">La del despliegue, la que acaba en <code>/exec</code>.</span>
-      </label>
-
-      <label class="campo">
-        <span class="campo-etiqueta">Token</span>
-        <input type="text" id="input-token" class="campo-input" autocomplete="off"
-               spellcheck="false" placeholder="pega o genera uno">
-        <span class="campo-ayuda">Tiene que ser idéntico al de las Propiedades del Script.</span>
-      </label>
-
-      <!-- Fuera del párrafo de ayuda: dentro no cabía un objetivo táctil de
-           48px sin descolocar la línea de texto. -->
-      <button type="button" id="btn-generar-token" class="btn-texto btn-secundario">
-        Generar un token nuevo
-      </button>
-
-      <p class="estado-ajustes" id="estado-ajustes" role="status" aria-live="polite"></p>
-
-      <!-- Qué versión está sirviendo el service worker. Sirve para saber si el
-           móvil tiene la última o una cacheada de hace tres despliegues. -->
-      <p class="version-app">Versión servida: <span id="version-app">—</span></p>
-    </div>
-
-    <div class="pantalla-acciones">
-      <button type="button" id="btn-probar" class="btn">Probar conexión</button>
-      <button type="button" id="btn-guardar-ajustes" class="btn btn-primario btn-guardar">Guardar</button>
-    </div>
-  </section>
-
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
-    <span class="toast-texto" id="toast-texto"></span>
-    <button type="button" class="toast-accion" id="toast-deshacer" hidden>Deshacer</button>
+  <!-- Barra de deshacer. No es un aviso flotante: ocupa el ancho entero
+       encima de las pestañas, porque borrar no pide confirmación. -->
+  <div class="deshacer" id="deshacer" hidden>
+    <span class="deshacer-texto" id="deshacer-texto"></span>
+    <button type="button" class="deshacer-boton" id="deshacer-boton">Deshacer</button>
   </div>
 
-  <!-- El orden importa. nucleo.js va primero porque lo usan todos los demás, y
-       es el mismo archivo que carga el service worker con importScripts. -->
-  <script src="config.js"></script>
-  <script src="js/nucleo.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/cola.js"></script>
-  <script src="js/ajustes.js"></script>
-  <script src="js/resumen.js"></script>
-  <script src="js/app.js"></script>
+  <nav class="tabs" id="tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab activo" data-tab="mes">Mes</button>
+      <button type="button" class="tab" data-tab="historial">Historial</button>
+      <button type="button" class="tab" data-tab="fijos">Fijos</button>
+      <button type="button" class="tab" data-tab="ahorro">Ahorro</button>
+      <button type="button" class="tab" data-tab="ajustes">Ajustes</button>
+    </div>
+    <button type="button" class="tab-anotar" id="btn-anotar">Anotar</button>
+  </nav>
+
+</div>
+
+<!-- Se enseña solo si el HTML y el JS son de versiones distintas. Ver app.js. -->
+<div id="averia" hidden></div>
+
+<!-- Sin empaquetador: el orden es el de las dependencias. config y formato no
+     dependen de nada; nucleo necesita config; estado necesita los tres; las
+     pantallas necesitan estado y vista; app.js las enciende a todas. -->
+<script src="config.js"></script>
+<script src="js/formato.js"></script>
+<script src="js/nucleo.js"></script>
+<script src="js/vista.js"></script>
+<script src="js/estado.js"></script>
+<script src="js/mes.js"></script>
+<script src="js/fijos.js"></script>
+<script src="js/ahorro.js"></script>
+<script src="js/anotar.js"></script>
+<script src="js/ajustes.js"></script>
+<script src="js/app.js"></script>
+
 </body>
 </html>
