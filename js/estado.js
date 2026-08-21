@@ -424,22 +424,31 @@ const ESTADO = (() => {
     let faltaAcumulada = 0;
     /* Solo las activas. Una meta desactivada no recibe reparto, así que
        contarla en «tienes N metas activas» y ofrecerla en el reparto era
-       prometer un destino que la hoja no iba a aceptar. */
-    return datos.metas.filter(m => m.activa !== false).map(m => {
-      const objetivo = Number(m.objetivo) || 0;
-      const guardado = Math.max(0, Math.min(Number(m.guardado) || 0, objetivo));
-      const falta = objetivo - guardado;
-      faltaAcumulada += falta;
-      return {
-        nombre: m.nombre,
-        objetivo,
-        guardado,
-        falta,
-        completa: falta <= 0,
-        avance: objetivo ? Math.max(0, Math.min(100, (guardado / objetivo) * 100)) : 0,
-        meses: ritmo > 0 ? Math.ceil(faltaAcumulada / ritmo) : null
-      };
-    });
+       prometer un destino que la hoja no iba a aceptar.
+
+       Cada una viaja con `i`, su sitio en `datos.metas`. Es la única identidad
+       estable que tiene una meta: el nombre es justo lo que cambia cuando la
+       renombras, y esta lista es una copia, así que quedarse con el objeto
+       tampoco vale —una sincronización a media palabra lo deja huérfano. */
+    return datos.metas
+      .map((m, i) => ({ m, i }))
+      .filter(({ m }) => m.activa !== false)
+      .map(({ m, i }) => {
+        const objetivo = Number(m.objetivo) || 0;
+        const guardado = Math.max(0, Math.min(Number(m.guardado) || 0, objetivo));
+        const falta = objetivo - guardado;
+        faltaAcumulada += falta;
+        return {
+          i,
+          nombre: m.nombre,
+          objetivo,
+          guardado,
+          falta,
+          completa: falta <= 0,
+          avance: objetivo ? Math.max(0, Math.min(100, (guardado / objetivo) * 100)) : 0,
+          meses: ritmo > 0 ? Math.ceil(faltaAcumulada / ritmo) : null
+        };
+      });
   }
 
   /* ------------------------------------------------------------ arranque */

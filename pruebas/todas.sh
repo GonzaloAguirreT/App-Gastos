@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las diez pruebas, cada una con el modo de servidor que necesita.
+# Las once pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -67,6 +67,7 @@ corre ahorro-proyectado
 corre cerrar-y-reabrir
 corre meses-navegables --mes-viejo
 corre mes-como-fecha --mes-como-fecha
+corre escribir-meta
 
 echo
 if [ "$fallos" -eq 0 ]; then

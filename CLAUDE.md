@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las diez, cada una con su servidor
+sh pruebas/todas.sh                  # las once, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -26,6 +26,7 @@ node pruebas/mes-recien-empezado.mjs # un mes vacío no ha ido mal todavía
 node pruebas/alto-700.mjs            # nada se sale en un móvil de verdad
 node pruebas/botones.mjs             # nada de lo pulsable puede estar muerto
 node pruebas/hoja-y-vestido.mjs      # el vestido cae donde caen los datos
+node pruebas/escribir-meta.mjs       # repintar no puede cerrarte el teclado
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 ```

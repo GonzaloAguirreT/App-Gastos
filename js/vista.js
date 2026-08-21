@@ -36,9 +36,9 @@ const VISTA = (() => {
     Object.keys(props).forEach(clave => {
       const valor = props[clave];
       if (valor === null || valor === undefined || valor === false) return;
-      if (clave === 'onClick') { nodo.addEventListener('click', valor); return; }
-      if (clave === 'onInput') { nodo.addEventListener('input', valor); return; }
-      if (clave === 'onKeyDown') { nodo.addEventListener('keydown', valor); return; }
+      if (clave === 'onClick') { nodo.addEventListener('click', porGesto(valor)); return; }
+      if (clave === 'onInput') { nodo.addEventListener('input', porGesto(valor)); return; }
+      if (clave === 'onKeyDown') { nodo.addEventListener('keydown', porGesto(valor)); return; }
       if (clave === 'clase') { nodo.className = (nodo.className + ' ' + valor).trim(); return; }
       if (clave === 'estilo') { Object.assign(nodo.style, valor); return; }
       if (clave === 'texto') { nodo.textContent = valor; return; }
@@ -62,8 +62,88 @@ const VISTA = (() => {
     nodo.appendChild(hijos instanceof Node ? hijos : document.createTextNode(String(hijos)));
   }
 
-  /** Vacía un contenedor y le mete lo nuevo. */
+  /* Lo último que se quiso pintar en un contenedor que tenía el dedo dentro.
+     Es un WeakMap y no un objeto porque la clave es el nodo: si la pantalla
+     desaparece, la entrada se va con ella. */
+  const enEspera = new WeakMap();
+
+  /**
+   * Envuelve un manejador para dejar dicho, mientras corre, que lo que pase
+   * dentro lo ha pedido la persona.
+   *
+   * Un repintado dentro de un gesto es justo lo que se acaba de pedir —el
+   * buscador filtrando la lista, un chip que se marca— y tiene que verse ya,
+   * aunque haya un campo enfocado; quien lo pide se encarga de devolver el
+   * foco. Los repintados que llegan solos —la cola que se vacía, una
+   * sincronización, un guardado con retraso— son los que no pueden llevarse por
+   * delante el campo en el que se está escribiendo.
+   *
+   * Es un contador y no un booleano porque los gestos se anidan: un manejador
+   * que dispara un click sobre otro nodo devolvería el permiso demasiado
+   * pronto. Y se suelta en el `finally` síncrono a propósito: si el manejador
+   * es asíncrono, lo que ocurra después del primer `await` ya no es el gesto,
+   * es lo que llegó luego.
+   */
+  let gestos = 0;
+  function porGesto(fn) {
+    return evento => {
+      gestos++;
+      try { return fn(evento); } finally { gestos--; }
+    };
+  }
+
+  /* ¿Está la persona escribiendo dentro de este contenedor? Sólo cuentan los
+     campos de texto: una casilla o un botón enfocados se pueden repintar sin
+     que nadie note nada. */
+  function tecleandoEn(contenedor) {
+    const dedo = document.activeElement;
+    if (!dedo || (dedo.tagName !== 'INPUT' && dedo.tagName !== 'TEXTAREA')) return false;
+    if (['checkbox', 'radio', 'button', 'submit'].indexOf(dedo.type) !== -1) return false;
+    return dedo !== contenedor && contenedor.contains(dedo);
+  }
+
+  /**
+   * Vacía un contenedor y le mete lo nuevo. Salvo que dentro haya un dedo
+   * escribiendo: entonces espera a que salga del campo.
+   *
+   * Repintar destruye los nodos, y con ellos el input enfocado. En el móvil eso
+   * cierra el teclado a media palabra y el campo vuelve a salir con lo último
+   * que se guardó —una letra, si el guardado iba por detrás—. Pasaba
+   * escribiendo el nombre de una meta, pero le pasa igual a cualquier campo de
+   * una pantalla que se repinte sola: los nombres de Quiénes, una categoría
+   * nueva, la descripción de un gasto, el token de la conexión. Basta con que
+   * la cola se vacíe o entre una sincronización mientras se teclea.
+   *
+   * Devolver el foco después de repintar no sirve: el teclado del móvil sólo se
+   * abre con un gesto de la persona, así que un `focus()` a mano deja el cursor
+   * puesto y el teclado cerrado. La única manera de no cerrarlo es no destruir
+   * el input.
+   *
+   * Lo aplazado no se pierde: se guarda y se pinta en cuanto el campo pierde el
+   * foco, así que la pantalla nunca se queda atrás más de lo que dura escribir.
+   */
   function pintar(contenedor, contenido) {
+    if (!gestos && tecleandoEn(contenedor)) {
+      /* Un solo vigilante por contenedor aunque lleguen veinte repintados:
+         sobrescribir lo que espera basta, y se queda el último. */
+      if (!enEspera.has(contenedor)) {
+        document.activeElement.addEventListener('blur', () => {
+          /* Un setTimeout porque durante el blur el foco aún no ha llegado a su
+             destino: sin él, tocar el campo de al lado parece salir de la
+             pantalla y el repintado se comería ese segundo campo. */
+          setTimeout(() => {
+            const ultimo = enEspera.get(contenedor);
+            if (!ultimo) return;
+            enEspera.delete(contenedor);
+            pintar(contenedor, ultimo);
+          }, 0);
+        }, { once: true });
+      }
+      enEspera.set(contenedor, contenido);
+      return contenedor;
+    }
+
+    enEspera.delete(contenedor);
     contenedor.textContent = '';
     poner(contenedor, contenido);
     return contenedor;
