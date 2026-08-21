@@ -92,6 +92,35 @@ const VISTA = (() => {
     };
   }
 
+  /* Los dos sitios donde algo se desliza: la columna de cada pantalla, que va en
+     vertical, y las tiras de chips, que van en horizontal. */
+  const DESLIZANTES = '.desliza, .chips.tira';
+
+  function conScroll(contenedor) {
+    const dentro = [].slice.call(contenedor.querySelectorAll(DESLIZANTES));
+    // El propio contenedor cuenta si es él quien se desliza: querySelectorAll
+    // solo mira hacia abajo.
+    return contenedor.matches && contenedor.matches(DESLIZANTES)
+      ? [contenedor].concat(dentro) : dentro;
+  }
+
+  /* Por dónde va bajada —o corrida— cada una, en orden de aparición.
+
+     El orden basta como identidad porque el árbol se vuelve a construir con el
+     mismo código: la tira de categorías sigue siendo la primera y la columna de
+     la pantalla, la segunda. */
+  function guardarScroll(contenedor) {
+    return conScroll(contenedor).map(e => [e.scrollTop, e.scrollLeft]);
+  }
+
+  function devolverScroll(contenedor, guardado) {
+    const ahora = conScroll(contenedor);
+    for (var i = 0; i < ahora.length && i < guardado.length; i++) {
+      ahora[i].scrollTop = guardado[i][0];
+      ahora[i].scrollLeft = guardado[i][1];
+    }
+  }
+
   /* ¿Está la persona escribiendo dentro de este contenedor? Sólo cuentan los
      campos de texto: una casilla o un botón enfocados se pueden repintar sin
      que nadie note nada. */
@@ -121,6 +150,16 @@ const VISTA = (() => {
    *
    * Lo aplazado no se pierde: se guarda y se pinta en cuanto el campo pierde el
    * foco, así que la pantalla nunca se queda atrás más de lo que dura escribir.
+   *
+   * Y por lo mismo se guarda y se devuelve el desplazamiento: repintar
+   * reconstruye la columna que se desliza, y una columna recién hecha empieza
+   * por arriba. Bajabas hasta la conexión, tocabas un interruptor y Ajustes se
+   * te iba otra vez al principio; en Anotar, la tira de categorías volvía a la
+   * izquierda justo después de elegir una de las últimas.
+   *
+   * Esto no pisa el «cada pantalla empieza por arriba» de ir(): allí el
+   * desplazamiento se pone a cero ANTES, sobre los nodos que todavía existen,
+   * así que lo que se guarda aquí ya es cero.
    */
   function pintar(contenedor, contenido) {
     if (!gestos && tecleandoEn(contenedor)) {
@@ -144,8 +183,10 @@ const VISTA = (() => {
     }
 
     enEspera.delete(contenedor);
+    const scroll = guardarScroll(contenedor);
     contenedor.textContent = '';
     poner(contenedor, contenido);
+    devolverScroll(contenedor, scroll);
     return contenedor;
   }
 

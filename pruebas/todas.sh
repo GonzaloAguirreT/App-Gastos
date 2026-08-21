@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las catorce pruebas, cada una con el modo de servidor que necesita.
+# Las quince pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -77,6 +77,7 @@ corre cerrar-y-reabrir
 corre meses-navegables --mes-viejo
 corre mes-como-fecha --mes-como-fecha
 corre escribir-meta
+corre no-saltar-arriba
 corre vaciar-telefono --rechaza
 
 echo
