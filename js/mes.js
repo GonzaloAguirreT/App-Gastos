@@ -15,9 +15,13 @@ const MES = (() => {
   let busca = '';
   let seleccionado = null;
 
+  /* Sin repetidos. Al cerrar el mes a mano desde Ajustes, el mes en curso y el
+     recién cerrado son el mismo, y la lista lo traía dos veces: la flecha
+     izquierda quedaba activa apuntando a la posición donde ya estabas. Un botón
+     que se ve encendido y no lleva a ninguna parte. */
   function mesesDisponibles() {
     const cerrados = ESTADO.estado().datos.cierres.map(c => c.mes);
-    return [ESTADO.mesEnCurso()].concat(cerrados);
+    return [...new Set([ESTADO.mesEnCurso()].concat(cerrados))];
   }
 
   function verMes(mes) { mesVisto = mes; pintarMes(); }
