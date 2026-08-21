@@ -6,13 +6,13 @@
  *
  *   Panel        el mes en curso, en la misma jerarquía que la pantalla Mes
  *   Año          doce filas, una por mes, de donde leen los gráficos
- *   Movimientos  una fila por apunte. Es la tabla que crece
+ *   Movimientos  una fila por apunte, con el mes que lo PAGA en «Se usa en»
  *   Fijos        las reglas que escriben solas
  *   Metas        a qué se destina el ahorro
  *   Cierres      una fila por mes cerrado, con su Total Ahorrado
  *   Reparto      el libro mayor del ahorro: cada asignación, una línea
- *   Listas       personas, cuentas y categorías; la app las lee y las escribe
- *   Config       plan, límite y avisos: lo que es de los dos
+ *   Listas       personas con su día de cobro, cuentas con su crédito, categorías
+ *   Config       ahorro esperado y avisos: lo que es de los dos
  *   _uuids       oculta, para no escribir dos veces el mismo apunte
  *
  * Panel y Año son puro cálculo: no los escribe nadie.
@@ -39,9 +39,12 @@ const HOJA_REPARTO = 'Reparto';
 const HOJA_LISTAS = 'Listas';
 const HOJA_CONFIG = 'Config';
 
-/* El plan del mes, tal y como lo citan las fórmulas de Panel y de Año. Es la
-   celda y no el rango con nombre a propósito: ver ponerNombre(). */
-const REF_PLAN = HOJA_CONFIG + '!$B$4';
+/* El ahorro esperado, tal y como lo citan las fórmulas de Panel y de Año. Es
+   la celda y no el rango con nombre a propósito: ver ponerNombre().
+
+   Config!B4 dejó de ser "el plan del mes" y pasó a ser el colchón que no se
+   quiere tocar: el techo del mes ya no se escribe a mano, es lo que entra. */
+const REF_AHORRO = HOJA_CONFIG + '!$B$4';
 
 /* Los UUID van en una hoja aparte y no en una columna oculta de Movimientos.
    Una columna oculta ensancha igual el rango que lee cualquier consulta
@@ -56,18 +59,26 @@ const MESES_VIEJOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 
 /* El orden de estos arrays ES el contrato de columnas. No reordenar: hay
    fórmulas en Panel y en Año que apuntan a letras concretas. */
-const CABECERAS_MOVIMIENTOS = ['FECHA', 'MES', 'TIPO', 'CATEGORÍA', 'DESCRIPCIÓN',
-                               'IMPORTE', 'CUENTA', 'PERSONA', 'REPARTO', 'ORIGEN', 'UUID'];
+/* SE USA EN es la columna que ordena el libro entero: el mes que PAGA la fila,
+   que no es el mes de su fecha. Todas las fórmulas de Panel y de Año filtran
+   por ella y ninguna por la fecha; si filtraran por la fecha, la factura de la
+   tarjeta aparecería en el mes en el que no la vas a pagar. */
+const CABECERAS_MOVIMIENTOS = ['FECHA', 'TIPO', 'CATEGORÍA', 'DESCRIPCIÓN', 'IMPORTE',
+                               'CUENTA', 'PERSONA', 'REPARTO', 'SE USA EN', 'ORIGEN', 'UUID'];
 
 const CABECERAS_FIJOS = ['UUID', 'TIPO', 'CONCEPTO', 'IMPORTE', 'DÍA', 'CADA (MESES)',
-                         'CUOTAS', 'RESTANTES', 'CUENTA', 'PERSONA', 'REPARTO', 'ACTIVO',
-                         'PRÓXIMO CARGO', 'ÚLTIMO CARGO'];
+                         'CUOTAS', 'RESTANTES', 'CUENTA', 'PERSONA', 'REPARTO', 'SE USA EN',
+                         'ACTIVO', 'PRÓXIMO CARGO', 'ÚLTIMO CARGO', 'MES IMPUTADO'];
 
 const CABECERAS_METAS = ['META', 'OBJETIVO', 'GUARDADO', 'FALTA', 'AVANCE', 'ORDEN', 'ACTIVA', 'NOTAS'];
-const CABECERAS_CIERRES = ['MES', 'ENTRADO', 'GASTADO', 'PLAN', 'TOTAL AHORRADO',
+const CABECERAS_CIERRES = ['MES', 'ENTRÓ', 'GASTÓ', 'AHORRO ESPERADO', 'TOTAL AHORRADO',
                            'REPARTIDO', 'SIN ASIGNAR', 'CERRADO EL'];
 const CABECERAS_REPARTO = ['MES', 'FECHA', 'META', 'MONTO', 'ORIGEN', 'UUID'];
-const CABECERAS_LISTAS = ['PERSONA', 'COLOR', 'CUENTA', 'ACTIVA', 'CATEGORÍA', 'TIPO', 'REPARTO', 'ACTIVA'];
+/* Tres listas en paralelo. La de personas lleva su día de cobro de tarjeta —es
+   de cada uno, no del hogar— y la de cuentas, cuáles aplazan el cargo. */
+const CABECERAS_LISTAS = ['PERSONA', 'COLOR', 'DÍA COBRO TC',
+                          'CUENTA', 'ES CRÉDITO', 'ACTIVA',
+                          'CATEGORÍA', 'TIPO', 'REPARTO', 'ACTIVA'];
 
 /* En Metas, Cierres, Reparto, Listas y Config la cabecera va en la fila 4: las
    dos primeras son el título y una frase que explica qué es cada hoja, y la
@@ -89,6 +100,10 @@ const COLORES_PERSONA = ['#3D5A6C', '#A34E6B', '#5E7A52', '#9A7A3F'];
    manda la hoja. */
 const PERSONAS_SEMILLA = ['Gonzalo', 'Camila'];
 const CUENTAS_SEMILLA = ['Cuenta Corriente', 'Tarjeta Credito', 'Tarjeta Debito', 'Efectivo'];
+/* Cuáles de esas cuentas aplazan el cargo al mes que las factura. */
+const CREDITO_SEMILLA = ['Tarjeta Credito'];
+/* Y con qué día, hasta que cada persona ponga el suyo en Listas!C. */
+const DIA_COBRO_SEMILLA = 5;
 const CATEGORIAS_SEMILLA = [
   ['Alimentación', 'Gasto', 'Común'],
   ['Restaurantes', 'Gasto', 'Personal'],
@@ -110,8 +125,8 @@ const CATEGORIAS_SEMILLA = [
   ['Arriendo cobrado', 'Ingreso', 'Común']
 ];
 
-const PLAN_SEMILLA = 1600000;
-const LIMITE_SEMILLA = 200000;
+/* El colchón del mes. Ya no hay «plan»: el techo es lo que entra. */
+const AHORRO_SEMILLA = 200000;
 
 /* Cuántas filas de cada tabla preparan las fórmulas. Son topes generosos y
    baratos: una fórmula sobre una fila vacía devuelve "" y no se ve. */
@@ -239,10 +254,15 @@ function instalar() {
 /**
  * Los movimientos que ya hay, sea cual sea el formato en que estén.
  *
- * El formato viejo tenía siete columnas —Fecha, Concepto, Importe, Cuenta,
- * Tipo, Categoría, Usuario— y el nuevo tiene once. Lo que era "Concepto" pasa
- * a "Descripción", que es lo que siempre fue: texto libre. La categoría ya
- * estaba en su columna.
+ * Han existido tres. El primero tenía siete columnas —Fecha, Concepto,
+ * Importe, Cuenta, Tipo, Categoría, Usuario—; el segundo once, con una columna
+ * MES en la B que era una fórmula sobre la fecha; el de ahora también once,
+ * pero sin MES y con SE USA EN en la I, que es un dato y no una fórmula porque
+ * el mes que paga una compra no siempre es el de su fecha.
+ *
+ * Se distinguen por la cabecera de la B, que es lo único que dice de verdad
+ * qué formato hay delante. Un movimiento del formato intermedio se queda sin
+ * «Se usa en»: se lo pone escribirMovimientos, que lo calcula.
  */
 function leerMovimientosParaMigrar(libro) {
   const hoja = libro.getSheetByName(HOJA_MOVIMIENTOS);
@@ -250,15 +270,25 @@ function leerMovimientosParaMigrar(libro) {
 
   const ancho = hoja.getLastColumn();
   const filas = hoja.getRange(2, 1, hoja.getLastRow() - 1, ancho).getValues();
-  const nuevo = ancho >= 11 && String(hoja.getRange(1, 2).getValue()).toUpperCase().indexOf('MES') === 0;
+  const cabeceraB = String(hoja.getRange(1, 2).getValue()).toUpperCase();
+  const conMes = ancho >= 11 && cabeceraB.indexOf('MES') === 0;
+  const actual = ancho >= 11 && cabeceraB.indexOf('TIPO') === 0;
 
   return filas
     .filter(f => f[0] instanceof Date)
-    .map(f => nuevo
-      ? { fecha: f[0], tipo: f[2], categoria: f[3], descripcion: f[4], importe: f[5],
-          cuenta: f[6], persona: f[7], reparto: f[8], origen: f[9] || 'app', uuid: f[10] || '' }
-      : { fecha: f[0], tipo: f[4], categoria: f[5], descripcion: f[1], importe: f[2],
-          cuenta: f[3], persona: f[6], reparto: '', origen: 'app', uuid: '' });
+    .map(f => {
+      if (actual) {
+        return { fecha: f[0], tipo: f[1], categoria: f[2], descripcion: f[3], importe: f[4],
+                 cuenta: f[5], persona: f[6], reparto: f[7], paraMes: mesDeCelda(f[8]),
+                 origen: f[9] || 'app', uuid: f[10] || '' };
+      }
+      if (conMes) {
+        return { fecha: f[0], tipo: f[2], categoria: f[3], descripcion: f[4], importe: f[5],
+                 cuenta: f[6], persona: f[7], reparto: f[8], origen: f[9] || 'app', uuid: f[10] || '' };
+      }
+      return { fecha: f[0], tipo: f[4], categoria: f[5], descripcion: f[1], importe: f[2],
+               cuenta: f[3], persona: f[6], reparto: '', origen: 'app', uuid: '' };
+    });
 }
 
 /**
@@ -271,14 +301,21 @@ function leerMovimientosParaMigrar(libro) {
 function leerFijosParaMigrar(libro) {
   const nueva = libro.getSheetByName(HOJA_FIJOS);
   if (nueva && nueva.getLastRow() > 1) {
-    return nueva.getRange(2, 1, nueva.getLastRow() - 1, 14).getValues()
+    /* La L era ACTIVO y ahora es SE USA EN, con todo lo de detrás corrido una
+       columna. Se mira la cabecera y no el ancho: una hoja del formato viejo
+       puede tener columnas de sobra a la derecha por cualquier motivo. */
+    const conUsaEn = String(nueva.getRange(1, 12).getValue()).toUpperCase().indexOf('SE USA') === 0;
+    const d = conUsaEn ? 1 : 0;
+    return nueva.getRange(2, 1, nueva.getLastRow() - 1, conUsaEn ? 16 : 14).getValues()
       .filter(f => f[2])
       .map(f => ({
         uuid: f[0] || nuevoUuid(), tipo: f[1] || 'Gasto', concepto: f[2], importe: Number(f[3]) || 0,
         dia: Number(f[4]) || 1, cada: Number(f[5]) || 1, cuotas: Number(f[6]) || 0,
         restantes: Number(f[7]) || 0, cuenta: f[8], persona: f[9], reparto: f[10] || 'Personal',
-        activo: f[11] !== false, prox: f[12] instanceof Date ? f[12] : null,
-        ultimo: f[13] instanceof Date ? f[13] : null
+        usaEn: conUsaEn && f[11] === 'mes siguiente' ? 'siguiente' : 'mismo',
+        activo: f[11 + d] !== false,
+        prox: f[12 + d] instanceof Date ? f[12 + d] : null,
+        ultimo: f[13 + d] instanceof Date ? f[13 + d] : null
       }));
   }
 
@@ -322,25 +359,51 @@ function leerFijosParaMigrar(libro) {
 /** Las listas que ya hay en el libro; si no hay ninguna, la semilla. */
 function leerListasExistentes(libro) {
   const hoja = libro.getSheetByName(HOJA_LISTAS);
-  const vacio = { personas: [], cuentas: [], categorias: [] };
+  /* `inactivas` no filtra nada: solo recuerda qué está desmarcado. Filtrar aquí
+     sería tirarlo, porque escribirListas vuelca de vuelta lo que esta función
+     devuelve y la siguiente escritura de Listas lo borraría de la hoja. Quien
+     filtra es leerLibro, que es lo que ve la app. */
+  const vacio = { personas: [], cuentas: [], credito: [], categorias: [],
+                  inactivas: { cuentas: [], categorias: [] } };
 
   if (hoja && hoja.getLastRow() >= FILA_DATOS) {
-    const filas = hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, 8).getValues();
+    const filas = hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, 10).getValues();
     filas.forEach(f => {
-      if (f[0]) vacio.personas.push({ nombre: String(f[0]), color: String(f[1] || '') });
-      if (f[2]) vacio.cuentas.push(String(f[2]));
-      if (f[4]) vacio.categorias.push({
-        nombre: String(f[4]),
-        tipo: f[5] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-        reparto: f[6] === 'Común' ? 'Común' : 'Personal'
+      if (f[0]) vacio.personas.push({
+        nombre: String(f[0]),
+        color: String(f[1] || ''),
+        // El día de cobro de SU tarjeta. Vacío o cero significa que no aplaza.
+        diaCobro: Number(f[2]) || 0
       });
+      /* «Activa» en FALSE retira la cuenta o la categoría de la app sin
+         borrarla: lo que ya se escribió con ella sigue sumando y el panel sigue
+         cuadrando, pero deja de ofrecerse al anotar. Desmarcar la casilla desde
+         la hoja no hacía absolutamente nada. */
+      if (f[3]) {
+        vacio.cuentas.push(String(f[3]));
+        if (f[4] === true) vacio.credito.push(String(f[3]));
+        if (f[5] === false) vacio.inactivas.cuentas.push(String(f[3]));
+      }
+      if (f[6]) {
+        vacio.categorias.push({
+          nombre: String(f[6]),
+          tipo: f[7] === 'Ingreso' ? 'Ingreso' : 'Gasto',
+          reparto: f[8] === 'Común' ? 'Común' : 'Personal'
+        });
+        if (f[9] === false) vacio.inactivas.categorias.push(String(f[6]));
+      }
     });
   }
 
   if (!vacio.personas.length) {
-    vacio.personas = PERSONAS_SEMILLA.map((n, i) => ({ nombre: n, color: COLORES_PERSONA[i] }));
+    vacio.personas = PERSONAS_SEMILLA.map((n, i) => ({
+      nombre: n, color: COLORES_PERSONA[i], diaCobro: DIA_COBRO_SEMILLA
+    }));
   }
-  if (!vacio.cuentas.length) vacio.cuentas = CUENTAS_SEMILLA.slice();
+  if (!vacio.cuentas.length) {
+    vacio.cuentas = CUENTAS_SEMILLA.slice();
+    vacio.credito = CREDITO_SEMILLA.slice();
+  }
   if (!vacio.categorias.length) {
     vacio.categorias = CATEGORIAS_SEMILLA.map(c => ({ nombre: c[0], tipo: c[1], reparto: c[2] }));
   }
@@ -362,27 +425,36 @@ function escribirListas(libro, listas) {
   const hoja = hojaLimpia(libro, HOJA_LISTAS);
   titular(hoja, 'Listas',
     'La app lee estas listas. Los textos deben coincidir palabra por palabra con los de Movimientos.');
-  hoja.getRange(FILA_CABECERA, 1, 1, 8).setValues([CABECERAS_LISTAS]).setFontWeight('bold');
+  hoja.getRange(FILA_CABECERA, 1, 1, 10).setValues([CABECERAS_LISTAS]).setFontWeight('bold');
 
+  const credito = listas.credito || [];
+  const apagadas = (listas.inactivas || {}).cuentas || [];
+  const apagadasCat = (listas.inactivas || {}).categorias || [];
   const filas = [];
   const cuantas = Math.max(listas.personas.length, listas.cuentas.length,
                            listas.categorias.length, TOPE_CATEGORIAS);
   for (var i = 0; i < cuantas; i++) {
     const p = listas.personas[i];
     const c = listas.categorias[i];
+    const cuenta = listas.cuentas[i] || '';
     filas.push([
       p ? p.nombre : '',
       p ? (p.color || COLORES_PERSONA[i % COLORES_PERSONA.length]) : (i < TOPE_PERSONAS ? COLORES_PERSONA[i] : ''),
-      listas.cuentas[i] || '',
-      listas.cuentas[i] ? true : '',
+      p ? (Number(p.diaCobro) || '') : '',
+      cuenta,
+      cuenta ? credito.indexOf(cuenta) !== -1 : '',
+      cuenta ? apagadas.indexOf(cuenta) === -1 : '',
       c ? c.nombre : '',
       c ? c.tipo : '',
       c ? c.reparto : '',
-      c ? true : ''
+      c ? apagadasCat.indexOf(c.nombre) === -1 : ''
     ]);
   }
-  hoja.getRange(FILA_DATOS, 1, filas.length, 8).setValues(filas);
-  hoja.setColumnWidth(1, 150).setColumnWidth(3, 170).setColumnWidth(5, 170);
+  hoja.getRange(FILA_DATOS, 1, filas.length, 10).setValues(filas);
+  // Casillas de verdad: «es crédito» se marca con el dedo desde la hoja igual
+  // que desde la app, y una casilla no se puede escribir mal.
+  hoja.getRange(FILA_DATOS, 5, filas.length, 1).insertCheckboxes();
+  hoja.setColumnWidth(1, 150).setColumnWidth(4, 170).setColumnWidth(7, 170);
 }
 
 /** `previo` llega de fuera: para cuando se llama a esto, Config ya se va a
@@ -392,57 +464,77 @@ function escribirConfig(libro, previo) {
   titular(hoja, 'Config',
     'Lo que la app lee al arrancar. El token NO va aquí: vive solo en el teléfono.');
 
-  hoja.getRange('A4:C8').setValues([
-    ['Plan del mes', previo.plan, 'común para todas las personas'],
+  const s = sep(hoja);
+
+  hoja.getRange('A4:C7').setValues([
+    ['Ahorro esperado', previo.ahorroEsperado, 'el colchón: de aquí sale el tope de cada uno'],
     ['Moneda', 'CLP', 'sin decimales, miles con punto'],
     ['Símbolo', '$', ''],
-    ['Límite de aviso', previo.limite, 'avisa cuando el saldo baja de aquí'],
     ['Día de cierre', 'último', 'la app cierra sola esa noche']
   ]);
 
-  hoja.getRange('A10:C13').setValues([
+  hoja.getRange('A9:C12').setValues([
     ['AVISO', 'ACTIVO', 'CUÁNDO'],
     ['El día que toca un fijo', previo.avisos.fijo, 'por la mañana'],
-    ['Saldo bajo el límite', previo.avisos.saldo, 'una vez por mes'],
+    ['Saldo bajo el ahorro esperado', previo.avisos.saldo, 'una vez por mes'],
     ['Resumen semanal', previo.avisos.semanal, 'domingos por la noche']
   ]);
-  hoja.getRange('A10:C10').setFontWeight('bold');
-  hoja.getRange('B11:B13').insertCheckboxes();
+  hoja.getRange('A9:C9').setFontWeight('bold');
+  hoja.getRange('B10:B12').insertCheckboxes();
 
-  hoja.getRange('A15:C20').setValues([
+  /* Dos de estos controles tienen que dar 0 SIEMPRE. Un movimiento sin «Se usa
+     en» no aparece en ningún mes: no es un aviso, es una fila perdida. */
+  hoja.getRange('A14:C20').setValues([
     ['CONTROL', 'VALOR', 'QUÉ ES'],
     ['Movimientos escritos', '=COUNTA(' + HOJA_MOVIMIENTOS + '!$A$2:$A)', 'filas con fecha'],
-    ['Fijos activos', '=COUNTIF(' + HOJA_FIJOS + '!$L$2:$L' + sep(hoja) + 'TRUE)', 'reglas que siguen cobrando'],
-    ['Metas activas', '=COUNTIF(' + HOJA_METAS + '!$G$5:$G' + sep(hoja) + 'TRUE)', 'reciben reparto'],
+    ['Sin Se usa en',
+      '=COUNTIFS(' + HOJA_MOVIMIENTOS + '!$A$2:$A' + s + '"<>"' + s +
+      HOJA_MOVIMIENTOS + '!$I$2:$I' + s + '"")',
+      'filas que no aparecen en ningún mes; 0 es lo esperado'],
+    ['Fijos activos', '=COUNTIF(' + HOJA_FIJOS + '!$M$2:$M' + s + 'TRUE)', 'reglas que siguen cobrando'],
+    ['Metas activas', '=COUNTIF(' + HOJA_METAS + '!$G$5:$G' + s + 'TRUE)', 'reciben reparto'],
     ['Meses cerrados', '=COUNTA(' + HOJA_CIERRES + '!$A$5:$A)', 'con Total Ahorrado escrito'],
     ['Descuadre de reparto', '=SUM(' + HOJA_CIERRES + '!$G$5:$G)', 'ahorro cerrado sin meta; 0 es lo esperado']
   ]);
-  hoja.getRange('A15:C15').setFontWeight('bold');
+  hoja.getRange('A14:C14').setFontWeight('bold');
 
-  /* Los nombres definidos son una comodidad para quien escriba sus propias
-     fórmulas en la hoja: PLAN se lee mejor que Config!$B$4. Las fórmulas que
-     escribe este script NO los usan —usan la celda directamente— para que, si
-     alguna vez no se pudieran crear, la consecuencia fuera perder una comodidad
+  /* El nombre definido es una comodidad para quien escriba sus propias fórmulas
+     en la hoja: AHORRO_ESPERADO se lee mejor que Config!$B$4. Las fórmulas que
+     escribe este script NO lo usan —usan la celda directamente— para que, si
+     alguna vez no se pudiera crear, la consecuencia fuera perder una comodidad
      y no un panel entero lleno de #¿NOMBRE?. */
-  ponerNombre(libro, 'PLAN', hoja.getRange('B4'));
-  ponerNombre(libro, 'LIMITE', hoja.getRange('B7'));
+  ponerNombre(libro, 'AHORRO_ESPERADO', hoja.getRange('B4'));
 
   formatoSeguro(hoja.getRange('B4'), '#,##0');
-  formatoSeguro(hoja.getRange('B7'), '#,##0');
-  hoja.setColumnWidth(1, 190).setColumnWidth(3, 320);
+  hoja.setColumnWidth(1, 220).setColumnWidth(3, 320);
 }
 
-/** Lo que había en Config antes de rehacerla, para no perder el plan. */
+/** Lo que había en Config antes de rehacerla, para no perder lo que valía. */
 function leerConfigActual(libro) {
   const hoja = libro.getSheetByName(HOJA_CONFIG);
-  const base = { plan: PLAN_SEMILLA, limite: LIMITE_SEMILLA,
+  const base = { ahorroEsperado: AHORRO_SEMILLA,
                  avisos: { fijo: true, saldo: true, semanal: false } };
   if (!hoja) return base;
-  const plan = Number(hoja.getRange('B4').getValue());
-  const limite = Number(hoja.getRange('B7').getValue());
-  if (plan > 0) base.plan = plan;
-  if (limite > 0) base.limite = limite;
-  const avisos = hoja.getRange('B11:B13').getValues();
+
+  /* B4 cambió de significado: era «plan del mes» y ahora es el ahorro
+     esperado. En una hoja del formato anterior, B4 trae el plan —una cifra de
+     siete dígitos que como colchón no tiene sentido— y B7 el viejo límite de
+     aviso, que ES el colchón. Se distingue por la etiqueta de A4, que es lo
+     único que dice de verdad qué hay en la celda. */
+    const etiqueta = String(hoja.getRange('A4').getValue() || '').toLowerCase();
+  const b4 = Number(hoja.getRange('B4').getValue());
+  if (etiqueta.indexOf('plan') !== -1) {
+    const viejoLimite = Number(hoja.getRange('B7').getValue());
+    if (viejoLimite > 0) base.ahorroEsperado = viejoLimite;
+  } else if (b4 > 0) {
+    base.ahorroEsperado = b4;
+  }
+
+  /* Los avisos subieron una fila al desaparecer el límite. Se leen las dos
+     posiciones y gana la que tenga algo: durante la migración conviven. */
+  const filaNueva = hoja.getRange('B10:B12').getValues();
+  const filaVieja = hoja.getRange('B11:B13').getValues();
+  const avisos = etiqueta.indexOf('plan') !== -1 ? filaVieja : filaNueva;
   base.avisos = { fijo: avisos[0][0] !== false, saldo: avisos[1][0] !== false, semanal: avisos[2][0] === true };
   return base;
 }
@@ -453,45 +545,84 @@ function escribirMovimientos(libro, movimientos, categorias) {
   hoja.setFrozenRows(1);
 
   const repartoDe = repartoPorCategoria(categorias);
+  const listas = leerListasExistentes(libro);
+
+  /* «Se usa en» se fuerza a texto ANTES de escribir nada. Sin eso Sheets
+     reconoce "2026-08" como el 1 de agosto y lo guarda como fecha de verdad; al
+     leerlo vuelve "Sat Aug 01 2026 00:00:00 GMT+0200" y ningún SUMIFS casa con
+     él. Es la misma trampa que ya costó un mes cerrado llamado "Undefined". */
+  formatoSeguro(hoja.getRange('I:I'), '@');
 
   if (movimientos.length) {
-    const filas = movimientos.map(m => [
-      m.fecha,
-      '',                                   // la fórmula del mes se pone después
-      m.tipo === 'Ingreso' ? 'Ingreso' : 'Gasto',
-      m.categoria || '',
-      m.descripcion || '',
-      Number(m.importe) || 0,
-      m.cuenta || '',
-      m.persona || '',
-      m.reparto || repartoDe[m.categoria] || 'Personal',
-      m.origen || 'app',
-      m.uuid || ''
-    ]);
+    const filas = movimientos.map(m => {
+      const fila = {
+        fecha: m.fecha instanceof Date ? iso(m.fecha) : String(m.fecha),
+        tipo: m.tipo === 'Ingreso' ? 'Ingreso' : 'Gasto',
+        cuenta: m.cuenta || '', persona: m.persona || '', usaEn: m.usaEn
+      };
+      return [
+        m.fecha,
+        fila.tipo,
+        m.categoria || '',
+        m.descripcion || '',
+        Number(m.importe) || 0,
+        fila.cuenta,
+        fila.persona,
+        m.reparto || repartoDe[m.categoria] || 'Personal',
+        m.paraMes || seUsaEn(fila, listas),
+        m.origen || 'app',
+        m.uuid || ''
+      ];
+    });
     hoja.getRange(2, 1, filas.length, 11).setValues(filas);
   }
 
   /* La última fila se cuenta, no se pregunta. getLastRow() puede venir inflado
      por la sonda que sep() escribe en Z200 para averiguar el separador: aunque
      se borre acto seguido, Sheets no siempre encoge el rango usado, y entonces
-     se escribirían doscientas fórmulas del mes sobre filas vacías. */
+     se daría formato a doscientas filas vacías. */
   const ultima = movimientos.length + 1;
-  ponerFormulaMes(hoja, 2, ultima);
   formatoSeguro(hoja.getRange(2, 1, ultima - 1, 1), 'yyyy-mm-dd');
-  formatoSeguro(hoja.getRange(2, 6, ultima - 1, 1), '#,##0');
-  hoja.setColumnWidth(4, 140).setColumnWidth(5, 200).setColumnWidth(7, 150);
+  formatoSeguro(hoja.getRange(2, 5, ultima - 1, 1), '#,##0');
+  hoja.setColumnWidth(3, 140).setColumnWidth(4, 200).setColumnWidth(6, 150);
+
+  ponerFiltroYDesplegables(hoja, listas);
 }
 
-/** La columna Mes es una fórmula y no un dato: escrita a mano se desincroniza
- *  en cuanto alguien corrige una fecha, y nadie se entera. */
-function ponerFormulaMes(hoja, desde, hasta) {
-  if (hasta < desde) return;
-  const s = sep(hoja);
-  const formulas = [];
-  for (var f = desde; f <= hasta; f++) {
-    formulas.push(['=IF($A' + f + '=""' + s + '""' + s + 'TEXT($A' + f + s + '"yyyy-mm"))']);
+/**
+ * El autofiltro de Movimientos y los desplegables de sus columnas de lista.
+ *
+ * Los desplegables no son un adorno: los SUMIFS del Panel comparan texto
+ * exacto, así que una fila escrita a mano en la hoja con "Alimentacion" sin
+ * tilde no la suma nadie y no lo dice ningún error. Con la lista delante, eso
+ * no pasa.
+ *
+ * Va en su propia función y con try/catch porque un libro puede tener ya un
+ * filtro puesto a mano, y en Apps Script crear un segundo lanza. Perder el
+ * filtro es una molestia; perder la instalación entera por eso, no.
+ */
+function ponerFiltroYDesplegables(hoja, listas) {
+  const desde = 2;
+  const hasta = Math.max(400, hoja.getMaxRows());
+
+  const lista = (columna, valores) => {
+    if (!valores.length) return;
+    const regla = SpreadsheetApp.newDataValidation()
+      .requireValueInList(valores, true).setAllowInvalid(false).build();
+    hoja.getRange(desde, columna, hasta - desde + 1, 1).setDataValidation(regla);
+  };
+  lista(2, ['Gasto', 'Ingreso']);
+  lista(6, listas.cuentas);
+  lista(7, listas.personas.map(p => p.nombre));
+  lista(8, ['Común', 'Personal']);
+
+  try {
+    const previo = hoja.getFilter();
+    if (previo) previo.remove();
+    hoja.getRange(1, 1, hasta, 11).createFilter();
+  } catch (e) {
+    console.log('No se pudo poner el autofiltro de Movimientos: ' + e);
   }
-  hoja.getRange(desde, 2, formulas.length, 1).setFormulas(formulas);
 }
 
 /**
@@ -502,6 +633,35 @@ function ponerFormulaMes(hoja, desde, hasta) {
  * repartirse igual que un gasto suelto de Suscripciones, o el panel acaba
  * contando en Personal lo mismo que ya contaba en Común.
  */
+/**
+ * El mes que PAGA una fila: «Se usa en», en `yyyy-mm`.
+ *
+ * Lo calcula el backend y no el teléfono, y está en una sola función, porque es
+ * la decisión que ordena el libro entero: dos teléfonos con las listas
+ * desincronizadas escribirían meses distintos para la misma compra.
+ *
+ * Tres casos:
+ *   gasto normal            → el mes de su fecha;
+ *   gasto con crédito       → el de su fecha si compró ANTES del día de cobro
+ *                             de esa persona, el siguiente desde ese día;
+ *   ingreso                 → el mes en que se cobra, o el siguiente si la fila
+ *                             lo declara (`usaEn: 'siguiente'`).
+ */
+function seUsaEn(m, listas) {
+  const mes = String(m.fecha).slice(0, 7);
+  if (m.tipo === 'Ingreso') return m.usaEn === 'siguiente' ? mesMas(mes, 1) : mes;
+
+  const datos = listas || leerListasExistentes(SpreadsheetApp.getActiveSpreadsheet());
+  if (datos.credito.indexOf(m.cuenta) === -1) return mes;
+
+  const persona = datos.personas.filter(p => p.nombre === m.persona)[0];
+  const corte = Number(persona && persona.diaCobro) || 0;
+  // Sin día de cobro no se aplaza nada: mientras la hoja no traiga la columna,
+  // imputar todo al mes de la compra se parece más a la verdad que aplazarlo.
+  if (!corte) return mes;
+  return Number(String(m.fecha).slice(8, 10)) < corte ? mes : mesMas(mes, 1);
+}
+
 function repartoPorCategoria(categorias) {
   const tabla = {};
   (categorias || []).forEach(c => { tabla[c.nombre] = c.reparto; });
@@ -510,7 +670,7 @@ function repartoPorCategoria(categorias) {
 
 function escribirFijos(libro, fijos, categorias) {
   const hoja = hojaLimpia(libro, HOJA_FIJOS);
-  hoja.getRange(1, 1, 1, 14).setValues([CABECERAS_FIJOS]).setFontWeight('bold');
+  hoja.getRange(1, 1, 1, 16).setValues([CABECERAS_FIJOS]).setFontWeight('bold');
   hoja.setFrozenRows(1);
 
   /* El concepto de un fijo ES una categoría, así que de ahí sale su reparto
@@ -523,16 +683,40 @@ function escribirFijos(libro, fijos, categorias) {
   if (fijos.length) {
     const filas = fijos.map(f => [
       f.uuid, f.tipo, f.concepto, f.importe, f.dia, f.cada, f.cuotas || '', f.restantes || '',
-      f.cuenta, f.persona, f.reparto || repartoDe[f.concepto] || 'Personal', f.activo !== false,
-      f.prox || calcularProximo(f, hoy()), f.ultimo || ''
+      f.cuenta, f.persona, f.reparto || repartoDe[f.concepto] || 'Personal',
+      textoUsaEn(f), f.activo !== false,
+      f.prox || calcularProximo(f, hoy()), f.ultimo || '', ''
     ]);
-    hoja.getRange(2, 1, filas.length, 14).setValues(filas);
+    hoja.getRange(2, 1, filas.length, 16).setValues(filas);
   }
 
-  hoja.getRange('L2:L' + (TOPE_FIJOS + 1)).insertCheckboxes();
+  hoja.getRange('M2:M' + (TOPE_FIJOS + 1)).insertCheckboxes();
   formatoSeguro(hoja.getRange('D2:D'), '#,##0');
-  formatoSeguro(hoja.getRange('M2:N'), 'yyyy-mm-dd');
+  formatoSeguro(hoja.getRange('N2:O'), 'yyyy-mm-dd');
+  ponerFormulaMesImputado(hoja, 2, TOPE_FIJOS + 1);
   hoja.setColumnWidth(1, 90).setColumnWidth(3, 170);
+}
+
+/** «Mes siguiente» solo lo llevan los ingresos: un gasto sale el día que sale. */
+function textoUsaEn(f) {
+  return f.tipo === 'Ingreso' && f.usaEn === 'siguiente' ? 'mes siguiente' : 'mismo mes';
+}
+
+/**
+ * El mes al que imputa un fijo, derivado de su próximo cargo y de su «Se usa
+ * en». Es fórmula y no dato porque los dos de los que depende cambian solos:
+ * escrito a mano se desincroniza en cuanto el fijo cobra, y nadie se entera.
+ */
+function ponerFormulaMesImputado(hoja, desde, hasta) {
+  if (hasta < desde) return;
+  const s = sep(hoja);
+  const formulas = [];
+  for (var f = desde; f <= hasta; f++) {
+    formulas.push(['=IF($N' + f + '=""' + s + '""' + s +
+      'TEXT(EDATE($N' + f + s + 'IF($L' + f + '="mes siguiente"' + s + '1' + s + '0))' + s +
+      '"yyyy-mm"))']);
+  }
+  hoja.getRange(desde, 16, formulas.length, 1).setFormulas(formulas);
 }
 
 function escribirMetas(libro, metas) {
@@ -570,8 +754,29 @@ function escribirMetas(libro, metas) {
   hoja.getRange(FILA_DATOS, 3, TOPE_METAS, 3).setFormulas(formulas);
 
   hoja.getRange('G5:G' + (FILA_DATOS + TOPE_METAS - 1)).insertCheckboxes();
+
+  /* La fila de total y, dos más abajo, lo que se ha ahorrado y todavía no tiene
+     meta. Sin ese número hay que restar a mano dos columnas de dos hojas para
+     saber si el reparto cuadra, que es justo lo que nadie hace. */
+  const ultima = FILA_DATOS + TOPE_METAS - 1;
+  const filaTotal = ultima + 2;
+  const suma = col => '=SUM(' + col + FILA_DATOS + ':' + col + ultima + ')';
+  hoja.getRange(filaTotal, 1, 1, 4)
+      .setValues([['Total', '', '', '']]);
+  hoja.getRange(filaTotal, 2, 1, 3)
+      .setFormulas([[suma('B'), suma('C'), suma('D')]]);
+
+  const filaLibre = filaTotal + 2;
+  hoja.getRange(filaLibre, 1, 1, 3).setValues([
+    ['SIN ASIGNAR',
+     '=SUM(' + HOJA_CIERRES + '!$E:$E)-SUM($C' + FILA_DATOS + ':$C' + ultima + ')',
+     'ahorro cerrado que aún no tiene meta']
+  ]);
+
   formatoSeguro(hoja.getRange('B5:D'), '#,##0');
   formatoSeguro(hoja.getRange('E5:E'), '0%');
+  formatoSeguro(hoja.getRange(filaTotal, 2, 1, 3), '#,##0');
+  formatoSeguro(hoja.getRange(filaLibre, 2), '#,##0');
   hoja.setColumnWidth(1, 200);
 }
 
@@ -595,8 +800,20 @@ function escribirCierres(libro, cierres) {
   }
 
   ponerFormulasCierre(hoja, FILA_DATOS, FILA_DATOS + TOPE_CIERRES - 1);
+
+  /* La fila de total, dos por debajo de la última. La columna del ahorro
+     esperado se queda vacía a propósito: sumar colchones de meses distintos no
+     da un número que signifique nada. */
+  const ultima = FILA_DATOS + TOPE_CIERRES - 1;
+  const filaTotal = ultima + 2;
+  const suma = col => '=SUM(' + col + FILA_DATOS + ':' + col + ultima + ')';
+  hoja.getRange(filaTotal, 1).setValue('Total');
+  hoja.getRange(filaTotal, 2, 1, 2).setFormulas([[suma('B'), suma('C')]]);
+  hoja.getRange(filaTotal, 5, 1, 3).setFormulas([[suma('E'), suma('F'), suma('G')]]);
+
   formatoSeguro(hoja.getRange('B5:G'), '#,##0');
   formatoSeguro(hoja.getRange('H5:H'), 'yyyy-mm-dd hh:mm');
+  formatoSeguro(hoja.getRange(filaTotal, 2, 1, 6), '#,##0');
   hoja.setColumnWidth(5, 130).setColumnWidth(8, 140);
 }
 
@@ -605,13 +822,11 @@ function ponerFormulasCierre(hoja, desde, hasta) {
   const formulas = [];
   for (var f = desde; f <= hasta; f++) {
     formulas.push([
-      /* Total Ahorrado = PLAN + entrado − gastado, no entrado − gastado.
-         El plan hace de ingreso: se fija cada mes a partir de lo que se va a
-         cobrar, así que los sueldos no se anotan como movimientos y sin el plan
-         esta columna daría siempre negativo. Lo que sí se anote —un bono, una
-         devolución— entra por la B y se suma encima.
+      /* Total Ahorrado = entrado − gastado. La D ya no es un plan que haga de
+         ingreso: es el ahorro esperado de ese mes, que es una referencia y no
+         un ingreso, y sumarla aquí inflaría el ahorro por el colchón.
          Si se cambia aquí, hay que cambiarlo también en ESTADO.resumen. */
-      '=IF($A' + f + '=""' + s + '""' + s + '$D' + f + '+$B' + f + '-$C' + f + ')',
+      '=IF($A' + f + '=""' + s + '""' + s + '$B' + f + '-$C' + f + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
         'SUMIF(' + HOJA_REPARTO + '!$A:$A' + s + '$A' + f + s + HOJA_REPARTO + '!$D:$D))',
       '=IF($A' + f + '=""' + s + '""' + s + '$E' + f + '-$F' + f + ')'
@@ -691,63 +906,75 @@ function crearPanel(libro) {
   hoja.getRange('A4:C4').setValues([['MES', primero, 'primer día del mes']]);
   formatoSeguro(hoja.getRange('B4'), 'yyyy-mm-dd');
 
-  // Rango del mes elegido, tal como lo quieren todos los SUMIFS de esta hoja.
-  const desde = '">="&$B$4';
-  const hasta = '"<"&EOMONTH($B$4' + s + '0)+1';
-  const enElMes = M + '!$A:$A' + s + desde + s + M + '!$A:$A' + s + hasta;
-  const suma = (tipo, extra) => '=SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"' + tipo + '"' +
+  /* El mes elegido se compara contra «Se usa en» y NUNCA contra la fecha. Es
+     la decisión que ordena el libro: una compra con tarjeta del 25 de julio la
+     paga agosto, y filtrando por la fecha aparecería en el mes en el que no la
+     vas a pagar. */
+  const elMes = 'TEXT($B$4' + s + '"yyyy-mm")';
+  const enElMes = M + '!$I:$I' + s + elMes;
+  const suma = (tipo, extra) => '=SUMIFS(' + M + '!$E:$E' + s + M + '!$B:$B' + s + '"' + tipo + '"' +
     (extra ? s + extra : '') + s + enElMes + ')';
 
   hoja.getRange('A6:F8').setValues([
-    ['SALDO DISPONIBLE', '', '', 'PLAN DEL MES', '', 'AHORRO PROYECTADO'],
-    ['=' + REF_PLAN + '-B10-B11', '', '', '=' + REF_PLAN, '', '=B9-B10-B11'],
-    ['plan − gastado − por venir', '', '', 'se edita en Config', '', 'entrado − gastado − por venir']
+    ['SALDO DISPONIBLE', '', '', 'LO QUE ENTRA', '', 'AHORRO ESPERADO'],
+    ['=B9-B10-B11', '', '', '=B9', '', '=' + REF_AHORRO],
+    ['entra − gastado − por venir', '', '', 'ingresos imputados a este mes', '', 'se edita en Config']
   ]);
 
-  hoja.getRange('A9:B13').setValues([
+  hoja.getRange('A9:B14').setValues([
     ['Entrado', suma('Ingreso')],
     ['Gastado', suma('Gasto')],
     ['Fijos por venir',
       '=SUMIFS(' + HOJA_FIJOS + '!$D:$D' + s + HOJA_FIJOS + '!$B:$B' + s + '"Gasto"' + s +
-      HOJA_FIJOS + '!$L:$L' + s + 'TRUE' + s + HOJA_FIJOS + '!$M:$M' + s + '">="&TODAY()' + s +
-      HOJA_FIJOS + '!$M:$M' + s + hasta + ')'],
-    ['Común', suma('Gasto', M + '!$I:$I' + s + '"Común"')],
-    ['Personal', suma('Gasto', M + '!$I:$I' + s + '"Personal"')]
+      HOJA_FIJOS + '!$M:$M' + s + 'TRUE' + s + HOJA_FIJOS + '!$N:$N' + s + '">="&TODAY()' + s +
+      HOJA_FIJOS + '!$N:$N' + s + '"<"&EOMONTH($B$4' + s + '0)+1)'],
+    ['Común', suma('Gasto', M + '!$H:$H' + s + '"Común"')],
+    ['Personal', suma('Gasto', M + '!$H:$H' + s + '"Personal"')],
+    // Lo que se puede repartir entre todos: lo que entra menos el colchón.
+    ['Gastable', '=MAX(0' + s + 'B9-' + REF_AHORRO + ')']
   ]);
 
-  hoja.getRange('A15:D15').setValues([['QUIÉN GASTÓ', 'GASTADO', '% DEL PLAN', 'MOVIMIENTOS']])
-      .setFontWeight('bold');
+  /* El tope de cada uno es proporcional a lo que aporta: si entran 60 de uno y
+     40 de la otra y se quieren ahorrar 20, los topes son el 60 % y el 40 % de
+     los 80 que quedan. Pasar del 100 % es lo que la app pinta en rojo. */
+  hoja.getRange('A16:F16').setValues([
+    ['QUIÉN GASTÓ', 'GASTADO', 'APORTA', 'TOPE', '% DE SU TOPE', 'MOVIMIENTOS']
+  ]).setFontWeight('bold');
   const porPersona = [];
   for (var i = 0; i < TOPE_PERSONAS; i++) {
-    const f = 16 + i;
+    const f = 17 + i;
     const origen = HOJA_LISTAS + '!$A' + (FILA_DATOS + i);
     porPersona.push([
       '=IF(' + origen + '=""' + s + '""' + s + origen + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
-        'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
+        'SUMIFS(' + M + '!$E:$E' + s + M + '!$B:$B' + s + '"Gasto"' + s + M + '!$G:$G' + s + '$A' + f + s +
         enElMes + '))',
-      '=IF(OR($A' + f + '=""' + s + REF_PLAN + '=0)' + s + '""' + s + '$B' + f + '/' + REF_PLAN + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
-        'COUNTIFS(' + M + '!$H:$H' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s + enElMes + '))'
+        'SUMIFS(' + M + '!$E:$E' + s + M + '!$B:$B' + s + '"Ingreso"' + s + M + '!$G:$G' + s + '$A' + f + s +
+        enElMes + '))',
+      '=IF(OR($A' + f + '=""' + s + '$B$9=0)' + s + '""' + s + '$B$14*$C' + f + '/$B$9)',
+      '=IF(OR($A' + f + '=""' + s + '$D' + f + '=0)' + s + '""' + s + '$B' + f + '/$D' + f + ')',
+      '=IF($A' + f + '=""' + s + '""' + s +
+        'COUNTIFS(' + M + '!$G:$G' + s + '$A' + f + s + M + '!$B:$B' + s + '"Gasto"' + s + enElMes + '))'
     ]);
   }
-  hoja.getRange(16, 1, TOPE_PERSONAS, 4).setFormulas(porPersona);
+  hoja.getRange(17, 1, TOPE_PERSONAS, 6).setFormulas(porPersona);
 
-  const filaCat = 16 + TOPE_PERSONAS + 1;
+  const filaCat = 17 + TOPE_PERSONAS + 1;
   hoja.getRange(filaCat, 1, 1, 4).setValues([['POR CATEGORÍA', 'GASTADO', '% DEL GASTO', 'REPARTO']])
       .setFontWeight('bold');
   const porCategoria = [];
   for (var j = 0; j < TOPE_CATEGORIAS; j++) {
     const f = filaCat + 1 + j;
-    const origen = HOJA_LISTAS + '!$E' + (FILA_DATOS + j);
+    const origen = HOJA_LISTAS + '!$G' + (FILA_DATOS + j);
     porCategoria.push([
       '=IF(' + origen + '=""' + s + '""' + s + origen + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
-        'SUMIFS(' + M + '!$F:$F' + s + M + '!$D:$D' + s + '$A' + f + s + M + '!$C:$C' + s + '"Gasto"' + s +
+        'SUMIFS(' + M + '!$E:$E' + s + M + '!$C:$C' + s + '$A' + f + s + M + '!$B:$B' + s + '"Gasto"' + s +
         enElMes + '))',
       '=IF(OR($A' + f + '=""' + s + '$B$10=0)' + s + '""' + s + '$B' + f + '/$B$10)',
       '=IF($A' + f + '=""' + s + '""' + s +
-        'IFERROR(VLOOKUP($A' + f + s + HOJA_LISTAS + '!$E:$G' + s + '3' + s + 'FALSE)' + s + '""))'
+        'IFERROR(VLOOKUP($A' + f + s + HOJA_LISTAS + '!$G:$I' + s + '3' + s + 'FALSE)' + s + '""))'
     ]);
   }
   hoja.getRange(filaCat + 1, 1, TOPE_CATEGORIAS, 4).setFormulas(porCategoria);
@@ -764,17 +991,17 @@ function crearPanel(libro) {
       '=IF($A' + f + '=""' + s + '""' + s + HOJA_FIJOS + '!$E' + fila + ')',
       '=IF($A' + f + '=""' + s + '""' + s + HOJA_FIJOS + '!$D' + fila + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
-        'IF(' + HOJA_FIJOS + '!$M' + fila + '<TODAY()' + s + '"cargado"' + s +
-        '"pendiente · "&TEXT(' + HOJA_FIJOS + '!$M' + fila + s + '"dd/mm")))'
+        'IF(' + HOJA_FIJOS + '!$N' + fila + '<TODAY()' + s + '"cargado"' + s +
+        '"pendiente · "&TEXT(' + HOJA_FIJOS + '!$N' + fila + s + '"dd/mm")))'
     ]);
   }
   hoja.getRange(filaFijos + 1, 1, 12, 4).setFormulas(fijosDelMes);
 
   formatoSeguro(hoja.getRange('A7'), '#,##0');
   formatoSeguro(hoja.getRange('D7:F7'), '#,##0');
-  formatoSeguro(hoja.getRange('B9:B13'), '#,##0');
-  formatoSeguro(hoja.getRange(16, 2, TOPE_PERSONAS, 1), '#,##0');
-  formatoSeguro(hoja.getRange(16, 3, TOPE_PERSONAS, 1), '0%');
+  formatoSeguro(hoja.getRange('B9:B14'), '#,##0');
+  formatoSeguro(hoja.getRange(17, 2, TOPE_PERSONAS, 3), '#,##0');
+  formatoSeguro(hoja.getRange(17, 5, TOPE_PERSONAS, 1), '0%');
   formatoSeguro(hoja.getRange(filaCat + 1, 2, TOPE_CATEGORIAS, 1), '#,##0');
   formatoSeguro(hoja.getRange(filaCat + 1, 3, TOPE_CATEGORIAS, 1), '0%');
   formatoSeguro(hoja.getRange(filaFijos + 1, 3, 12, 1), '#,##0');
@@ -797,30 +1024,31 @@ function crearAnio(libro) {
 
   const M = HOJA_MOVIMIENTOS;
   hoja.getRange(FILA_CABECERA, 1, 1, 8).setValues([
-    ['MES', 'ENTRADO', 'GASTADO', 'AHORRO', 'PLAN', '% DEL PLAN', 'COMÚN', 'PERSONAL']
+    ['MES', 'ENTRADO', 'GASTADO', 'AHORRO', 'AHORRO ESPERADO', '% DE LO QUE ENTRA',
+     'COMÚN', 'PERSONAL']
   ]).setFontWeight('bold');
 
   const meses = [];
   for (var m = 1; m <= 12; m++) {
     const f = FILA_DATOS + m - 1;
-    /* El límite superior es el mes siguiente. Para diciembre eso es el mes 13,
-       que Sheets entiende perfectamente como enero del año que viene. */
-    const desde = 'DATE(YEAR(TODAY())' + s + m + s + '1)';
-    const hasta = 'DATE(YEAR(TODAY())' + s + (m + 1) + s + '1)';
-    const rango = M + '!$A:$A' + s + '">="&' + desde + s + M + '!$A:$A' + s + '"<"&' + hasta;
-    const suma = (tipo, extra) => '=SUMIFS(' + M + '!$F:$F' + s + rango + s + M + '!$C:$C' + s +
+    const primero = 'DATE(YEAR(TODAY())' + s + m + s + '1)';
+    /* Una fila por mes IMPUTADO, no por mes de calendario: se compara «Se usa
+       en» con el texto del mes, igual que en el Panel. */
+    const rango = M + '!$I:$I' + s + 'TEXT($A' + f + s + '"yyyy-mm")';
+    const suma = (tipo, extra) => '=SUMIFS(' + M + '!$E:$E' + s + rango + s + M + '!$B:$B' + s +
       '"' + tipo + '"' + (extra ? s + extra : '') + ')';
 
     meses.push([
-      '=' + desde,
+      '=' + primero,
       suma('Ingreso'),
       suma('Gasto'),
+      // Lo ahorrado es lo que entró menos lo que salió. Ya no hay plan que sumar.
       '=B' + f + '-C' + f,
       '=IFERROR(VLOOKUP(TEXT(A' + f + s + '"yyyy-mm")' + s +
-        HOJA_CIERRES + '!$A:$D' + s + '4' + s + 'FALSE)' + s + REF_PLAN + ')',
-      '=IF(E' + f + '=0' + s + '""' + s + 'C' + f + '/E' + f + ')',
-      suma('Gasto', M + '!$I:$I' + s + '"Común"'),
-      suma('Gasto', M + '!$I:$I' + s + '"Personal"')
+        HOJA_CIERRES + '!$A:$D' + s + '4' + s + 'FALSE)' + s + REF_AHORRO + ')',
+      '=IF(B' + f + '=0' + s + '""' + s + 'C' + f + '/B' + f + ')',
+      suma('Gasto', M + '!$H:$H' + s + '"Común"'),
+      suma('Gasto', M + '!$H:$H' + s + '"Personal"')
     ]);
   }
   hoja.getRange(FILA_DATOS, 1, 12, 8).setFormulas(meses);
@@ -843,9 +1071,9 @@ function crearAnio(libro) {
     delAnio.push([
       '=IF(' + origen + '=""' + s + '""' + s + origen + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
-        'SUMIFS(' + M + '!$F:$F' + s + M + '!$C:$C' + s + '"Gasto"' + s + M + '!$H:$H' + s + '$A' + f + s +
-        M + '!$A:$A' + s + '">="&DATE(YEAR(TODAY())' + s + '1' + s + '1)' + s +
-        M + '!$A:$A' + s + '"<"&DATE(YEAR(TODAY())+1' + s + '1' + s + '1)))',
+        'SUMIFS(' + M + '!$E:$E' + s + M + '!$B:$B' + s + '"Gasto"' + s + M + '!$G:$G' + s + '$A' + f + s +
+        M + '!$I:$I' + s + '">="&TEXT(YEAR(TODAY())' + s + '"0000")&"-01"' + s +
+        M + '!$I:$I' + s + '"<="&TEXT(YEAR(TODAY())' + s + '"0000")&"-12"))',
       '=IF(OR($A' + f + '=""' + s + '$C$' + total + '=0)' + s + '""' + s + '$B' + f + '/$C$' + total + ')'
     ]);
   }
@@ -986,13 +1214,17 @@ function leerLibro() {
 
   return {
     hoy: iso(hoy()),
-    config: { plan: config.plan, limite: config.limite, avisos: config.avisos },
+    config: { ahorroEsperado: config.ahorroEsperado, avisos: config.avisos },
     personas: listas.personas.map((p, i) => ({
       nombre: p.nombre,
-      color: p.color || COLORES_PERSONA[i % COLORES_PERSONA.length]
+      color: p.color || COLORES_PERSONA[i % COLORES_PERSONA.length],
+      diaCobro: Number(p.diaCobro) || 0
     })),
-    cuentas: listas.cuentas,
-    categorias: listas.categorias,
+    // La app solo ve lo activo; en la hoja sigue estando todo.
+    cuentas: listas.cuentas.filter(c => (listas.inactivas.cuentas || []).indexOf(c) === -1),
+    credito: listas.credito,
+    categorias: listas.categorias.filter(
+      c => (listas.inactivas.categorias || []).indexOf(c.nombre) === -1),
     movimientos: leerMovimientos(libro, desde),
     fijos: leerFijos(libro),
     metas: leerMetas(libro),
@@ -1004,26 +1236,33 @@ function leerMovimientos(libro, desdeMes) {
   const hoja = libro.getSheetByName(HOJA_MOVIMIENTOS);
   if (!hoja || hoja.getLastRow() < 2) return [];
   return hoja.getRange(2, 1, hoja.getLastRow() - 1, 11).getValues()
-    .filter(f => f[0] instanceof Date && iso(f[0]).slice(0, 7) >= desdeMes)
     .map(f => ({
       uuid: String(f[10] || ''),
-      fecha: iso(f[0]),
-      tipo: f[2] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-      categoria: String(f[3] || ''),
-      descripcion: String(f[4] || ''),
-      importe: Number(f[5]) || 0,
-      cuenta: String(f[6] || ''),
-      persona: String(f[7] || ''),
-      reparto: f[8] === 'Común' ? 'Común' : 'Personal',
+      fecha: f[0] instanceof Date ? iso(f[0]) : '',
+      tipo: f[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
+      categoria: String(f[2] || ''),
+      descripcion: String(f[3] || ''),
+      importe: Number(f[4]) || 0,
+      cuenta: String(f[5] || ''),
+      persona: String(f[6] || ''),
+      reparto: f[7] === 'Común' ? 'Común' : 'Personal',
+      /* El mes que la paga. Una fila escrita por un despliegue anterior no lo
+         trae, y entonces vale el de su fecha: es lo que hacía la app antes y
+         para un gasto en efectivo sigue siendo la respuesta correcta. */
+      paraMes: mesDeCelda(f[8]) || (f[0] instanceof Date ? iso(f[0]).slice(0, 7) : ''),
       origen: String(f[9] || 'app')
     }))
+    /* Se recorta por el mes que PAGA y no por la fecha: una compra de
+       diciembre que se cobra en enero tiene que viajar al teléfono aunque su
+       fecha se haya quedado fuera de la ventana. */
+    .filter(m => m.fecha && m.paraMes >= desdeMes)
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
 
 function leerFijos(libro) {
   const hoja = libro.getSheetByName(HOJA_FIJOS);
   if (!hoja || hoja.getLastRow() < 2) return [];
-  return hoja.getRange(2, 1, hoja.getLastRow() - 1, 14).getValues()
+  return hoja.getRange(2, 1, hoja.getLastRow() - 1, 16).getValues()
     .filter(f => f[2])
     .map(f => ({
       uuid: String(f[0] || ''),
@@ -1037,9 +1276,10 @@ function leerFijos(libro) {
       cuenta: String(f[8] || ''),
       persona: String(f[9] || ''),
       reparto: f[10] === 'Común' ? 'Común' : 'Personal',
-      activo: f[11] !== false,
-      prox: f[12] instanceof Date ? iso(f[12]) : '',
-      ultimo: f[13] instanceof Date ? iso(f[13]) : ''
+      usaEn: f[11] === 'mes siguiente' ? 'siguiente' : 'mismo',
+      activo: f[12] !== false,
+      prox: f[13] instanceof Date ? iso(f[13]) : '',
+      ultimo: f[14] instanceof Date ? iso(f[14]) : ''
     }));
 }
 
@@ -1065,12 +1305,12 @@ function leerCierres(libro) {
     .map(f => {
       const entrado = Number(f[1]) || 0;
       const gastado = Number(f[2]) || 0;
-      const plan = Number(f[3]) || 0;
+      const ahorroEsperado = Number(f[3]) || 0;
       const repartido = Number(f[5]) || 0;
-      /* Con el plan haciendo de ingreso, lo ahorrado es plan + entrado −
-         gastado. Misma definición que la fórmula de la columna E y que
-         ESTADO.resumen: si se cambia, se cambia en los tres sitios. */
-      const ahorrado = plan + entrado - gastado;
+      /* Lo ahorrado es lo que entró menos lo que salió. Misma definición que la
+         fórmula de la columna E y que ESTADO.resumen: si se cambia, se cambia
+         en los tres sitios. */
+      const ahorrado = entrado - gastado;
       /* Lo ahorrado se calcula aquí en vez de leer la celda, aunque la celda
          lo tenga: es una fórmula, y una fórmula puede estar rota, vacía o
          recién escrita y sin recalcular. Si eso pasara, la app enseñaría un
@@ -1081,7 +1321,7 @@ function leerCierres(libro) {
         mes: mesDeCelda(f[0]),
         entrado: entrado,
         gastado: gastado,
-        plan: plan,
+        ahorroEsperado: ahorroEsperado,
         ahorrado: ahorrado,
         repartido: repartido,
         sinAsignar: ahorrado - repartido
@@ -1118,20 +1358,26 @@ function escribirFilaMovimiento(m) {
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_MOVIMIENTOS);
   if (!hoja) throw new Error('No existe la hoja ' + HOJA_MOVIMIENTOS + '. Ejecuta instalar().');
 
+  /* El mes que la paga se calcula AQUÍ y no se copia de lo que mande la app.
+     La app lo manda ya resuelto para poder pintar el saldo sin esperar a la
+     hoja, pero quien decide es el backend: es el único sitio donde el cálculo
+     es el mismo para los dos teléfonos. Un ingreso es la excepción —el «se usa
+     en» lo eligió un dedo, no una regla—, y seUsaEn() ya lo respeta. */
   hoja.appendRow([
-    fechaDesdeISO(m.fecha), '',
+    fechaDesdeISO(m.fecha),
     m.tipo, m.categoria, m.descripcion || '',
     Number(m.importe),   // número de verdad, no texto: los SUMIFS lo necesitan
-    m.cuenta, m.persona, m.reparto || 'Personal', m.origen || 'app', m.uuid
+    m.cuenta, m.persona, m.reparto || 'Personal',
+    seUsaEn(m), m.origen || 'app', m.uuid
   ]);
 
   /* El formato se fija en la fila recién escrita y no solo en la columna.
      Ponerlo únicamente en la columna al instalar no funcionó: las filas que
      añade appendRow se mostraban con el formato de fecha del sistema. */
   const fila = hoja.getLastRow();
-  ponerFormulaMes(hoja, fila, fila);
   formatoSeguro(hoja.getRange(fila, 1), 'yyyy-mm-dd');
-  formatoSeguro(hoja.getRange(fila, 6), '#,##0');
+  formatoSeguro(hoja.getRange(fila, 5), '#,##0');
+  formatoSeguro(hoja.getRange(fila, 9), '@');
 }
 
 function editarMovimiento(datos) {
@@ -1139,12 +1385,29 @@ function editarMovimiento(datos) {
   if (!fila) return { ok: true, escritos: 0, aviso: 'No se encontró el movimiento' };
 
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_MOVIMIENTOS);
-  const columnas = { tipo: 3, categoria: 4, descripcion: 5, importe: 6,
-                     cuenta: 7, persona: 8, reparto: 9 };
+  const columnas = { fecha: 1, tipo: 2, categoria: 3, descripcion: 4, importe: 5,
+                     cuenta: 6, persona: 7, reparto: 8 };
   Object.keys(datos.cambios || {}).forEach(clave => {
     if (!columnas[clave]) return;
-    hoja.getRange(fila, columnas[clave]).setValue(datos.cambios[clave]);
+    // La fecha viaja como yyyy-mm-dd y tiene que entrar como fecha de verdad,
+    // o la celda se queda con un texto que ningún SUMIFS sabe comparar.
+    const valor = clave === 'fecha' ? fechaDesdeISO(datos.cambios[clave]) : datos.cambios[clave];
+    hoja.getRange(fila, columnas[clave]).setValue(valor);
   });
+
+  /* Cambiar la cuenta o el dueño cambia el mes que la paga: pasar una compra
+     del día 20 de efectivo a la tarjeta la manda a la factura del mes
+     siguiente. Se recalcula desde la fila ya escrita, no desde lo que mandó la
+     app, para que valga también cuando el cambio venía solo del importe. */
+  const actual = hoja.getRange(fila, 1, 1, 11).getValues()[0];
+  hoja.getRange(fila, 9).setValue(seUsaEn({
+    fecha: actual[0] instanceof Date ? iso(actual[0]) : String(actual[0]),
+    tipo: actual[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
+    cuenta: String(actual[5] || ''),
+    persona: String(actual[6] || ''),
+    // Un ingreso ya tenía su mes elegido a mano: se respeta el que hay escrito.
+    usaEn: String(actual[8] || '') === mesMas(String(actual[0]).slice(0, 7), 1) ? 'siguiente' : 'mismo'
+  }));
   return { ok: true, escritos: 1 };
 }
 
@@ -1170,18 +1433,19 @@ function guardarFijo(datos) {
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_FIJOS);
   const fila = buscarFilaPorUuid(HOJA_FIJOS, 1, f.uuid) || primeraFilaLibre(hoja);
 
-  const anterior = fila <= hoja.getLastRow() ? hoja.getRange(fila, 14).getValue() : '';
+  const anterior = fila <= hoja.getLastRow() ? hoja.getRange(fila, 15).getValue() : '';
   const ultimo = anterior instanceof Date ? anterior : (f.ultimo ? fechaDesdeISO(f.ultimo) : '');
 
-  hoja.getRange(fila, 1, 1, 14).setValues([[
+  hoja.getRange(fila, 1, 1, 15).setValues([[
     f.uuid, f.tipo, f.concepto, Number(f.importe), Number(f.dia), Number(f.cada),
     Number(f.cuotas) || '', Number(f.restantes) || '',
-    f.cuenta, f.persona, f.reparto || 'Personal', f.activo !== false,
+    f.cuenta, f.persona, f.reparto || 'Personal', textoUsaEn(f), f.activo !== false,
     calcularProximo(f, hoy()), ultimo
   ]]);
 
   formatoSeguro(hoja.getRange(fila, 4), '#,##0');
-  formatoSeguro(hoja.getRange(fila, 13, 1, 2), 'yyyy-mm-dd');
+  formatoSeguro(hoja.getRange(fila, 14, 1, 2), 'yyyy-mm-dd');
+  ponerFormulaMesImputado(hoja, fila, fila);
   return { ok: true, escritos: 1 };
 }
 
@@ -1216,8 +1480,8 @@ function marcarCargo(datos) {
     /* Al desmarcar hay que devolver la cuota y retrasar el próximo cargo, o el
        fijo se saltaría un mes por haberlo tocado. */
     if (f.cuotas) hoja.getRange(fila, 8).setValue(Number(f.restantes) + 1);
-    hoja.getRange(fila, 13).setValue(fechaDesdeISO(diaDelMes(datos.mes, f.dia)));
-    hoja.getRange(fila, 14).setValue('');
+    hoja.getRange(fila, 14).setValue(fechaDesdeISO(diaDelMes(datos.mes, f.dia)));
+    hoja.getRange(fila, 15).setValue('');
   }
   return { ok: true, escritos: 1 };
 }
@@ -1237,6 +1501,9 @@ function cobrarFijo(f, fila, mes) {
     cuenta: f.cuenta,
     persona: f.persona,
     reparto: f.reparto,
+    // Un ingreso fijo marcado «mes siguiente» alimenta al mes de después del
+    // que lo cobra; seUsaEn() se encarga a partir de aquí.
+    usaEn: f.usaEn,
     origen: 'fijo'
   });
   registrarUuid(marca, 'cargo de fijo');
@@ -1244,11 +1511,11 @@ function cobrarFijo(f, fila, mes) {
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_FIJOS);
   const restantes = f.cuotas ? Math.max(0, Number(f.restantes) - 1) : 0;
   hoja.getRange(fila, 8).setValue(f.cuotas ? restantes : '');
-  hoja.getRange(fila, 14).setValue(fechaDesdeISO(diaDelMes(mes, f.dia)));
-  hoja.getRange(fila, 13).setValue(fechaDesdeISO(diaDelMes(mesMas(mes, f.cada), f.dia)));
+  hoja.getRange(fila, 15).setValue(fechaDesdeISO(diaDelMes(mes, f.dia)));
+  hoja.getRange(fila, 14).setValue(fechaDesdeISO(diaDelMes(mesMas(mes, f.cada), f.dia)));
   // Al agotar las cuotas, el fijo se apaga solo. No se borra: el histórico de
   // lo que se pagó sigue en Movimientos y la regla queda como referencia.
-  if (f.cuotas && restantes === 0) hoja.getRange(fila, 12).setValue(false);
+  if (f.cuotas && restantes === 0) hoja.getRange(fila, 13).setValue(false);
   return true;
 }
 
@@ -1279,23 +1546,27 @@ function cerrarMes(mes, uuid) {
      incluirlo igual. */
   cobrarFijosDelMes(mes);
 
-  const movimientos = leerMovimientos(libro, mes).filter(m => m.fecha.slice(0, 7) === mes);
+  /* Por el mes que PAGA, no por la fecha: la factura de la tarjeta que se cobra
+     en agosto cierra con agosto aunque se comprara en julio. */
+  const movimientos = leerMovimientos(libro, mes).filter(m => m.paraMes === mes);
   const entrado = movimientos.filter(m => m.tipo === 'Ingreso').reduce((a, m) => a + m.importe, 0);
   const gastado = movimientos.filter(m => m.tipo === 'Gasto').reduce((a, m) => a + m.importe, 0);
-  const plan = leerConfigActual(libro).plan;
+  const ahorroEsperado = leerConfigActual(libro).ahorroEsperado;
 
   // La fila 5 es la del mes más reciente: los cierres se leen de arriba abajo.
   hoja.insertRowBefore(FILA_DATOS);
   // Texto antes de escribir, o Sheets guarda "2026-08" como el 1 de agosto.
   formatoSeguro(hoja.getRange(FILA_DATOS, 1), '@');
-  hoja.getRange(FILA_DATOS, 1, 1, 4).setValues([[mes, entrado, gastado, plan]]);
+  hoja.getRange(FILA_DATOS, 1, 1, 4).setValues([[mes, entrado, gastado, ahorroEsperado]]);
   hoja.getRange(FILA_DATOS, 8).setValue(new Date());
   ponerFormulasCierre(hoja, FILA_DATOS, FILA_DATOS);
   formatoSeguro(hoja.getRange(FILA_DATOS, 2, 1, 6), '#,##0');
   formatoSeguro(hoja.getRange(FILA_DATOS, 8), 'yyyy-mm-dd hh:mm');
 
   if (uuid) registrarUuid(uuid, 'cierre de ' + mes);
-  return { ok: true, escritos: 1, ahorrado: plan + entrado - gastado };
+  // Lo ahorrado es lo que entró menos lo que salió. Ya no hay plan que sumar:
+  // el techo del mes son sus propios ingresos.
+  return { ok: true, escritos: 1, ahorrado: entrado - gastado };
 }
 
 /** Los fijos del mes que aún no han escrito su fila. */
@@ -1377,17 +1648,18 @@ function guardarMetas(metas) {
 
   metas.forEach(m => { if (m.antes && m.antes !== m.nombre) renombrarEnReparto(libro, m.antes, m.nombre); });
 
-  hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).clearContent();
-  hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).clearContent();
-
-  metas.slice(0, TOPE_METAS).forEach((m, i) => {
-    const fila = FILA_DATOS + i;
-    hoja.getRange(fila, 1).setValue(m.nombre || '');
-    hoja.getRange(fila, 2).setValue(Number(m.objetivo) || 0);
-    hoja.getRange(fila, 6).setValue(i + 1);
-    hoja.getRange(fila, 7).setValue(m.activa !== false);
-    hoja.getRange(fila, 8).setValue(m.notas || '');
-  });
+  /* Por bloques y no celda a celda: cada setValue cruza al servicio de Sheets,
+     y con diez metas esto eran cincuenta viajes para escribir cinco columnas.
+     Es la misma trampa que llevó instalar() de 868 llamadas a 207. */
+  const nombres = [];
+  const cola = [];
+  for (var i = 0; i < TOPE_METAS; i++) {
+    const m = metas[i];
+    nombres.push([m ? (m.nombre || '') : '', m ? Number(m.objetivo) || 0 : '']);
+    cola.push(m ? [i + 1, m.activa !== false, m.notas || ''] : ['', '', '']);
+  }
+  hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).setValues(nombres);
+  hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).setValues(cola);
 
   return { ok: true, escritos: metas.length };
 }
@@ -1408,24 +1680,35 @@ function guardarConfig(datos) {
 
   if (datos.config) {
     const hoja = libro.getSheetByName(HOJA_CONFIG);
-    if (datos.config.plan !== undefined) hoja.getRange('B4').setValue(Number(datos.config.plan));
-    if (datos.config.limite !== undefined) hoja.getRange('B7').setValue(Number(datos.config.limite));
+    if (datos.config.ahorroEsperado !== undefined) {
+      hoja.getRange('B4').setValue(Number(datos.config.ahorroEsperado));
+    }
     if (datos.config.avisos) {
       const a = datos.config.avisos;
-      if (a.fijo !== undefined) hoja.getRange('B11').setValue(a.fijo === true);
-      if (a.saldo !== undefined) hoja.getRange('B12').setValue(a.saldo === true);
-      if (a.semanal !== undefined) hoja.getRange('B13').setValue(a.semanal === true);
+      if (a.fijo !== undefined) hoja.getRange('B10').setValue(a.fijo === true);
+      if (a.saldo !== undefined) hoja.getRange('B11').setValue(a.saldo === true);
+      if (a.semanal !== undefined) hoja.getRange('B12').setValue(a.semanal === true);
     }
   }
 
-  if (datos.personas || datos.cuentas || datos.categorias) {
+  if (datos.personas || datos.cuentas || datos.categorias || datos.credito) {
     const listas = leerListasExistentes(libro);
     if (datos.personas) {
       listas.personas = datos.personas
         .filter(p => p && String(p.nombre || '').trim())
-        .map((p, i) => ({ nombre: String(p.nombre).trim(), color: p.color || COLORES_PERSONA[i % 4] }));
+        .map((p, i) => ({
+          nombre: String(p.nombre).trim(),
+          color: p.color || COLORES_PERSONA[i % 4],
+          diaCobro: Number(p.diaCobro) || 0
+        }));
     }
     if (datos.cuentas) listas.cuentas = datos.cuentas.filter(c => String(c || '').trim());
+    /* Una lista de crédito vacía es una respuesta válida: quitar la última
+       tarjeta tiene que llegar a la hoja, no confundirse con "no lo mandaron".
+       Por eso se comprueba contra undefined y no por si es cierto. */
+    if (datos.credito !== undefined) {
+      listas.credito = (datos.credito || []).filter(c => String(c || '').trim());
+    }
     if (datos.categorias) {
       listas.categorias = datos.categorias
         .filter(c => c && String(c.nombre || '').trim())
@@ -1436,9 +1719,49 @@ function guardarConfig(datos) {
         }));
     }
     escribirListas(libro, listas);
+    /* Cambiar un día de cobro o marcar una cuenta como de crédito cambia el mes
+       que paga las compras YA escritas. Si la columna no se rehace, el Panel
+       sigue sumando con el reparto de antes del cambio y contradice a la app,
+       que sí recalcula. */
+    if (datos.personas || datos.credito !== undefined) recalcularSeUsaEn(libro, listas);
   }
 
   return { ok: true, escritos: 1 };
+}
+
+/**
+ * Rehace la columna «Se usa en» de todos los gastos.
+ *
+ * Solo los gastos: el de un ingreso lo eligió una persona en la app —«este
+ * dinero se usa en septiembre»— y no hay regla que pueda deducirlo, así que
+ * recalcularlo sería pisarle la decisión.
+ *
+ * Se lee y se escribe la columna entera de una vez. Celda a celda serían
+ * cuatrocientas llamadas al servicio de Sheets y este script ya se ha muerto
+ * dos veces por tiempo.
+ */
+function recalcularSeUsaEn(libro, listas) {
+  const hoja = libro.getSheetByName(HOJA_MOVIMIENTOS);
+  if (!hoja || hoja.getLastRow() < 2) return 0;
+
+  const alto = hoja.getLastRow() - 1;
+  const filas = hoja.getRange(2, 1, alto, 11).getValues();
+  const columna = [];
+  var cambios = 0;
+
+  filas.forEach(f => {
+    const actual = String(f[8] || '');
+    if (!(f[0] instanceof Date) || f[1] === 'Ingreso') { columna.push([actual]); return; }
+    const nuevo = seUsaEn({
+      fecha: iso(f[0]), tipo: 'Gasto',
+      cuenta: String(f[5] || ''), persona: String(f[6] || '')
+    }, listas);
+    if (nuevo !== actual) cambios++;
+    columna.push([nuevo]);
+  });
+
+  if (cambios) hoja.getRange(2, 9, alto, 1).setValues(columna);
+  return cambios;
 }
 
 /* ========================================================================
@@ -1495,15 +1818,17 @@ function instalarDisparadorDiario() {
    ======================================================================== */
 
 function leerFilaFijo(hoja, fila) {
-  const f = hoja.getRange(fila, 1, 1, 14).getValues()[0];
+  const f = hoja.getRange(fila, 1, 1, 16).getValues()[0];
   return {
     uuid: String(f[0] || ''), tipo: f[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
     concepto: String(f[2] || ''), importe: Number(f[3]) || 0, dia: Number(f[4]) || 1,
     cada: Number(f[5]) || 1, cuotas: Number(f[6]) || 0, restantes: Number(f[7]) || 0,
     cuenta: String(f[8] || ''), persona: String(f[9] || ''),
-    reparto: f[10] === 'Común' ? 'Común' : 'Personal', activo: f[11] !== false,
-    prox: f[12] instanceof Date ? iso(f[12]) : '',
-    ultimo: f[13] instanceof Date ? iso(f[13]) : ''
+    reparto: f[10] === 'Común' ? 'Común' : 'Personal',
+    usaEn: f[11] === 'mes siguiente' ? 'siguiente' : 'mismo',
+    activo: f[12] !== false,
+    prox: f[13] instanceof Date ? iso(f[13]) : '',
+    ultimo: f[14] instanceof Date ? iso(f[14]) : ''
   };
 }
 

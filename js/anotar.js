@@ -2,9 +2,9 @@
  * Anotar: la pantalla del teclado.
  *
  * Es una sola pantalla con varios oficios. Además de anotar un gasto sirve
- * para dar de alta un fijo, corregir un importe ya escrito, poner el plan del
- * mes, el límite de aviso, el objetivo de una meta o cuánto va a esa meta en
- * un reparto. Todos son lo mismo: teclear un número y confirmarlo.
+ * para dar de alta un fijo, corregir un importe ya escrito, poner el ahorro
+ * esperado, el objetivo de una meta o cuánto va a esa meta en un reparto.
+ * Todos son lo mismo: teclear un número y confirmarlo.
  *
  * Tenerlas juntas no es ahorro de código, es coherencia: el gesto de escribir
  * una cifra tiene que ser idéntico en toda la app, y el teclado es el sitio
@@ -28,11 +28,15 @@ const ANOTAR = (() => {
   let cada = 1;
   let dia = 10;
   let cuotas = 0;
+  /* En qué mes se usa un ingreso: el que lo cobra o el siguiente. En Chile un
+     sueldo pagado el 30 se gasta el mes que viene y uno pagado el 5, ese mismo.
+     Solo aparece en los ingresos: un gasto sale el día que sale. */
+  let usaEn = 'mismo';
   let objetivo = null;     // el movimiento, fijo o meta que se está editando
   let disponible = 0;      // tope, solo en el reparto
   let volverA = 'mes';
 
-  const soloTeclado = () => ['plan', 'limite', 'meta', 'reparto'].indexOf(modo) !== -1;
+  const soloTeclado = () => ['ahorro-esperado', 'meta', 'reparto'].indexOf(modo) !== -1;
   const esFijo = () => modo === 'fijo' || modo === 'edita-fijo';
   const numero = () => parseInt(digitos || '0', 10);
 
@@ -41,7 +45,7 @@ const ANOTAR = (() => {
   function abrir(categoriaInicial) {
     const { ajustes, datos } = ESTADO.estado();
     modo = 'movimiento';
-    digitos = ''; descripcion = ''; objetivo = null;
+    digitos = ''; descripcion = ''; objetivo = null; usaEn = 'mismo';
     tipo = 'Gasto';
     categoria = categoriaInicial || primeraCategoria('Gasto');
     volverA = 'mes';
@@ -54,7 +58,7 @@ const ANOTAR = (() => {
    *  aquí para anotar un sueldo, y llegar a "Gasto" sería empezar corrigiendo. */
   function nuevoFijo(tipoInicial) {
     modo = 'fijo';
-    digitos = ''; descripcion = ''; objetivo = null;
+    digitos = ''; descripcion = ''; objetivo = null; usaEn = 'mismo';
     tipo = tipoInicial === 'Ingreso' ? 'Ingreso' : 'Gasto';
     categoria = primeraCategoria(tipo);
     cada = 1; dia = 10; cuotas = 0;
@@ -97,14 +101,16 @@ const ANOTAR = (() => {
     cada = Number(f.cada) || 1;
     dia = Number(f.dia) || 1;
     cuotas = Number(f.cuotas) || 0;
+    usaEn = f.usaEn === 'siguiente' ? 'siguiente' : 'mismo';
     volverA = 'fijo';
     pintar();
     VISTA.ir('anotar');
     mostrarControlesDelFijo();
   }
 
-  function editarPlan() { soloNumero('plan', ESTADO.estado().datos.config.plan, 'ajustes'); }
-  function editarLimite() { soloNumero('limite', ESTADO.estado().datos.config.limite, 'ajustes'); }
+  function editarAhorroEsperado() {
+    soloNumero('ahorro-esperado', ESTADO.estado().datos.config.ahorroEsperado, 'ajustes');
+  }
 
   function editarMeta(m) {
     objetivo = m;
@@ -154,8 +160,13 @@ const ANOTAR = (() => {
       h('span.importe-numero' + (digitos ? '' : '.vacio'), FMT.miles(numero()))
     ]);
 
+    /* Las categorías van en UNA tira que se desliza, no envueltas en varias
+       filas. Con dieciocho categorías, envolverlas ocupa cinco filas y en un
+       móvil de verdad —780 px de alto, no los 844 del prototipo— lo que se
+       queda fuera es el teclado. Se ve la elegida y las siguientes, y se
+       arrastra para el resto. */
     const chipsCategoria = conChips
-      ? h('div.chips.margen', { estilo: { padding: '12px 26px 4px' } },
+      ? h('div.chips.tira.margen', { estilo: { padding: '12px 26px 4px' } },
           lista.map(k => chip(k, categoria === k, () => { categoria = k; pintar(); }, 'ancho')))
       : null;
 
@@ -172,6 +183,41 @@ const ANOTAR = (() => {
             placeholder: (tipo === 'Ingreso' ? 'De dónde viene' : 'Dónde fue') + ' (opcional)',
             onInput: e => { descripcion = e.target.value; }
           })
+        ])
+      : null;
+
+    /* «Este dinero se usa en»: la elección que decide en qué mes cuenta un
+       ingreso. Va con la consecuencia escrita debajo porque el nombre de un
+       mes no dice, por sí solo, qué le pasa al saldo que tienes delante. */
+    const mesAhora = ESTADO.mesEnCurso();
+    const usoIngreso = conChips && tipo === 'Ingreso'
+      ? h('div.margen', { estilo: { padding: '12px 26px 0' } }, [
+          h('div.etiqueta.mini', { estilo: { paddingBottom: '6px' } },
+            esFijo() ? 'Cada pago se usa en' : 'Este dinero se usa en'),
+          h('div.chips.apretados', [
+            chip(esFijo() ? 'El mes en que se cobra' : FMT.cap(FMT.nombreMes(mesAhora)),
+                 usaEn === 'mismo', () => { usaEn = 'mismo'; pintar(); }, 'ancho'),
+            chip(esFijo() ? 'El mes siguiente' : FMT.cap(FMT.nombreMes(FMT.mesMas(mesAhora, 1))),
+                 usaEn === 'siguiente', () => { usaEn = 'siguiente'; pintar(); }, 'ancho')
+          ]),
+          h('p.nota', { estilo: { marginTop: '6px' } }, usaEn === 'siguiente'
+            ? 'Se guarda para ' + FMT.nombreMes(FMT.mesMas(mesAhora, 1))
+              + ': no suma al saldo de este mes.'
+            : 'Suma al saldo disponible de ' + FMT.nombreMes(mesAhora) + '.')
+        ])
+      : null;
+
+    /* De dónde sale el dinero, en cajetines. Antes la cuenta solo se podía
+       cambiar tocando el pie, que rotaba a la siguiente: para llegar a la
+       tercera había que tocar tres veces y leer el texto entre toque y toque.
+       Con cuatro cuentas eso es peor que enseñarlas. */
+    const cuentaActual = ajustes.cuenta || datos.cuentas[0];
+    const chipsCuenta = conChips
+      ? h('div.margen', { estilo: { padding: '14px 26px 0' } }, [
+          h('div.etiqueta.mini', { estilo: { paddingBottom: '7px' } },
+            tipo === 'Ingreso' ? 'A dónde entra' : 'De dónde sale'),
+          h('div.chips.tira', datos.cuentas.map(k =>
+            chip(k, cuentaActual === k, () => { ESTADO.guardarAjustes({ cuenta: k }); }, 'ancho')))
         ])
       : null;
 
@@ -218,9 +264,11 @@ const ANOTAR = (() => {
       importe,
       h('div.desliza', [
         chipsCategoria,
+        usoIngreso,
         nota,
         chipsFijo,
-        boton('pie-anotar', { onClick: cambiarCuenta }, pie(ajustes, datos)),
+        chipsCuenta,
+        boton('pie-anotar', { onClick: cambiarQuien }, pie(ajustes, datos)),
         h('div', { estilo: { height: '10px' } })
       ]),
       teclado,
@@ -229,17 +277,15 @@ const ANOTAR = (() => {
   }
 
   function tituloTeclado() {
-    return modo === 'plan' ? 'Plan del mes'
-         : modo === 'meta' ? 'Meta de ahorro'
+    return modo === 'meta' ? 'Meta de ahorro'
          : modo === 'reparto' ? 'Cuánto a esta meta'
-         : 'Límite de aviso';
+         : 'Ahorro esperado';
   }
 
   function textoGuardar() {
     return modo === 'reparto' ? 'Asignar'
-         : modo === 'plan' ? 'Guardar plan'
          : modo === 'meta' ? 'Guardar meta'
-         : modo === 'limite' ? 'Guardar límite'
+         : modo === 'ahorro-esperado' ? 'Guardar ahorro esperado'
          : (modo === 'edita-mov' || modo === 'edita-fijo') ? 'Guardar cambio'
          : modo === 'fijo' ? 'Guardar fijo'
          : 'Guardar';
@@ -250,8 +296,8 @@ const ANOTAR = (() => {
    *  forma más fácil de cambiarlo sin querer. */
   function pie(ajustes, datos) {
     const c = datos.config;
-    if (modo === 'plan') return 'Plan actual: ' + FMT.dinero(c.plan) + ' · común para todos. Teclea el nuevo y guarda.';
-    if (modo === 'limite') return 'Aviso actual bajo ' + FMT.dinero(c.limite) + '. Teclea el nuevo límite.';
+    if (modo === 'ahorro-esperado') return 'Ahora ' + FMT.dinero(c.ahorroEsperado)
+      + ' · común para los dos. De él sale el tope de cada uno. Teclea el nuevo y guarda.';
     if (modo === 'meta') return 'Meta «' + (objetivo && objetivo.nombre ? objetivo.nombre : 'sin nombre')
       + '» · ahora ' + FMT.dinero(objetivo ? objetivo.objetivo : 0) + '. Teclea el nuevo objetivo.';
     if (modo === 'reparto') return 'Cuánto va a «' + (objetivo && objetivo.nombre ? objetivo.nombre : 'esta meta')
@@ -266,15 +312,34 @@ const ANOTAR = (() => {
            + ' · ' + term + ' · ' + (ajustes.cuenta || datos.cuentas[0]);
     }
     const sinRed = !ESTADO.estado().enLinea;
-    return (ajustes.cuenta || datos.cuentas[0]) + ' · ' + (ajustes.persona || datos.personas[0].nombre)
-         + (sinRed ? ' · se enviará al recuperar conexión' : ' · toca para cambiar de cuenta');
+    const cuenta = ajustes.cuenta || datos.cuentas[0];
+    const quien = ajustes.persona || datos.personas[0].nombre;
+
+    /* Con tarjeta de crédito, decir en qué mes se va a cobrar es la mitad de
+       la información: el gasto no sale hoy, y quien lo anota tiene que verlo
+       ANTES de guardar, no descubrirlo al mirar el mes que viene. */
+    const cobro = tipo === 'Gasto' && ESTADO.esCredito(cuenta) ? cobroDe(cuenta, quien) : '';
+    if (cobro) return 'Con ' + cuenta + ' ' + cobro + ' · lo anota ' + quien;
+
+    return 'Lo anota ' + quien
+         + (sinRed ? ' · se enviará al recuperar conexión' : ' · toca para cambiar de persona');
   }
 
-  function cambiarCuenta() {
+  /** «se cobra el 5 de septiembre», con el día de cobro de esa persona. */
+  function cobroDe(cuenta, quien) {
+    const corte = ESTADO.diaCobroDe(quien);
+    if (!corte) return '';
+    const hoyISO = ESTADO.hoy();
+    const mes = Number(hoyISO.slice(8)) < corte
+      ? FMT.mesDe(hoyISO) : FMT.mesMas(FMT.mesDe(hoyISO), 1);
+    return 'se cobra el ' + corte + ' de ' + FMT.nombreMes(mes);
+  }
+
+  function cambiarQuien() {
     const { ajustes, datos } = ESTADO.estado();
-    const actual = ajustes.cuenta || datos.cuentas[0];
-    const siguiente = datos.cuentas[(datos.cuentas.indexOf(actual) + 1) % datos.cuentas.length];
-    ESTADO.guardarAjustes({ cuenta: siguiente });
+    const nombres = datos.personas.map(p => p.nombre);
+    const actual = ajustes.persona || nombres[0];
+    ESTADO.guardarAjustes({ persona: nombres[(nombres.indexOf(actual) + 1) % nombres.length] });
   }
 
   /* ------------------------------------------------------------ teclado */
@@ -321,8 +386,7 @@ const ANOTAR = (() => {
     const { ajustes, datos } = ESTADO.estado();
     VISTA.vibrar();
 
-    if (modo === 'plan') { await ESTADO.guardarConfig({ config: { plan: n } }); }
-    else if (modo === 'limite') { await ESTADO.guardarConfig({ config: { limite: n } }); }
+    if (modo === 'ahorro-esperado') { await ESTADO.guardarConfig({ config: { ahorroEsperado: n } }); }
     else if (modo === 'meta') {
       const metas = datos.metas.map(m => m.nombre === objetivo.nombre
         ? Object.assign({}, m, { objetivo: n }) : m);
@@ -333,7 +397,10 @@ const ANOTAR = (() => {
       await ESTADO.editarMovimiento(objetivo.uuid, { importe: n, categoria, tipo });
     }
     else if (modo === 'edita-fijo') {
-      await ESTADO.guardarFijo(Object.assign({}, objetivo, { importe: n, concepto: categoria }));
+      await ESTADO.guardarFijo(Object.assign({}, objetivo, {
+        importe: n, concepto: categoria,
+        usaEn: objetivo.tipo === 'Ingreso' ? usaEn : 'mismo'
+      }));
     }
     else if (modo === 'fijo') {
       /* El concepto de un fijo es una categoría de la lista, no texto libre:
@@ -352,6 +419,7 @@ const ANOTAR = (() => {
         cuenta: ajustes.cuenta || datos.cuentas[0],
         persona: ajustes.persona || datos.personas[0].nombre,
         reparto: ESTADO.repartoDe(categoria),
+        usaEn: tipo === 'Ingreso' ? usaEn : 'mismo',
         activo: true,
         prox: proximoCargo(dia)
       });
@@ -363,12 +431,14 @@ const ANOTAR = (() => {
         descripcion,
         importe: n,
         cuenta: ajustes.cuenta || datos.cuentas[0],
-        persona: ajustes.persona || datos.personas[0].nombre
+        persona: ajustes.persona || datos.personas[0].nombre,
+        usaEn: tipo === 'Ingreso' ? usaEn : 'mismo'
       });
     }
 
     digitos = '';
     descripcion = '';
+    usaEn = 'mismo';
     const destino = modo === 'movimiento' ? 'mes' : volverA;
     objetivo = null;
     VISTA.ir(destino);
@@ -384,6 +454,6 @@ const ANOTAR = (() => {
 
   return {
     abrir, nuevoFijo, desdeMovimiento, editarMovimiento, editarFijo,
-    editarPlan, editarLimite, editarMeta, asignarReparto, pintar
+    editarAhorroEsperado, editarMeta, asignarReparto, pintar
   };
 })();

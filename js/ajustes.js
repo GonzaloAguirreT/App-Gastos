@@ -2,7 +2,7 @@
  * Ajustes y todo lo que cuelga de él: listas editables, el atajo y los tres
  * pasos de la primera vez.
  *
- * La división que manda aquí: lo que es de los dos (plan, límite, avisos,
+ * La división que manda aquí: lo que es de los dos (ahorro esperado, avisos,
  * categorías, cuentas, personas) se escribe en la hoja; lo que es de este
  * teléfono (conexión, quién anota aquí, su cuenta habitual, el tema) se queda
  * en el móvil. Por eso el token no viaja nunca: una hoja se comparte.
@@ -48,23 +48,46 @@ const AJUSTES = (() => {
             onClick: () => { ESTADO.guardarAjustes({ tema: m }); VISTA.aplicarTema(m); }
           }, FMT.cap(m))))),
 
-        seccion('Plan del mes'),
+        seccion('Ahorro esperado'),
         h('div.margen', [
-          boton('fila', { estilo: { padding: '4px 0 13px' }, onClick: () => ANOTAR.editarPlan() }, [
-            h('span.titulo', FMT.dinero(datos.config.plan)),
+          boton('fila', { estilo: { padding: '4px 0 13px' }, onClick: () => ANOTAR.editarAhorroEsperado() }, [
+            h('span.titulo', FMT.dinero(datos.config.ahorroEsperado)),
             h('span.fila-valor', 'cambiar ›')
           ]),
           h('p.nota', { estilo: { marginTop: '9px' } },
-            'Un único plan para los dos: contra él se mide el saldo del mes, sin importar quién anote.')
+            'El colchón que no queréis tocar. El techo del mes es lo que entra; esto es lo '
+            + 'que se aparta antes de repartir, y de ahí sale el tope de cada uno.')
+        ]),
+
+        seccion('Tarjeta de crédito'),
+        h('div.margen', [
+          /* El día de cobro es de CADA persona, no del hogar: uno puede
+             facturar el 5 y la otra el 25, y de eso depende en qué mes cae
+             cada compra. Por eso hay una tira por persona, con su color. */
+          datos.personas.map(p => h('div.chips-fila.dias-cobro', [
+            h('span.etiqueta.corta', [
+              h('span.marca', { estilo: { background: ESTADO.colorPersona(p.nombre) } }),
+              p.nombre
+            ]),
+            h('div.chips.apretados', CONFIG.DIAS.map(d =>
+              chip(String(d), Number(p.diaCobro) === d, () => cambiarDiaCobro(p.nombre, d), 'dia')))
+          ])),
+          h('p.nota', { estilo: { margin: '4px 0 14px' } },
+            'Una compra anterior a ese día entra en la factura de este mes; desde ese día, '
+            + 'en la del siguiente.'),
+          seccion('Cuentas de crédito'),
+          h('div.chips', datos.cuentas.map(c =>
+            chip(c, ESTADO.esCredito(c), () => alternarCredito(c), 'ancho'))),
+          h('p.nota', { estilo: { marginTop: '9px' } },
+            'Las marcadas aplazan el cargo al mes que las factura. Las demás salen el día '
+            + 'que se gastan.')
         ]),
 
         seccion('Avisos'),
         h('div.margen', [
           interruptor('fijo', 'El día que toca un fijo', 'aviso por la mañana'),
-          interruptor('saldo', 'Saldo bajo el límite', 'una sola vez por mes'),
-          interruptor('semanal', 'Resumen semanal', 'domingos por la noche'),
-          fila('Límite de aviso', FMT.dinero(datos.config.limite) + ' ›',
-               () => ANOTAR.editarLimite(), { clases: 'baja' })
+          interruptor('saldo', 'Saldo bajo el ahorro esperado', 'una sola vez por mes'),
+          interruptor('semanal', 'Resumen semanal', 'domingos por la noche')
         ]),
 
         seccion('Listas'),
@@ -83,11 +106,11 @@ const AJUSTES = (() => {
           fila('Conexión', h('span.fila-valor', {
             estilo: { color: enLinea ? 'var(--mut)' : 'var(--acc)' }
           }, enLinea ? 'correcta ✓' : 'sin conexión'), () => ESTADO.sincronizar()),
-          fila('Pendientes de enviar', h('span.fila-valor', {
+          fila('Pendientes de enviar (' + pendientes + ')', h('span.fila-valor', {
             estilo: { color: pendientes ? 'var(--acc)' : 'var(--mut)' }
-          }, pendientes ? pendientes + ' · enviar ahora' : '0'),
-            () => APP.vaciarCola({ aMano: true })),
-          fila('Conexión con la hoja', '3 pasos ›', () => abrirOnboarding()),
+          }, pendientes ? 'ver ›' : 'todo al día ›'),
+            () => { VISTA.ir('cola'); pintarCola(); }),
+          fila('Repetir onboarding', '3 pasos ›', () => abrirOnboarding()),
           fila('Versión', APP.versionServida() || '—', null)
         ]),
 
@@ -117,6 +140,158 @@ const AJUSTES = (() => {
         h('div.respiro')
       ])
     ]);
+  }
+
+  /* ------------------------------------------------------------- la cola
+
+     "3 sin enviar" no dice nada útil: quedarse sin cobertura y que la hoja
+     rechace la petición son problemas distintos, se arreglan de forma distinta
+     y hasta ahora se contaban igual. Aquí cada apunte enseña qué es, cuándo se
+     intentó por última vez y POR QUÉ no salió. */
+
+  function pintarCola() {
+    NUCLEO.todos().then(registros => {
+      const enLinea = ESTADO.estado().enLinea;
+
+      /* Un grupo, una petición, una fila en esta pantalla: las filas de un
+         mismo grupo viajan juntas y no tiene sentido ofrecer enviar media. */
+      const grupos = [];
+      registros.forEach(r => {
+        let g = grupos.find(x => x.grupo === r.grupo);
+        if (!g) { g = { grupo: r.grupo, registros: [] }; grupos.push(g); }
+        g.registros.push(r);
+      });
+      grupos.sort((a, b) => (a.registros[0].creado || 0) - (b.registros[0].creado || 0));
+
+      VISTA.pintar(document.getElementById('pantalla-cola'), [
+        h('div.cabeza-hoja', [
+          boton('salir', { onClick: () => VISTA.ir('ajustes') }, '‹ Ajustes'),
+          h('span.etiqueta', 'Pendientes')
+        ]),
+        h('div.margen.regla-fuerte', { estilo: { padding: '22px 26px 18px' } }, [
+          h('div.editorial', { estilo: { color: grupos.length ? 'var(--acc)' : 'var(--ink)' } },
+            grupos.length === 0 ? 'Todo al día'
+              : grupos.length === 1 ? 'Uno sin enviar' : grupos.length + ' sin enviar'),
+          h('p.nota.suelta', { estilo: { marginTop: '10px', maxWidth: '300px' } },
+            grupos.length === 0
+              ? 'No queda nada en la cola: todo lo anotado está escrito en la hoja.'
+              : 'Están guardados en el teléfono y no se pierden. Salen solos cuando la hoja '
+                + 'vuelva a contestar, o ahora mismo si los empujas.')
+        ]),
+        h('div.desliza.margen', [
+          grupos.map(g => filaCola(g, enLinea)),
+          grupos.length
+            ? h('div', { estilo: { padding: '20px 0 26px' } },
+                boton('boton tinta', { onClick: enviarTodo }, 'Enviar todo a la hoja'))
+            : h('div', { estilo: { padding: '20px 0 26px' } },
+                boton('boton suave', { onClick: () => VISTA.ir('ajustes') }, 'Volver a Ajustes')),
+          h('div.respiro')
+        ])
+      ]);
+    });
+  }
+
+  function filaCola(g, enLinea) {
+    const r = g.registros[0];
+    const fila = r.fila || {};
+    const cuantos = g.registros.length;
+
+    return h('div.pendiente', [
+      h('div.pendiente-cabeza', [
+        h('span.pendiente-nombre', nombreDeCola(r.accion, fila, cuantos)),
+        h('span.pendiente-monto', fila.importe != null ? FMT.dinero(fila.importe) : ''),
+        h('span.pendiente-meta',
+          [fila.cuenta, fila.persona].filter(Boolean).join(' · ') || accionEnClaro(r.accion))
+      ]),
+      /* El motivo, en acento y con su punto. Distinguir "sin conexión" de "la
+         hoja no respondió" es la mitad del valor de esta pantalla: la primera
+         se arregla sola y la segunda casi nunca. */
+      h('div.pendiente-motivo', [
+        h('span.cuadro'),
+        (r.ultimoIntento ? 'Último intento ' + FMT.momento(r.ultimoIntento) : 'Aún sin intentar')
+          + ' · ' + (r.ultimoError || (enLinea ? 'esperando su turno' : 'sin conexión'))
+      ]),
+      h('div.pendiente-acciones', [
+        boton('boton-cola', { onClick: () => enviarUno(g.grupo) }, 'Enviar ahora'),
+        boton('boton-cola peligro', { onClick: () => descartar(g) }, 'Descartar')
+      ])
+    ]);
+  }
+
+  function nombreDeCola(accion, fila, cuantos) {
+    if (accion === 'movimientos') return fila.categoria || 'Movimiento';
+    if (cuantos > 1) return accionEnClaro(accion) + ' · ' + cuantos + ' filas';
+    return accionEnClaro(accion);
+  }
+
+  function accionEnClaro(accion) {
+    return ({
+      'movimientos': 'Movimiento anotado',
+      'movimiento-edita': 'Cambio en un movimiento',
+      'movimiento-baja': 'Borrado de un movimiento',
+      'fijo': 'Alta o cambio de un fijo',
+      'fijo-baja': 'Borrado de un fijo',
+      'fijo-cargo': 'Marca de fijo cargado',
+      'cerrar-mes': 'Cierre del mes',
+      'cierre-baja': 'Reapertura del mes',
+      'reparto': 'Reparto del ahorro',
+      'metas': 'Cambio en las metas',
+      'config': 'Cambio de ajustes'
+    })[accion] || accion;
+  }
+
+  async function enviarUno(grupo) {
+    const r = await NUCLEO.enviarGrupo(grupo);
+    await ESTADO.refrescarPendientes();
+    pintarCola();
+    if (r.enviados) VISTA.avisar(r.enviados === 1 ? 'Enviada.' : r.enviados + ' enviadas.');
+    else VISTA.avisar('No se pudo enviar: ' + (r.motivo || 'sin motivo'), { mal: true });
+  }
+
+  async function enviarTodo() {
+    const r = await APP.vaciarCola({ aMano: true });
+    pintarCola();
+    if (r.enviados && !r.quedan) VISTA.avisar(r.enviados + ' enviadas.');
+    else if (r.motivo) VISTA.avisar('No se pudo enviar: ' + r.motivo, { mal: true });
+    else if (r.quedan) VISTA.avisar(r.quedan + ' siguen en cola.', { mal: true });
+    else VISTA.avisar('No queda nada por enviar.');
+  }
+
+  /** Descartar también ofrece deshacer: es la misma clase de acción que borrar
+   *  un movimiento —irreversible y sin preguntar— y merece la misma red. */
+  async function descartar(g) {
+    const copia = g.registros.slice();
+    await NUCLEO.borrarGrupo(g.grupo);
+    await ESTADO.refrescarPendientes();
+    pintarCola();
+    VISTA.vibrar();
+    VISTA.deshacer('Descartado: ' + nombreDeCola(copia[0].accion, copia[0].fila || {}, copia.length),
+      async () => {
+        await NUCLEO.reponer(copia);
+        await ESTADO.refrescarPendientes();
+        pintarCola();
+      });
+  }
+
+  function cambiarDiaCobro(nombre, dia) {
+    const { datos } = ESTADO.estado();
+    ESTADO.guardarConfig({
+      personas: datos.personas.map(p => p.nombre === nombre
+        // Volver a tocar el día elegido lo quita: sin día no hay aplazamiento,
+        // que es lo que quiere quien paga la tarjeta al contado.
+        ? Object.assign({}, p, { diaCobro: Number(p.diaCobro) === dia ? 0 : dia })
+        : p)
+    });
+  }
+
+  function alternarCredito(cuenta) {
+    const { datos } = ESTADO.estado();
+    const lista = datos.credito || [];
+    ESTADO.guardarConfig({
+      credito: ESTADO.esCredito(cuenta)
+        ? lista.filter(c => c !== cuenta)
+        : lista.concat([cuenta])
+    });
   }
 
   function cambiarPersona() {
@@ -225,9 +400,19 @@ const AJUSTES = (() => {
     const entrada = h('input.entrada.fuerte', {
       valor: nuevaCuenta,
       placeholder: 'Tarjeta Falabella…',
-      onInput: e => { nuevaCuenta = e.target.value; },
+      onInput: e => { nuevaCuenta = e.target.value; refrescarBoton(); },
       onKeyDown: e => { if (e.key === 'Enter') anadir(); }
     });
+
+    /* El botón se enciende al escribir, igual que en Categorías: el mismo gesto
+       contestaba distinto en dos pantallas gemelas. */
+    const botonAnadir = boton('boton' + (nuevaCuenta.trim() ? ' listo' : ''),
+                              { onClick: anadir }, 'Añadir');
+
+    function refrescarBoton() {
+      botonAnadir.className = 'boton' + (entrada.value.trim() ? ' listo' : '');
+      nuevaCuenta = entrada.value;
+    }
 
     function anadir() {
       const bruto = (entrada.value || '').trim();
@@ -249,7 +434,7 @@ const AJUSTES = (() => {
         seccion('En uso'),
         h('div.margen', filas),
         seccion('Escribir una nueva'),
-        h('div.margen.anadir', [entrada, boton('boton', { onClick: anadir }, 'Añadir')]),
+        h('div.margen.anadir', [entrada, botonAnadir]),
         sugeridas.length ? seccion('O de las sugeridas') : null,
         h('div.margen.chips', { estilo: { paddingBottom: '24px' } }, sugeridas.map(k =>
           boton('boton-pequeno', { onClick: () => guardar(datos.cuentas.concat([k])) }, '+ ' + k))),
@@ -372,8 +557,9 @@ const AJUSTES = (() => {
     VISTA.ir('quienes');
   }
 
-  /** Paso 2: quiénes anotan y con qué plan. Los nombres son los de la hoja: el
-   *  color se asigna por orden y es el que llevará esa persona en la barra. */
+  /** Paso 2: quiénes anotan y cuánto quieren ahorrar. Los nombres son los de la
+   *  hoja: el color se asigna por orden y es el que llevará esa persona en la
+   *  barra del mes. */
   function pintarQuienes() {
     const { datos } = ESTADO.estado();
     const personas = datos.personas.slice();
@@ -421,10 +607,10 @@ const AJUSTES = (() => {
             : null
         ])),
         h('div.margen', { estilo: { padding: '26px 26px 0' } }, [
-          h('div.etiqueta', { estilo: { paddingBottom: '8px' } }, 'Plan del mes, común'),
-          h('div.chips.apretados', CONFIG.PLANES_SUGERIDOS.map(v =>
-            chip(FMT.dinero(v), Number(datos.config.plan) === v,
-                 () => ESTADO.guardarConfig({ config: { plan: v } })))),
+          h('div.etiqueta', { estilo: { paddingBottom: '8px' } }, 'Ahorro esperado, común'),
+          h('div.chips.apretados', CONFIG.AHORROS_SUGERIDOS.map(v =>
+            chip(FMT.dinero(v), Number(datos.config.ahorroEsperado) === v,
+                 () => ESTADO.guardarConfig({ config: { ahorroEsperado: v } })))),
           h('p.nota', { estilo: { marginTop: '10px' } }, 'Lo puedes cambiar cuando quieras en Ajustes.')
         ]),
         h('div.respiro')
@@ -513,6 +699,7 @@ const AJUSTES = (() => {
     if (donde === 'atajo') pintarAtajo();
     if (donde === 'quienes') pintarQuienes();
     if (donde === 'detectados') pintarDetectados();
+    if (donde === 'cola') pintarCola();
   }
 
   return { pintar, abrirOnboarding };

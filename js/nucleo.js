@@ -177,6 +177,42 @@ const NUCLEO = (() => {
     return suyos.length;
   }
 
+  /** Devuelve a la cola unos registros retirados. Es lo que deshace un
+   *  "Descartar": lo que se sacó vuelve tal cual, con sus intentos y su
+   *  motivo, porque descartar por error no debería costar el apunte. */
+  async function reponer(registros) {
+    if (!registros || !registros.length) return 0;
+    await conTienda(COLA, 'readwrite', t => registros.forEach(r => t.put(r)));
+    return registros.length;
+  }
+
+  /**
+   * Manda UN grupo ahora mismo, saltándose las dos esperas.
+   *
+   * Es lo que hay detrás del "Enviar ahora" de una fila de la cola. `procesar`
+   * manda todo lo que esté listo, que es lo correcto para el botón de abajo;
+   * aquí hace falta poder empujar solo el apunte que tienes delante y contar
+   * qué ha pasado con ÉL, sin que el resultado se mezcle con el de los demás.
+   */
+  async function enviarGrupo(grupo) {
+    const suyos = (await todos()).filter(r => r.grupo === grupo);
+    if (!suyos.length) return { enviados: 0, motivo: '' };
+    let ajustes;
+    try {
+      ajustes = await leerAjustes();
+    } catch (error) {
+      return { enviados: 0, motivo: String(error.message || error) };
+    }
+    try {
+      await enviar(suyos.map(r => r.fila), ajustes, suyos[0].accion);
+      for (const r of suyos) await borrar(r.uuid);
+      return { enviados: suyos.length, motivo: '' };
+    } catch (error) {
+      await posponer(suyos, error);
+      return { enviados: 0, motivo: String(error.message || error) };
+    }
+  }
+
   /* -------------------------------------------------------------- envío */
 
   /**
@@ -308,7 +344,14 @@ const NUCLEO = (() => {
     const actualizados = registros.map(r => {
       const intentos = (r.intentos || 0) + 1;
       const espera = Math.min(MS_DESHACER * Math.pow(2, intentos), MAX_ESPERA);
-      return { ...r, intentos, ultimoError: String(error.message || error), reintentarEn: ahora + espera };
+      return {
+        ...r, intentos,
+        ultimoError: String(error.message || error),
+        // Cuándo se intentó, no cuándo toca el siguiente: es lo que hay que
+        // poder leer en la pantalla de pendientes.
+        ultimoIntento: ahora,
+        reintentarEn: ahora + espera
+      };
     });
     await conTienda(COLA, 'readwrite', t => actualizados.forEach(r => t.put(r)));
   }
@@ -316,7 +359,7 @@ const NUCLEO = (() => {
   return {
     MS_DESHACER,
     leerAjustes, guardarAjustes, guardarMes, leerMes,
-    encolar, todos, contar, borrar, borrarGrupo, ultimoError,
-    pedir, enviar, consultarMes, procesar
+    encolar, todos, contar, borrar, borrarGrupo, reponer, ultimoError,
+    pedir, enviar, enviarGrupo, consultarMes, procesar
   };
 })();

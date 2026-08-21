@@ -20,7 +20,13 @@
   --bg:      #F4F0E8;
   --ink:     #1A1815;
   --sec:     #58544C;
-  --mut:     #8A857C;
+  /* El paquete da #8A857C, pero sobre este papel son 3,2:1 y WCAG AA pide 4,5
+     para texto normal. `mut` no es adorno: es el color de "Hoy · viernes 21" y
+     de "Feria · Cuenta Corriente · Camila". Se sube un paso, que es justo lo
+     que el propio ANDROID_LAYOUT.md del paquete propone («si te parece
+     demasiado apagado, súbelo un paso: #8A857C → #58544C»). Ahora 6,6:1.
+     En oscuro no hace falta: allí #8F8778 ya da 5,3:1 y se queda como está. */
+  --mut:     #58544C;
   --faint:   #9C9482;
   --hair:    #DCD5C6;
   --acc:     #A3341F;
@@ -30,6 +36,12 @@
   --p2:      #A34E6B;
   --p3:      #5E7A52;
   --p4:      #9A7A3F;
+
+  /* Hacia dónde se rebaja el color de una tarjeta de crédito: al papel en
+     claro, a la tinta en oscuro. Mezclar siempre hacia el fondo deja el tramo
+     casi igual que --hair, que en la barra significa lo contrario —lo que NO
+     se ha gastado—, y la tarjeta desaparecía del modo oscuro. */
+  --rebaja: var(--bg);
 
   --margen: 26px;
   --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
@@ -51,6 +63,7 @@
     --p2:      #D08DA6;
     --p3:      #9FB78F;
     --p4:      #D3B173;
+    --rebaja:  var(--ink);
   }
 }
 
@@ -68,6 +81,7 @@
   --p2:      #D08DA6;
   --p3:      #9FB78F;
   --p4:      #D3B173;
+  --rebaja:  var(--ink);
 }
 
 /* ------------------------------------------------------------------ reset */
@@ -122,6 +136,21 @@ input {
   outline: none;
 }
 input::placeholder { color: var(--mut); opacity: 1; }
+
+/* El foco de teclado, visible.
+
+   El reset apaga el outline de los input y el resaltado de toque de los
+   botones, que es lo que se quiere con el dedo: en un móvil el outline solo
+   ensucia. Pero quien navega con teclado —o con un mando, o con conmutador— se
+   queda sin saber dónde está.
+
+   :focus-visible es exactamente esa distinción: el navegador solo lo aplica
+   cuando el foco vino del teclado, así que esto no se ve nunca tocando la
+   pantalla y siempre tabulando. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 
 /* ------------------------------------------------------------------- capas */
 
@@ -262,17 +291,58 @@ input::placeholder { color: var(--mut); opacity: 1; }
 .saldo.negativo .saldo-signo, .saldo.negativo .saldo-numero { color: var(--acc); }
 .saldo.lectura .saldo-signo { color: var(--mut); }
 
-/* La barra de reparto: un tramo por persona y, al final, lo que aún tiene que
+/* La barra de reparto: por cada persona su tramo sólido y, si tiene factura de
+   otro mes, el mismo color rebajado detrás. Al final lo que aún tiene que
    salir. Sin redondeo y sin hueco entre tramos, como una regla graduada. */
-.barra { display: flex; height: 9px; background: var(--hair); margin-top: 2px; }
+.barra { display: flex; height: 9px; background: var(--hair); margin-top: 2px; position: relative; }
 .barra > div { height: 100%; }
 
-.leyenda {
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  font-size: 10px; white-space: nowrap; color: var(--sec);
+/* Hasta aquí se puede gastar sin comerse el ahorro esperado. Es una marca y no
+   un tramo: no ocupa sitio, señala un punto. */
+.barra-marca {
+  position: absolute; top: -4px; bottom: -4px; width: 2px;
+  background: var(--ink);
 }
-.leyenda > span { display: flex; align-items: center; gap: 5px; }
-.cuadro { width: 7px; height: 7px; flex: 0 0 7px; background: var(--acc); }
+
+/* La leyenda no lleva cifras: son cuadros con su nombre y una salida al
+   detalle. Las cifras ya están arriba en el saldo y abajo en las columnas. */
+.leyenda { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.leyenda-colores {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  min-width: 0; font-size: 10px; color: var(--sec);
+}
+.leyenda-colores > span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.leyenda-detalle {
+  flex: 0 0 auto; white-space: nowrap; padding: 8px 11px; font-size: 11px;
+  border: 1px solid var(--hair); color: var(--sec);
+}
+.cuadro { width: 8px; height: 8px; flex: 0 0 8px; background: var(--acc); }
+.cuadro.grande { width: 11px; height: 11px; flex: 0 0 11px; }
+/* Con filete de 1 px. Sin él, el cuadro de «Disponible» —que es del color de la
+   regla— desaparece sobre el papel y la leyenda se queda con un hueco. */
+.leyenda-colores .cuadro { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14); }
+
+/* Lo que el saldo en rojo no dice por sí solo: cuánto de más. */
+.aviso-exceso { font-size: 11px; line-height: 1.55; color: var(--acc); }
+
+/* --------------------------------------------------------- detalle del mes */
+
+.detalle-saldo { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.detalle-saldo-signo { font-family: var(--serif); font-size: 20px; }
+.detalle-saldo-cifra { font-family: var(--serif); font-size: 30px; }
+.detalle-saldo.excedido .detalle-saldo-signo,
+.detalle-saldo.excedido .detalle-saldo-cifra { color: var(--acc); }
+
+.tramo { padding: 14px 0; border-bottom: 1px solid var(--hair); display: flex; flex-direction: column; gap: 5px; }
+.tramo-cabeza { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.tramo-titulo { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.tramo-monto { font-family: var(--serif); font-size: 20px; white-space: nowrap; }
+/* La sangría alinea el texto con el título, no con el cuadro de color. */
+.tramo-incluye { margin-left: 19px; font-size: 11px; line-height: 1.55; color: var(--mut); }
+
+.cruces { display: flex; flex-direction: column; gap: 8px; }
+.cruce { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; line-height: 1.55; color: var(--sec); }
+.cruce > .cuadro { margin-top: 4px; }
 
 /* ------------------------------------------------------------- personas */
 
@@ -293,6 +363,8 @@ input::placeholder { color: var(--mut); opacity: 1; }
 .marca { width: 9px; height: 9px; flex: 0 0 9px; }
 .persona-total { font-family: var(--serif); font-size: 26px; line-height: 1; }
 .persona-detalle { font-size: 11px; color: var(--mut); }
+/* Pasarse del tope no es un matiz: es el número que hay que ver de lejos. */
+.persona-total.excedido, .persona-detalle.excedido { color: var(--acc); }
 
 .reparto-linea { padding: 11px var(--margen) 12px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--hair); }
 
@@ -323,6 +395,13 @@ input::placeholder { color: var(--mut); opacity: 1; }
   text-align: left;
 }
 .mov-nombre { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mov-meta.pendiente { color: var(--acc); }
+.mov-sin-enviar {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: var(--acc);
+}
+.mov-sin-enviar > .cuadro { width: 5px; height: 5px; flex: 0 0 5px; }
 .mov-importe { font-family: var(--serif); font-size: 17px; white-space: nowrap; }
 .mov-importe.entra { color: var(--mut); }
 .mov-meta { grid-column: 1 / -1; font-size: 11px; color: var(--mut); }
@@ -363,16 +442,37 @@ input::placeholder { color: var(--mut); opacity: 1; }
 .chip.activo { background: var(--ink); color: var(--invT); border-color: var(--ink); }
 .chip.pequeno { padding: 6px 9px; font-size: 11px; }
 .chip.dia { min-width: 32px; text-align: center; padding: 6px 8px; font-size: 11px; }
-.chip.ancho { padding: 10px 12px; }
-.chip.filtro { padding: 9px 11px; }
+/* Los de elegir de verdad —categorías, cuentas, meses— llevan la zona de toque
+   entera. Son min-height y no height porque Android escala la fuente del
+   sistema hasta el 130 % y un alto fijo recorta la palabra. */
+.chip.ancho { padding: 0 14px; min-height: 44px; display: inline-flex; align-items: center; }
+.chip.filtro { padding: 6px 9px; }
 
 .chips { display: flex; gap: 7px; flex-wrap: wrap; }
 .chips.apretados { gap: 6px; }
+
+/* Una sola fila que se desliza, para las listas largas. Con dieciocho
+   categorías, envolverlas ocupa cinco filas y en un móvil real lo que se queda
+   fuera de la pantalla es el teclado. */
+.chips.tira {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex: 0 0 auto;
+  -webkit-overflow-scrolling: touch;
+}
+.chips.tira > * { flex: 0 0 auto; white-space: nowrap; }
 
 /* Etiqueta a la izquierda y chips a la derecha. En una sola columna los chips
    caían debajo de su etiqueta y la ficha del fijo se hacía tres pantallas. */
 .chips-fila { display: grid; grid-template-columns: 50px 1fr; gap: 8px; align-items: start; }
 .chips-fila > .etiqueta { padding-top: 8px; }
+
+/* La tira de días de cobro va con el nombre encima y no al lado: en 50 px no
+   cabe un nombre con su cuadro de color, y son siete días. */
+.chips-fila.dias-cobro { display: block; padding: 10px 0 4px; }
+.chips-fila.dias-cobro > .etiqueta {
+  display: flex; align-items: center; gap: 6px; padding: 0 0 7px; color: var(--sec);
+}
 
 /* ---------------------------------------------------------------- botones */
 
@@ -447,16 +547,21 @@ input::placeholder { color: var(--mut); opacity: 1; }
   border: 1px solid var(--hair);
   border-bottom: 0;
 }
+/* min-height y no height: la tecla contiene texto y Android escala la fuente
+   del sistema hasta el 130 %. Con alto fijo, el número se corta. */
 .tecla {
-  height: 56px;
+  min-height: 56px;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--serif);
   font-size: 25px;
   background: var(--bg);
 }
-.tecla:active { background: var(--hair); }
 
-.bloque-teclado { margin-top: auto; padding: 0 18px; }
+/* Sin margin-top:auto para anclar el teclado. Funciona solo cuando sobra
+   espacio, y en la pantalla más apretada de la app el problema es justo el
+   contrario. Lo que lo ancla es que .desliza se lleva todo el sobrante
+   (flex: 1 1 0 con min-height: 0) y él se queda en flex: 0 0 auto. */
+.bloque-teclado { padding: 0 18px; }
 .bloque-guardar { padding: 14px 18px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
 .bloque-guardar.doble { grid-template-columns: 1fr 1fr; }
 
@@ -482,7 +587,12 @@ input::placeholder { color: var(--mut); opacity: 1; }
 .reparto-meta .monto { font-family: var(--serif); font-size: 21px; }
 .reparto-meta .monto.vacio { color: var(--hair); }
 .reparto-meta .pista { font-size: 11px; color: var(--mut); }
-.reparto-meta .accion { font-size: 11px; color: var(--sec); text-align: right; }
+/* Con padding vertical para llegar a la zona de toque mínima: sin él son once
+   píxeles de texto y el dedo falla más veces de las que acierta. */
+.reparto-meta .accion {
+  font-size: 11px; color: var(--sec); text-align: right;
+  min-height: 24px; display: flex; align-items: center; justify-content: flex-end;
+}
 .reparto-meta .accion.quita { color: var(--acc); }
 
 /* ------------------------------------------------------------------ tabs */
@@ -525,10 +635,56 @@ input::placeholder { color: var(--mut); opacity: 1; }
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   background: var(--ink);
   color: var(--invT);
+  overflow: hidden;
+  animation: barraEntra 260ms ease-out;
 }
 .deshacer[hidden] { display: none; }
 .deshacer-texto { font-size: 12px; }
 .deshacer-boton { padding: 8px 12px; font-size: 12px; border: 1px solid var(--invT); }
+
+/* La barra entra deslizando desde abajo y se retira por donde vino, colapsando
+   su propio alto en vez de desaparecer de golpe: así lo que hay encima no da
+   un salto.
+
+   Durante la salida no acepta toques. Pulsar "Deshacer" en una barra que ya se
+   está yendo deshacía un borrado que el usuario creía consumado, y en los 300
+   ms de la animación el dedo llega de sobra. */
+.deshacer.saliendo { animation: barraSale 300ms ease-in forwards; pointer-events: none; }
+
+.banner, .aviso-exceso { animation: avisoEntra 300ms ease-out; }
+@keyframes avisoEntra {
+  from { opacity: 0; transform: translateY(-40%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes barraEntra {
+  from { max-height: 0; opacity: 0; transform: translateY(70%); }
+  to   { max-height: 90px; opacity: 1; transform: translateY(0); }
+}
+@keyframes barraSale {
+  from { max-height: 90px; opacity: 1; transform: translateY(0); }
+  to   { max-height: 0; opacity: 0; transform: translateY(70%); padding-top: 0; padding-bottom: 0; }
+}
+
+/* ---------------------------------------------------------- pendientes */
+
+.pendiente { padding: 14px 0; border-bottom: 1px solid var(--hair); display: flex; flex-direction: column; gap: 8px; }
+.pendiente-cabeza { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 3px; align-items: baseline; }
+.pendiente-nombre { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pendiente-monto { font-family: var(--serif); font-size: 19px; white-space: nowrap; }
+.pendiente-meta { font-size: 11px; color: var(--mut); grid-column: 1 / -1; }
+/* El motivo en acento: quedarse sin cobertura y que la hoja rechace la
+   petición son problemas distintos y hasta ahora se contaban igual. */
+.pendiente-motivo { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--acc); }
+.pendiente-motivo > .cuadro { width: 6px; height: 6px; flex: 0 0 6px; }
+.pendiente-acciones { display: flex; gap: 8px; }
+.boton-cola {
+  min-height: 40px; display: flex; align-items: center; padding: 0 14px;
+  font-size: 12px; border: 1px solid var(--ink);
+}
+.boton-cola.peligro { border-color: var(--hair); color: var(--acc); }
+.boton-cola:active { background: var(--ink); color: var(--invT); transform: scale(0.96); }
+.boton-cola.peligro:active { background: var(--acc); color: var(--bg); border-color: var(--acc); }
 
 /* ------------------------------------------------------------------ atajo */
 
@@ -580,6 +736,62 @@ input::placeholder { color: var(--mut); opacity: 1; }
    prefiere no ver animaciones, no las ve. */
 .pantalla.activa { animation: aparece 140ms ease-out; }
 @keyframes aparece { from { opacity: 0; } to { opacity: 1; } }
+
+/* ------------------------------------------------------------ apretado
+
+   Sin sombras ni relieve, el acuse de un toque tiene que ser el propio color.
+   Son cuatro lenguajes, uno por tipo de botón, y cada uno dice qué clase de
+   acción es antes de que pase nada:
+
+     primario     invierte a papel y se queda con un filete de tinta;
+     de borde     se rellena de tinta;
+     destructivo  se rellena del acento;
+     de banner    se rellena de su propio color, el que ya tenía el texto.
+
+   Todos encogen a 0.96. Las teclas van a 60 ms porque se pulsan en ráfaga y
+   90 ms se notarían como retraso; el resto a 90 ms.
+
+   Los interruptores NO se animan. Ahí el cambio de color es el resultado, no
+   el acuse: animarlos hace dudar de si el toque ha llegado. */
+
+.tecla, .chip, .boton, .fila, .banner-accion, .tab, .tab-anotar,
+.salir, .flecha, .quitar, .boton-pequeno, .leyenda-detalle,
+.deshacer-boton, .mov, .editable, .reparto-meta {
+  transition: transform 90ms ease-out, background-color 90ms ease-out, color 90ms ease-out;
+}
+.tecla { transition-duration: 60ms; }
+
+.tecla:active { background: var(--ink); color: var(--invT); transform: scale(0.96); }
+
+.boton.tinta:active { background: var(--bg); color: var(--ink); border-color: var(--ink); transform: scale(0.96); }
+.boton.contorno:active,
+.boton.suave:active,
+.boton-pequeno:active,
+.leyenda-detalle:active,
+.chip:active { background: var(--ink); color: var(--invT); border-color: var(--ink); transform: scale(0.96); }
+.boton.peligro:active,
+.quitar:active { background: var(--acc); color: var(--invT); border-color: var(--acc); transform: scale(0.96); }
+.deshacer-boton:active { background: var(--invT); color: var(--ink); transform: scale(0.96); }
+/* El de un banner se rellena de su propio color: el urgente en acento, el
+   normal en tinta. currentColor ya es ese color, así que no hace falta
+   distinguirlos. */
+.banner-accion:active { background: currentColor; color: var(--avisoBg); transform: scale(0.96); }
+.fila:active, .mov:active, .editable:active, .reparto-meta:active { background: var(--hair); }
+.salir:active, .flecha:active, .tab:active { transform: scale(0.96); }
+.tab-anotar:active { background: var(--bg); color: var(--ink); }
+
+/* El interruptor de Ajustes es el resultado, no el acuse: no se anima. */
+.estado { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tecla, .chip, .boton, .fila, .banner-accion, .tab, .tab-anotar,
+  .salir, .flecha, .quitar, .boton-pequeno, .leyenda-detalle,
+  .deshacer-boton, .mov, .editable, .reparto-meta { transition: none; }
+  .tecla:active, .boton:active, .chip:active, .banner-accion:active,
+  .salir:active, .flecha:active, .tab:active, .quitar:active,
+  .boton-pequeno:active, .leyenda-detalle:active, .deshacer-boton:active { transform: none; }
+  .deshacer, .deshacer.saliendo, .banner, .aviso-exceso { animation: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .pantalla.activa { animation: none; }

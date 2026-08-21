@@ -72,19 +72,28 @@ const AHORRO = (() => {
           h('div', { estilo: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } }, [
             h('span.fila-nombre', 'Proyectado al cierre'),
             h('span.cifra', {
-              estilo: { fontSize: '26px', color: r.ahorro < 0 ? 'var(--acc)' : 'var(--ink)' }
-            }, FMT.dinero(r.ahorro))
+              estilo: { fontSize: '26px', color: r.queda < 0 ? 'var(--acc)' : 'var(--ink)' }
+            }, FMT.dinero(r.queda))
           ]),
-          /* La resta entera, no solo el total. El plan hace de ingreso —se fija
-             cada mes según lo que se va a cobrar— y lo que se anote aparte se
-             suma encima. Enseñarla desglosada es lo que deja ver, sin tener que
-             explicarlo, que anotar un sueldo lo contaría dos veces. */
+          /* La resta entera, no solo el total. El techo del mes es lo que entra
+             —los ingresos anotados más los que el calendario dice que van a
+             entrar—, así que enseñarla desglosada es lo que deja ver de dónde
+             sale la cifra sin tener que explicarlo aparte. */
           h('p.nota', { estilo: { marginTop: '6px' } },
-            FMT.dinero(r.plan) + ' de plan'
-            + (r.entrado ? ' · ' + FMT.dinero(r.entrado) + ' entraron aparte' : '')
+            (r.entrado ? FMT.dinero(r.entrado) + ' entraron' : 'nada ha entrado aún')
             + (r.porEntrar ? ' · ' + FMT.dinero(r.porEntrar) + ' por entrar' : '')
             + ' · ' + FMT.dinero(r.gastado) + ' gastado'
-            + (r.porVenir ? ' · ' + FMT.dinero(r.porVenir) + ' de fijos por venir' : ''))
+            + (r.porVenir ? ' · ' + FMT.dinero(r.porVenir) + ' de fijos por venir' : '')),
+          /* Cerrar desde aquí y no solo desde Ajustes: esta es la pantalla en
+             la que estás mirando cuánto has ahorrado, y es donde apetece
+             repartirlo. En mitad de mes no aparece —cerrar entonces archiva un
+             mes sin terminar— y la nota dice desde cuándo se puede. */
+          ESTADO.sePuedeCerrar(mes)
+            ? boton('boton contorno', { estilo: { marginTop: '12px', padding: '13px', fontSize: '13px' },
+                                        onClick: () => cerrarMesYRepartir(mes) },
+                    'Cerrar ' + FMT.nombreMes(mes) + ' y repartir')
+            : h('p.nota', { estilo: { marginTop: '10px' } },
+                'Se cierra solo la última noche del mes. Al cerrarlo eliges a qué metas va lo ahorrado.')
         ]),
 
         seccion('Meses cerrados'),
