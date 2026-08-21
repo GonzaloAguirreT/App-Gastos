@@ -7,8 +7,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#14100E",
-  "theme_color": "#14100E",
+  "background_color": "#F4F0E8",
+  "theme_color": "#F4F0E8",
   "lang": "es",
   "shortcuts": [
     {
@@ -16,27 +16,57 @@
       "short_name": "Anotar",
       "description": "Abre el teclado directamente, sin pasar por el mes",
       "url": "./index.html?anotar=1",
-      "icons": [{ "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "iconos/icono-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "icons": [
     {
+      "src": "iconos/icono-48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "iconos/icono-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "iconos/icono-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "iconos/icono-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "iconos/icono-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "iconos/icono-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "iconos/icono-maskable-512.png",
+      "src": "iconos/icono-monocromo-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "monochrome"
     }
   ]
 }

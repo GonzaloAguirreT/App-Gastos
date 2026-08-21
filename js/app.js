@@ -12,8 +12,9 @@ const APP = (() => {
      worker sirve una mezcla, y antes se manifestaba como una app que se moría
      en silencio a mitad de un toque. Mejor decirlo en voz alta. */
   const HUECOS = [
-    'pantalla-mes', 'pantalla-historial', 'pantalla-detalle', 'pantalla-fijos',
-    'pantalla-fijo', 'pantalla-ahorro', 'pantalla-reparto', 'pantalla-anotar',
+    'pantalla-mes', 'pantalla-mes-detalle', 'pantalla-historial', 'pantalla-detalle',
+    'pantalla-fijos', 'pantalla-fijo', 'pantalla-ahorro', 'pantalla-reparto',
+    'pantalla-anotar', 'pantalla-cola',
     'pantalla-ajustes', 'pantalla-categorias', 'pantalla-cuentas', 'pantalla-atajo',
     'pantalla-conectar', 'pantalla-quienes', 'pantalla-detectados',
     'tabs', 'deshacer', 'deshacer-texto', 'deshacer-boton', 'btn-anotar'

@@ -8,9 +8,9 @@
  *   `ajustes` es lo de ESTE teléfono: la conexión, quién anota aquí, su cuenta
  *             habitual y el tema. No viaja a la hoja.
  *
- * El plan del mes, el límite de aviso y los avisos NO son ajustes del teléfono
- * aunque lo parezcan: son de los dos, y por eso viven en la hoja. Si Camila
- * sube el plan, Gonzalo tiene que verlo subido.
+ * El ahorro esperado y los avisos NO son ajustes del teléfono aunque lo
+ * parezcan: son de los dos, y por eso viven en la hoja. Si Camila sube el
+ * ahorro esperado, Gonzalo tiene que verlo subido.
  *
  * Toda escritura hace dos cosas, en este orden: cambia `datos` en memoria para
  * que la pantalla responda al instante, y encola la operación para el backend.
@@ -26,9 +26,17 @@ const ESTADO = (() => {
 
   const datosVacios = {
     hoy: FMT.iso(),
-    config: { plan: CONFIG.PLAN, limite: CONFIG.LIMITE, avisos: { fijo: true, saldo: true, semanal: false } },
-    personas: CONFIG.PERSONAS.map((nombre, i) => ({ nombre, color: CONFIG.COLORES_PERSONA[i] || CONFIG.COLORES_PERSONA[0] })),
+    config: { ahorroEsperado: CONFIG.AHORRO_ESPERADO, avisos: { fijo: true, saldo: true, semanal: false } },
+    personas: CONFIG.PERSONAS.map((nombre, i) => ({
+      nombre,
+      color: CONFIG.COLORES_PERSONA[i] || CONFIG.COLORES_PERSONA[0],
+      diaCobro: CONFIG.DIA_COBRO
+    })),
     cuentas: CONFIG.CUENTAS.slice(),
+    /* Qué cuentas aplazan el cargo. Es una lista aparte y no una marca en el
+       nombre porque la hoja la guarda así (`Listas!E`) y porque una cuenta
+       puede dejar de ser de crédito sin cambiar de nombre. */
+    credito: CONFIG.CREDITO.slice(),
     categorias: CONFIG.CATEGORIAS.map(c => Object.assign({}, c)),
     movimientos: [],
     fijos: [],
@@ -39,6 +47,7 @@ const ESTADO = (() => {
   let datos = clonar(datosVacios);
   let ajustes = { endpoint: '', token: '', persona: '', cuenta: '', tema: 'sistema', onboarding: false };
   let pendientes = 0;
+  let enCola = [];          // uuids de lo que todavía no ha llegado a la hoja
   let enLinea = navigator.onLine !== false;
   let ultimoFallo = '';
   let sincronizando = false;
@@ -116,6 +125,64 @@ const ESTADO = (() => {
     return datos.categorias.filter(c => c.tipo === tipo).map(c => c.nombre);
   }
 
+  /* ------------------------------------------------- el calendario chileno
+
+     Un movimiento tiene dos fechas y confundirlas es el error clásico: el día
+     en que ocurrió y el mes que lo paga. Compras el 15 de agosto con la
+     tarjeta y la factura llega el 5 de septiembre: el gasto es de septiembre.
+     Un sueldo cobrado el 30 de julio se gasta en agosto.
+
+     Toda la app filtra por el mes que paga y NUNCA por la fecha. Filtrar por
+     la fecha pondría la factura en el mes en el que no la vas a pagar. */
+
+  /** ¿Aplaza esta cuenta el cargo? Lo dice la lista de la hoja, no el nombre:
+   *  llamar «Tarjeta» a una cuenta de débito es más fácil de lo que parece. */
+  function esCredito(cuenta) {
+    return (datos.credito || []).indexOf(cuenta) !== -1;
+  }
+
+  /**
+   * El día en que factura cada persona. Es de cada uno y no del hogar: uno
+   * puede facturar el 5 y la otra el 25.
+   *
+   * Sin día no hay aplazamiento, y eso es deliberado: mientras la hoja no
+   * traiga la columna —un despliegue viejo, una hoja recién creada— más vale
+   * imputar todo al mes de la compra que aplazarlo todo al siguiente.
+   */
+  function diaCobroDe(nombre) {
+    const p = persona(nombre);
+    return Math.max(0, Number(p && p.diaCobro) || 0);
+  }
+
+  /**
+   * El mes que paga un movimiento.
+   *
+   * Un GASTO se calcula siempre con la regla, aquí y ahora. Es una función de
+   * la fecha, la cuenta y el día de cobro de esa persona, y las tres viven en
+   * la hoja, que es la misma para los dos teléfonos. Recalcularlo es lo que
+   * hace que cambiar un día de cobro en Ajustes mueva de mes las compras que ya
+   * estaban anotadas: leer el `paraMes` guardado dejaría la pantalla enseñando
+   * el reparto de antes del cambio, y el número no volvería a cuadrar hasta que
+   * la hoja reescribiera la columna.
+   *
+   * Un INGRESO no lleva regla que valga: su mes lo eligió un dedo en «Este
+   * dinero se usa en», así que manda lo que venga escrito.
+   *
+   * Quien escribe la columna de la hoja sigue siendo el backend —es el único
+   * sitio donde el cálculo es idéntico para los dos teléfonos—; esto es lo que
+   * la app enseña mientras tanto.
+   */
+  function mesImputado(m) {
+    const mes = FMT.mesDe(m.fecha);
+    if (m.tipo === 'Ingreso') return m.paraMes ? FMT.aMes(m.paraMes) : mes;
+    if (!esCredito(m.cuenta)) return mes;
+    const corte = diaCobroDe(m.persona);
+    if (!corte) return mes;
+    // Antes de su día de cobro entra en la factura de este mes; desde su día,
+    // en la del siguiente.
+    return Number(String(m.fecha).slice(8)) < corte ? mes : FMT.mesMas(mes, 1);
+  }
+
   /* -------------------------------------------------------------- fijos */
 
   /**
@@ -149,14 +216,37 @@ const ESTADO = (() => {
     return Boolean(fijo.ultimo && FMT.mesDe(fijo.ultimo) === mes);
   }
 
-  /** Los fijos que tocan en un mes: los que aún tienen que salir y los que ya
+  /**
+   * En qué mes de calendario tiene que cobrarse un fijo para que su dinero
+   * cuente en `mes`.
+   *
+   * Solo un ingreso puede declararlo: un sueldo que se paga el 30 se gasta el
+   * mes siguiente, así que el que alimenta agosto es el que se cobra en julio.
+   * Un gasto no lo lleva —la ficha del fijo solo ofrece esa fila a los
+   * ingresos— porque un cargo sale el día que sale.
+   */
+  function mesCobroDe(fijo, mes) {
+    return fijo.tipo === 'Ingreso' && fijo.usaEn === 'siguiente'
+      ? FMT.mesMas(mes, -1) : mes;
+  }
+
+  /** Los fijos que aportan a un mes: los que aún tienen que salir y los que ya
    *  salieron. Sin los segundos, la lista de agosto se vaciaría sola a medida
    *  que avanza el mes. */
   function fijosDelMes(mes, tipo = null) {
     return datos.fijos
       .filter(f => f.activo !== false)
       .filter(f => tipo === null || f.tipo === tipo)
-      .filter(f => caeEn(f, mes) || cargadoEn(f, mes));
+      .filter(f => {
+        const cobro = mesCobroDe(f, mes);
+        return caeEn(f, cobro) || cargadoEn(f, cobro);
+      });
+  }
+
+  /** ¿Ya está cobrado el pago que alimenta a `mes`? Es `cargadoEn` mirando el
+   *  mes en que se cobra, que para un ingreso aplazado no es el mismo. */
+  function cobradoParaMes(fijo, mes) {
+    return cargadoEn(fijo, mesCobroDe(fijo, mes));
   }
 
   function diaDeCargo(fijo, mes) {
@@ -165,7 +255,14 @@ const ESTADO = (() => {
 
   /* ------------------------------------------------------ el mes en curso */
 
+  /** Los movimientos que PAGA este mes, no los que ocurrieron en él. */
   function movimientosDe(mes) {
+    return datos.movimientos.filter(m => mesImputado(m) === mes);
+  }
+
+  /** Los que ocurrieron en él, se paguen cuando se paguen. Solo hace falta
+   *  para explicar los cruces de mes: qué se compró aquí y se cobra fuera. */
+  function movimientosFechadosEn(mes) {
     return datos.movimientos.filter(m => FMT.mesDe(m.fecha) === mes);
   }
 
@@ -180,42 +277,102 @@ const ESTADO = (() => {
   function resumen(mes) {
     const movs = movimientosDe(mes);
     const gastos = movs.filter(m => m.tipo === 'Gasto');
+    const ingresos = movs.filter(m => m.tipo === 'Ingreso');
     const gastado = suma(gastos);
-    const entrado = suma(movs.filter(m => m.tipo === 'Ingreso'));
+    const entrado = suma(ingresos);
 
-    const porVenir = suma(fijosDelMes(mes, 'Gasto').filter(f => !cargadoEn(f, mes)), 'importe');
-    const porEntrar = suma(fijosDelMes(mes, 'Ingreso').filter(f => !cargadoEn(f, mes)), 'importe');
+    const fijosGasto = fijosDelMes(mes, 'Gasto');
+    const fijosIngreso = fijosDelMes(mes, 'Ingreso');
+    const porVenir = suma(fijosGasto.filter(f => !cobradoParaMes(f, mes)), 'importe');
+    const porEntrar = suma(fijosIngreso.filter(f => !cobradoParaMes(f, mes)), 'importe');
 
-    const plan = Number(datos.config.plan) || 0;
+    /* El techo del mes es LO QUE ENTRA, no un presupuesto escrito a mano.
+       Medirse contra un número inventado deja que el mes cuadre en la app y no
+       en la cuenta del banco; medirse contra los ingresos no. */
+    const entra = entrado + porEntrar;
+    const ahorroEsperado = Number(datos.config.ahorroEsperado) || 0;
+    const queda = entra - gastado - porVenir;
+
+    /* Lo que se puede gastar entre todos, y el tope de cada uno en proporción
+       a lo que aporta: si entran 60 de uno y 40 de la otra y se quieren
+       ahorrar 20, los topes son el 60 % y el 40 % de los 80 que quedan. */
+    const gastable = Math.max(0, entra - ahorroEsperado);
+    const aporteDe = nombre =>
+      suma(ingresos.filter(m => m.persona === nombre))
+      + suma(fijosIngreso.filter(f => !cobradoParaMes(f, mes) && f.persona === nombre), 'importe');
+    const aporteTotal = datos.personas.reduce((a, p) => a + aporteDe(p.nombre), 0);
+
     const comun = suma(gastos.filter(m => m.reparto === 'Común'));
+    const pct = n => entra > 0 ? Math.max(0, Math.min(100, (n / entra) * 100)) : 0;
 
     return {
       mes,
-      plan,
+      entra,
+      ahorroEsperado,
       gastado,
       entrado,
       porVenir,
       porEntrar,
-      queda: plan - gastado - porVenir,
+      queda,
+      /* Se ha comido el colchón: queda menos de lo que se quería ahorrar.
+       *
+       * Hace falta que haya entrado algo. Sin ingresos no hay techo, y sin
+       * techo lo que queda es cero, que siempre está por debajo del ahorro
+       * esperado: el día 1, antes del primer sueldo, la pantalla Mes acusaba de
+       * haber gastado de más doscientos mil sin un solo gasto anotado. Y es la
+       * primera pantalla que ve alguien que acaba de conectar su hoja. */
+      bajoAhorro: ahorroEsperado > 0 && entra > 0 && queda < ahorroEsperado,
       comun,
       personal: gastado - comun,
-      /* El plan ES el ingreso. Gonzalo y Camila lo fijan cada mes a partir de
-         lo que van a cobrar, así que el sueldo no se anota en la app: ya está
-         dentro del plan. Lo que sí se anota —un bono, una devolución— se suma
-         encima, porque eso es dinero que el plan no contemplaba.
-         Si algún día se anotara un sueldo se contaría dos veces; por eso la
-         nota de la pantalla enseña la resta entera en vez de solo el total. */
-      ahorro: plan + entrado + porEntrar - gastado - porVenir,
+      // Dónde cae la marca del ahorro esperado sobre la barra.
+      pctAhorro: pct(Math.max(0, entra - ahorroEsperado)),
+      pctPorVenir: pct(porVenir),
       porPersona: datos.personas.map(p => {
         const suyos = gastos.filter(m => m.persona === p.nombre);
+        const total = suma(suyos);
+        /* Su tarjeta: lo que compró en otro mes y se le cobra en este. Va en la
+           barra con su mismo color rebajado —es su gasto, pero de otro mes— y
+           cuenta dentro de su tope, porque el dinero sale ahora. */
+        const tarjeta = suma(suyos.filter(m => FMT.mesDe(m.fecha) !== mes));
+        const cuota = aporteTotal > 0
+          ? aporteDe(p.nombre) / aporteTotal
+          : 1 / Math.max(1, datos.personas.length);
+        const tope = gastable * cuota;
         return {
           nombre: p.nombre,
           color: colorPersona(p.nombre),
-          total: suma(suyos),
+          total,
+          tarjeta,
+          propio: total - tarjeta,
           cuantos: suyos.length,
-          parte: plan ? Math.max(0, Math.min(100, (suma(suyos) / plan) * 100)) : 0
+          cuota,
+          tope,
+          pctTope: tope > 0 ? (total / tope) * 100 : 0,
+          pasado: tope > 0 && total > tope,
+          parte: pct(total - tarjeta),
+          parteTarjeta: pct(tarjeta)
         };
-      })
+      }),
+      cruces: cruces(mes, movs)
+    };
+  }
+
+  /**
+   * La letra pequeña del saldo: por qué la cifra no es simplemente lo que
+   * entró menos lo que gastaste.
+   *
+   * Son las cuatro formas de cruzar un mes: dinero que se cobró fuera y se usa
+   * aquí, facturas de tarjeta de otro mes que se pagan aquí, compras de aquí
+   * que se cobrarán fuera, e ingresos de aquí reservados para el mes siguiente.
+   */
+  function cruces(mes, movs) {
+    const deFuera = x => FMT.mesDe(x.fecha) !== mes;
+    const salen = movimientosFechadosEn(mes).filter(m => mesImputado(m) !== mes);
+    return {
+      entra: movs.filter(m => m.tipo === 'Ingreso' && deFuera(m)),
+      entraTarjeta: movs.filter(m => m.tipo === 'Gasto' && deFuera(m)),
+      saleTarjeta: salen.filter(m => m.tipo === 'Gasto'),
+      saleReservado: salen.filter(m => m.tipo === 'Ingreso')
     };
   }
 
@@ -265,7 +422,10 @@ const ESTADO = (() => {
     const cerrados = datos.cierres.length;
     const ritmo = cerrados ? acumulado() / cerrados : 0;
     let faltaAcumulada = 0;
-    return datos.metas.map(m => {
+    /* Solo las activas. Una meta desactivada no recibe reparto, así que
+       contarla en «tienes N metas activas» y ofrecerla en el reparto era
+       prometer un destino que la hoja no iba a aceptar. */
+    return datos.metas.filter(m => m.activa !== false).map(m => {
       const objetivo = Number(m.objetivo) || 0;
       const guardado = Math.max(0, Math.min(Number(m.guardado) || 0, objetivo));
       const falta = objetivo - guardado;
@@ -288,7 +448,7 @@ const ESTADO = (() => {
     ajustes = await NUCLEO.leerAjustes();
     const guardado = await NUCLEO.leerMes();
     if (guardado && guardado.datos) datos = fusionar(guardado.datos);
-    pendientes = await NUCLEO.contar();
+    await contarCola();
     emitir();
   }
 
@@ -301,7 +461,18 @@ const ESTADO = (() => {
     if (!salida.personas || !salida.personas.length) salida.personas = base.personas;
     if (!salida.cuentas || !salida.cuentas.length) salida.cuentas = base.cuentas;
     if (!salida.categorias || !salida.categorias.length) salida.categorias = base.categorias;
+    salida.credito = salida.credito || [];
     salida.config = Object.assign({}, base.config, nuevos.config || {});
+
+    /* Config!B4 dejó de ser «el plan del mes» y pasó a ser el ahorro esperado.
+       Una hoja con el backend viejo sigue mandando `plan` y `limite`, y el
+       backend se despliega a mano: hay siempre una ventana en la que la app
+       nueva habla con la hoja vieja. El límite de aviso era ya el colchón que
+       no querías tocar, así que es lo que hereda el ahorro esperado; el plan
+       no hereda nada porque ahora el techo lo calcula la app. */
+    if (salida.config.ahorroEsperado == null) {
+      salida.config.ahorroEsperado = Number(salida.config.limite) || base.config.ahorroEsperado;
+    }
     /* El mes de un cierre viene de una celda, y Sheets convierte "2026-08" en
        una fecha de verdad al guardarla. Se normaliza al entrar para que ninguna
        pantalla tenga que preguntarse de qué tipo es lo que le han dado. */
@@ -332,16 +503,34 @@ const ESTADO = (() => {
       return false;
     } finally {
       sincronizando = false;
-      pendientes = await NUCLEO.contar();
+      await contarCola();
       emitir();
     }
   }
 
   async function refrescarPendientes() {
-    pendientes = await NUCLEO.contar();
+    await contarCola();
     ultimoFallo = await NUCLEO.ultimoError();
     emitir();
   }
+
+  /**
+   * Cuántos quedan en la cola y CUÁLES.
+   *
+   * El contador solo servía para el banner. Saber qué apuntes concretos siguen
+   * sin llegar es lo que deja marcarlos en el Historial: un movimiento que no
+   * está en la hoja se ve igual que uno que sí, y el que lo anotó no tiene
+   * forma de distinguirlos hasta que cuadra el mes y no le salen las cuentas.
+   */
+  async function contarCola() {
+    const registros = await NUCLEO.todos();
+    pendientes = registros.length;
+    enCola = registros.map(r => r.uuid);
+    return pendientes;
+  }
+
+  /** ¿Este apunte sigue esperando en el teléfono? */
+  function estaPendiente(uuidMov) { return enCola.indexOf(uuidMov) !== -1; }
 
   /* ---------------------------------------------------------- escrituras */
 
@@ -349,13 +538,13 @@ const ESTADO = (() => {
   async function encolar(accion, fila, { esperarDeshacer = false } = {}) {
     fila.uuid = fila.uuid || uuid();
     await NUCLEO.encolar([fila], fila.uuid, accion, esperarDeshacer);
-    pendientes = await NUCLEO.contar();
+    await contarCola();
     emitir();
     if (alEncolar) alEncolar();
     return fila.uuid;
   }
 
-  async function anotar({ tipo, categoria, descripcion, importe, cuenta, persona: quien, fecha }) {
+  async function anotar({ tipo, categoria, descripcion, importe, cuenta, persona: quien, fecha, usaEn }) {
     const fila = {
       uuid: uuid(),
       fecha: fecha || hoy(),
@@ -368,11 +557,19 @@ const ESTADO = (() => {
       reparto: repartoDe(categoria),
       origen: 'app'
     };
+    /* El mes que lo paga viaja con la fila. Lo recalcula el backend al
+       escribirla —es el único sitio donde el cálculo es el mismo para los dos
+       teléfonos—, pero se manda ya resuelto para que el saldo de esta pantalla
+       no espere a la hoja y para que un ingreso reservado al mes siguiente no
+       dependa de que el backend adivine lo que eligió el dedo. */
+    fila.paraMes = usaEn === 'siguiente'
+      ? FMT.mesMas(FMT.mesDe(fila.fecha), 1)
+      : mesImputado(fila);
     datos.movimientos.unshift(fila);
     // La ventana de deshacer solo tiene sentido en lo que se puede deshacer, y
     // un movimiento recién anotado se borra desde su propio detalle.
     await NUCLEO.encolar([fila], fila.uuid, 'movimientos', false);
-    pendientes = await NUCLEO.contar();
+    await contarCola();
     emitir();
     if (alEncolar) alEncolar();
     return fila;
@@ -383,6 +580,10 @@ const ESTADO = (() => {
     if (!m) return;
     Object.assign(m, cambios);
     if (cambios.categoria) m.reparto = repartoDe(cambios.categoria);
+    /* El mes que lo paga no se toca aquí. Cambiar la cuenta o el dueño lo
+       cambia —una compra del 20 pasada de efectivo a la tarjeta se va a la
+       factura del mes siguiente— pero de un gasto lo recalcula mesImputado en
+       cada lectura, y en la hoja lo reescribe el backend al guardar. */
     await encolar('movimiento-edita', { uuid: uuid(), objetivo: uuidMov, cambios: Object.assign({}, cambios, { reparto: m.reparto }) });
   }
 
@@ -399,14 +600,14 @@ const ESTADO = (() => {
     const [quitado] = datos.movimientos.splice(i, 1);
     const orden = uuid();
     await NUCLEO.encolar([{ uuid: orden, objetivo: uuidMov }], orden, 'movimiento-baja', true);
-    pendientes = await NUCLEO.contar();
+    await contarCola();
     emitir();
     if (alEncolar) alEncolar();
 
     return async () => {
       await NUCLEO.borrarGrupo(orden);
       datos.movimientos.splice(i, 0, quitado);
-      pendientes = await NUCLEO.contar();
+      await contarCola();
       emitir();
     };
   }
@@ -424,14 +625,14 @@ const ESTADO = (() => {
     const [quitado] = datos.fijos.splice(i, 1);
     const orden = uuid();
     await NUCLEO.encolar([{ uuid: orden, objetivo: uuidFijo }], orden, 'fijo-baja', true);
-    pendientes = await NUCLEO.contar();
+    await contarCola();
     emitir();
     if (alEncolar) alEncolar();
 
     return async () => {
       await NUCLEO.borrarGrupo(orden);
       datos.fijos.splice(i, 0, quitado);
-      pendientes = await NUCLEO.contar();
+      await contarCola();
       emitir();
     };
   }
@@ -462,6 +663,10 @@ const ESTADO = (() => {
           cuenta: fijo.cuenta,
           persona: fijo.persona,
           reparto: fijo.reparto,
+          // Un ingreso fijo marcado «mes siguiente» alimenta al mes de después
+          // del que lo cobra; un gasto se paga el mes en que sale.
+          paraMes: fijo.tipo === 'Ingreso' && fijo.usaEn === 'siguiente'
+            ? FMT.mesMas(mes, 1) : mes,
           origen: 'fijo'
         });
       }
@@ -477,15 +682,15 @@ const ESTADO = (() => {
     const r = resumen(mes);
     datos.cierres.unshift({
       mes,
-      entrado: r.entrado + r.porEntrar,
+      entrado: r.entra,
       gastado: r.gastado + r.porVenir,
-      plan: r.plan,
-      ahorrado: r.ahorro,
+      ahorroEsperado: r.ahorroEsperado,
+      ahorrado: r.queda,
       repartido: 0,
-      sinAsignar: r.ahorro
+      sinAsignar: r.queda
     });
     await encolar('cerrar-mes', { uuid: uuid(), mes });
-    return r.ahorro;
+    return r.queda;
   }
 
   /** Asignaciones: [{meta, monto}]. Se escriben como líneas en Reparto, que es
@@ -517,6 +722,9 @@ const ESTADO = (() => {
     if (cambios.categorias) datos.categorias = cambios.categorias;
     if (cambios.cuentas) datos.cuentas = cambios.cuentas;
     if (cambios.personas) datos.personas = cambios.personas;
+    // Una lista vacía es una respuesta válida: quitar la última cuenta de
+    // crédito tiene que llegar a la hoja, no confundirse con «no toques esto».
+    if (cambios.credito) datos.credito = cambios.credito;
     await encolar('config', Object.assign({ uuid: uuid() }, cambios));
   }
 
@@ -534,6 +742,7 @@ const ESTADO = (() => {
   return {
     suscribir, cuandoSeEncole, estado, configurada, uuid,
     hoy, mesEnCurso, persona, colorPersona, repartoDe, categoriasDe,
+    esCredito, diaCobroDe, mesImputado, mesCobroDe, cobradoParaMes, estaPendiente,
     caeEn, cargadoEn, fijosDelMes, diaDeCargo, movimientosDe, resumen,
     proximosMeses, acumulado, sinAsignar, metasCalculadas,
     iniciar, sincronizar, refrescarPendientes, marcarConexion,

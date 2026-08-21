@@ -18,8 +18,12 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
+sh pruebas/todas.sh                  # las nueve, cada una con su servidor
+
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
-node pruebas/cola-y-avisos.mjs       # un fallo de envío tiene que verse
+node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
+node pruebas/mes-recien-empezado.mjs # un mes vacío no ha ido mal todavía
+node pruebas/alto-700.mjs            # nada se sale en un móvil de verdad
 node pruebas/botones.mjs             # nada de lo pulsable puede estar muerto
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
@@ -28,6 +32,11 @@ node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 No hay marco de pruebas: son archivos de Node que se ejecutan a mano y salen con
 código distinto de cero si algo falla. Playwright vive en
 `/opt/node22/lib/node_modules/playwright`, fuera del proyecto.
+
+Cada prueba quiere un arranque distinto del servidor falso, y un servidor
+heredado de la anterior trae su libro ya tocado —el mes cerrado, los movimientos
+borrados— y hace fallar a la siguiente por un motivo que no es el suyo. Para eso
+está `todas.sh`: espera a que el puerto quede libre entre prueba y prueba.
 
 ## Arquitectura
 
@@ -59,6 +68,17 @@ no se puede desincronizar.
 la acción `mes`, se cachea en IndexedDB). `ajustes` es de *este* teléfono:
 conexión, quién anota aquí, tema. El token vive solo ahí, nunca en la hoja ni en
 el repositorio.
+
+**Un movimiento se cuenta en el mes que lo PAGA, nunca en el de su fecha.** Una
+compra con tarjeta hecha desde el día de cobro de esa persona se paga el mes
+siguiente; un sueldo puede declarar que se usa el mes que viene. Eso es
+`ESTADO.mesImputado`, y por ahí pasa `movimientosDe`, el resumen del mes, el
+cierre y las fórmulas del Panel. Filtrar por la fecha en cualquier sitio nuevo
+vuelve a descuadrar el mes en silencio.
+
+**El techo del mes es lo que entra**, no un presupuesto escrito a mano. `Config!B4`
+es el *ahorro esperado*: el colchón que se aparta antes de repartir, del que sale
+el tope proporcional de cada persona.
 
 ## La cola
 

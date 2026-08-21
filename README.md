@@ -151,19 +151,47 @@ Si cambias un nombre de columna aquí, cámbialo también en `Codigo.gs`.
 
 | A | B | C | D | E | F | G | H | I | J | K |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Fecha | Mes | Tipo | Categoría | Descripción | Importe | Cuenta | Persona | Reparto | Origen | UUID |
+| Fecha | Tipo | Categoría | Descripción | Importe | Cuenta | Persona | Reparto | Se usa en | Origen | UUID |
 
-`Mes` es una fórmula, no la escribas. `Origen` es `app` si lo tecleó una persona
-y `fijo` si lo generó una regla. `Reparto` es `Común` o `Personal`.
+`Origen` es `app` si lo tecleó una persona y `fijo` si lo generó una regla.
+`Reparto` es `Común` o `Personal`.
+
+**`Se usa en` es la columna que ordena el libro entero.** Un movimiento tiene
+dos fechas y confundirlas es el error clásico: el día en que ocurrió y el mes
+que lo paga. Compras el 15 de agosto con la tarjeta y la factura llega el 5 de
+septiembre: el gasto es de septiembre. Un sueldo cobrado el 30 de julio marcado
+«mes siguiente» se gasta en agosto.
+
+| Caso | Fecha | Se usa en |
+|---|---|---|
+| Gasto normal | 15/08 | `2026-08` |
+| Compra con crédito el 15/08, día de cobro 5 | 15/08 | `2026-09` |
+| Sueldo cobrado el 30/07 marcado «mes siguiente» | 30/07 | `2026-08` |
+
+**Todas las fórmulas de `Panel` y de `Año` filtran por esa columna, nunca por la
+fecha**: filtrando por la fecha, la factura aparecería en el mes en el que no la
+vas a pagar. `Config!B16` vigila que no quede ninguna fila sin ella y tiene que
+marcar 0.
+
+La calcula el backend, en un solo sitio: si la calculara cada teléfono, dos
+listas desincronizadas escribirían meses distintos para la misma compra.
 
 **`Fijos`** — cabecera en la fila 1.
 
-| A | B | C | D | E | F | G | H | I | J | K | L | M | N |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| UUID | Tipo | Concepto | Importe | Día | Cada (meses) | Cuotas | Restantes | Cuenta | Persona | Reparto | Activo | Próximo cargo | Último cargo |
+| A | B | C | D | E | F | G | H |
+|---|---|---|---|---|---|---|---|
+| UUID | Tipo | Concepto | Importe | Día | Cada (meses) | Cuotas | Restantes |
+
+| I | J | K | L | M | N | O | P |
+|---|---|---|---|---|---|---|---|
+| Cuenta | Persona | Reparto | Se usa en | Activo | Próximo cargo | Último cargo | Mes imputado |
 
 `Próximo cargo` **lo calcula el backend**: es la fuente de "qué cae en
-septiembre". `Cuotas` vacío es indefinido.
+septiembre". `Mes imputado` es una fórmula derivada de él y de `Se usa en`; no
+la escribas. `Cuotas` vacío es indefinido.
+
+`Se usa en` de un fijo es `mismo mes` o `mes siguiente`, y **solo lo llevan los
+ingresos**: un gasto sale el día que sale.
 
 El `Concepto` de un fijo es una categoría de la lista y no texto libre: el día
 que se cobre, esa palabra se escribe en la columna `Categoría` de
@@ -172,9 +200,25 @@ que se cobre, esa palabra se escribe en la columna `Categoría` de
 **`Metas`**, **`Cierres`**, **`Reparto`**, **`Listas`** y **`Config`** llevan la
 cabecera en la fila 4 y los datos desde la 5.
 
-En `Listas`, la columna **G** decide si un gasto de esa categoría cuenta como
-común: es la regla de "el arriendo sí, la ropa no", y evita tener que
-contestarlo en cada movimiento.
+`Listas` lleva tres listas en paralelo:
+
+| A | B | C | D | E | F | G | H | I | J |
+|---|---|---|---|---|---|---|---|---|---|
+| Persona | Color | Día cobro TC | Cuenta | Es crédito | Activa | Categoría | Tipo | Reparto | Activa |
+
+La columna **I** decide si un gasto de esa categoría cuenta como común: es la
+regla de "el arriendo sí, la ropa no", y evita tener que contestarlo en cada
+movimiento. La **E** marca qué cuentas aplazan el cargo y la **C**, con qué día
+lo hace **cada persona** —no el hogar: uno puede facturar el 5 y la otra el 25.
+
+En `Config`, **B4 es el ahorro esperado**, no un plan del mes. El techo del mes
+es lo que entra; el ahorro esperado es el colchón que se aparta antes de
+repartir, y de él sale el tope de cada uno:
+
+```
+gastable = entra − ahorro esperado
+tope(x)  = gastable × aporta(x) / entra
+```
 
 Lo guardado en cada meta **no es un campo**: sale de sumar sus líneas en
 `Reparto`. Así el ahorro siempre se puede auditar y nunca hay un total que no
@@ -217,7 +261,7 @@ Todas por `POST` con `Content-Type: text/plain`, incluida la lectura.
 | `cerrar-mes` | Escribe la fila de `Cierres` con lo que entró y lo que salió |
 | `reparto` | Escribe las líneas de asignación del ahorro |
 | `metas` | Reescribe la tabla de metas |
-| `config` | Escribe plan, límite, avisos y las listas |
+| `config` | Escribe el ahorro esperado, los avisos y las listas |
 
 Tres cosas que no se pueden cambiar:
 

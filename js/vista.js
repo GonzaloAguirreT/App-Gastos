@@ -47,6 +47,11 @@ const VISTA = (() => {
       nodo.setAttribute(clave, valor);
     });
 
+    /* Una zona que se desliza tiene que poder alcanzarse con el teclado. Sin
+       tabindex, un bloque con scroll y sin nada pulsable dentro —el Detalle del
+       mes— no hay forma de recorrerlo sin ratón ni dedo. */
+    if (nodo.classList.contains('desliza')) nodo.tabIndex = 0;
+
     poner(nodo, hijos);
     return nodo;
   }
@@ -71,6 +76,23 @@ const VISTA = (() => {
     const nodo = h('button.' + clases, props, hijos);
     nodo.type = 'button';
     return nodo;
+  }
+
+  /**
+   * El color de una tarjeta de crédito: el de su dueño, rebajado.
+   *
+   * Sólido significa "gastado este mes"; claro, "factura que llega de otro
+   * mes". La mezcla va hacia el papel en claro y hacia la tinta en oscuro:
+   * mezclar siempre hacia el fondo deja el tramo casi igual que `hair`, que en
+   * esta barra significa justo lo contrario —lo que NO se ha gastado—, y en
+   * modo oscuro la tarjeta desaparecía.
+   *
+   * Lo hace `color-mix` y no aritmética de hexadecimales a mano porque el
+   * navegador ya sabe mezclar colores y porque así la mezcla se recalcula sola
+   * al cambiar de tema, sin repintar nada.
+   */
+  function rebajado(color) {
+    return 'color-mix(in srgb, ' + color + ' 34%, var(--rebaja))';
   }
 
   /** Un chip: la unidad de elección de toda la app. */
@@ -142,7 +164,7 @@ const VISTA = (() => {
   function deshacer(texto, alDeshacer) {
     const barra = document.getElementById('deshacer');
     document.getElementById('deshacer-texto').textContent = texto;
-    barra.hidden = false;
+    mostrarBarra(barra);
     const btn = document.getElementById('deshacer-boton');
     btn.hidden = false;          // avisar() lo esconde; aquí vuelve a hacer falta
     btn.onclick = () => { ocultarDeshacer(); alDeshacer(); };
@@ -150,9 +172,29 @@ const VISTA = (() => {
     temporizador = setTimeout(ocultarDeshacer, NUCLEO.MS_DESHACER);
   }
 
+  /* La barra entra deslizando y sale colapsando su alto, y las dos cosas las
+     hace el CSS. Aquí solo se quita y se pone la clase, con un detalle: hay
+     que quitarla ANTES de enseñarla otra vez, o el navegador reutiliza la
+     animación de salida que ya estaba puesta y la barra nueva aparece
+     desvaneciéndose. */
+  const MS_SALIDA = 300;
+  let saliendo = null;
+
+  function mostrarBarra(barra) {
+    clearTimeout(saliendo);
+    barra.classList.remove('saliendo');
+    barra.hidden = false;
+  }
+
   function ocultarDeshacer() {
     clearTimeout(temporizador);
-    document.getElementById('deshacer').hidden = true;
+    const barra = document.getElementById('deshacer');
+    if (barra.hidden || barra.classList.contains('saliendo')) return;
+    barra.classList.add('saliendo');
+    saliendo = setTimeout(() => {
+      barra.hidden = true;
+      barra.classList.remove('saliendo');
+    }, MS_SALIDA);
   }
 
   /**
@@ -169,7 +211,7 @@ const VISTA = (() => {
     const barra = document.getElementById('deshacer');
     document.getElementById('deshacer-texto').textContent = texto;
     document.getElementById('deshacer-boton').hidden = true;
-    barra.hidden = false;
+    mostrarBarra(barra);
     clearTimeout(temporizador);
     temporizador = setTimeout(() => {
       document.getElementById('deshacer-boton').hidden = false;
@@ -206,7 +248,7 @@ const VISTA = (() => {
   }
 
   return {
-    h, pintar, boton, chip, fila, seccion,
+    h, pintar, boton, chip, fila, seccion, rebajado,
     ir, actual, cuandoCambie,
     deshacer, ocultarDeshacer, avisar, vibrar, aplicarTema
   };

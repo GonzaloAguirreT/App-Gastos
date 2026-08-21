@@ -47,11 +47,13 @@ function libroNuevo() {
   return {
     hoy: hoy(),
     config: {
-      plan: 1600000, limite: 200000, moneda: 'CLP', simbolo: '$',
+      ahorroEsperado: 200000, moneda: 'CLP', simbolo: '$',
       avisos: { fijo: true, saldo: true, semanal: false }, diaCierre: 'último'
     },
-    personas: [{ nombre: 'Gonzalo', color: '#3D5A6C' }, { nombre: 'Camila', color: '#A34E6B' }],
+    personas: [{ nombre: 'Gonzalo', color: '#3D5A6C', diaCobro: 5 },
+               { nombre: 'Camila', color: '#A34E6B', diaCobro: 20 }],
     cuentas: ['Cuenta Corriente', 'Tarjeta Credito', 'Efectivo'],
+    credito: ['Tarjeta Credito'],
     categorias: [
       { nombre: 'Alimentación', tipo: 'Gasto', reparto: 'Común' },
       { nombre: 'Restaurantes', tipo: 'Gasto', reparto: 'Personal' },
@@ -65,14 +67,29 @@ function libroNuevo() {
       ...(MES_VIEJO ? [{
         uuid: 'm-viejo', fecha: mesAtras(mesDe(hoy()), 3) + '-14', tipo: 'Gasto',
         categoria: 'Viajes', descripcion: 'Vuelos', importe: 480000,
-        cuenta: 'Tarjeta Credito', persona: 'Camila', reparto: 'Común', origen: 'app'
+        cuenta: 'Tarjeta Credito', persona: 'Camila', reparto: 'Común', origen: 'app',
+        paraMes: mesAtras(mesDe(hoy()), 3)
       }] : []),
       { uuid: 'm-1', fecha: hoy(), tipo: 'Gasto', categoria: 'Alimentación',
         descripcion: 'Feria', importe: 24000, cuenta: 'Cuenta Corriente',
-        persona: 'Camila', reparto: 'Común', origen: 'app' },
+        persona: 'Camila', reparto: 'Común', origen: 'app', paraMes: mesDe(hoy()) },
       { uuid: 'm-2', fecha: hoy(), tipo: 'Gasto', categoria: 'Restaurantes',
         descripcion: 'Almuerzo', importe: 12900, cuenta: 'Efectivo',
-        persona: 'Gonzalo', reparto: 'Personal', origen: 'app' }
+        persona: 'Gonzalo', reparto: 'Personal', origen: 'app', paraMes: mesDe(hoy()) },
+      /* Los dos sueldos: sin ingresos no hay techo, y sin techo la pantalla Mes
+         no tiene nada contra lo que medirse. */
+      { uuid: 'm-s1', fecha: mesDe(hoy()) + '-01', tipo: 'Ingreso', categoria: 'Sueldo',
+        descripcion: '', importe: 1400000, cuenta: 'Cuenta Corriente',
+        persona: 'Gonzalo', reparto: 'Personal', origen: 'app', paraMes: mesDe(hoy()) },
+      { uuid: 'm-s2', fecha: mesDe(hoy()) + '-01', tipo: 'Ingreso', categoria: 'Sueldo',
+        descripcion: '', importe: 900000, cuenta: 'Cuenta Corriente',
+        persona: 'Camila', reparto: 'Personal', origen: 'app', paraMes: mesDe(hoy()) },
+      /* Una compra con tarjeta del mes pasado hecha DESPUÉS del día de cobro:
+         su factura llega a este mes. Es el caso que ordena todo el libro. */
+      { uuid: 'm-tc', fecha: mesAtras(mesDe(hoy()), 1) + '-25', tipo: 'Gasto',
+        categoria: 'Ocio', descripcion: 'Entradas', importe: 38000,
+        cuenta: 'Tarjeta Credito', persona: 'Gonzalo', reparto: 'Personal',
+        origen: 'app', paraMes: mesDe(hoy()) }
     ],
     fijos: [
       { uuid: 'f-1', tipo: 'Gasto', concepto: 'Arriendo', importe: 620000, dia: 5,
@@ -90,7 +107,7 @@ function libroNuevo() {
     ],
     cierres: MES_COMO_FECHA
       ? [{ mes: 'Sat Aug 01 2026 00:00:00 GMT+0200 (hora de verano de Europa central)',
-           entrado: 0, gastado: 53376, plan: 1600000,
+           entrado: 0, gastado: 53376, ahorroEsperado: 200000,
            ahorrado: 1600000 - 53376, repartido: 0, sinAsignar: 1600000 - 53376,
            movimientos: [] }]
       : []
@@ -102,6 +119,20 @@ export const peticiones = [];
 
 const buscar = (lista, uuid) => lista.findIndex(x => x.uuid === uuid);
 
+/* «Se usa en», calculado en un solo sitio, igual que en el Apps Script real: si
+   dos teléfonos con listas distintas lo calcularan cada uno, la misma compra
+   acabaría en meses distintos. Lo que manda la app llega como propuesta y aquí
+   se recalcula, salvo en un ingreso, donde la elección es del dedo. */
+function seUsaEn(m) {
+  const mes = mesDe(m.fecha);
+  if (m.tipo === 'Ingreso') return m.paraMes || mes;
+  if (!libro.credito.includes(m.cuenta)) return mes;
+  const p = libro.personas.find(x => x.nombre === m.persona);
+  const corte = Number(p && p.diaCobro) || 0;
+  if (!corte) return mes;
+  return Number(m.fecha.slice(8)) < corte ? mes : mesSiguiente(mes);
+}
+
 function despachar(p) {
   const d = p.datos || {};
   switch (p.accion) {
@@ -110,14 +141,17 @@ function despachar(p) {
 
     case 'movimientos':
       (p.movimientos || []).forEach(m => {
-        if (!libro.movimientos.some(x => x.uuid === m.uuid)) libro.movimientos.push(m);
+        if (!libro.movimientos.some(x => x.uuid === m.uuid)) {
+          libro.movimientos.push(Object.assign({}, m, { paraMes: seUsaEn(m) }));
+        }
       });
       return { ok: true, escritos: (p.movimientos || []).length };
 
     case 'movimiento-edita': {
       const i = buscar(libro.movimientos, d.uuid);
       if (i === -1) return { ok: false, error: 'No existe ese movimiento' };
-      libro.movimientos[i] = Object.assign({}, libro.movimientos[i], d);
+      const m = Object.assign({}, libro.movimientos[i], d.cambios || d);
+      libro.movimientos[i] = Object.assign(m, { paraMes: seUsaEn(m) });
       return { ok: true };
     }
 
@@ -155,6 +189,8 @@ function despachar(p) {
       const f = libro.fijos[i];
       const fecha = (d.mes || mesDe(libro.hoy)) + '-' + String(f.dia).padStart(2, '0');
       const uuid = 'fijo-' + f.uuid + '-' + mesDe(fecha);
+      const paraMes = f.tipo === 'Ingreso' && f.usaEn === 'siguiente'
+        ? mesSiguiente(mesDe(fecha)) : mesDe(fecha);
       if (d.cargado === false) {
         libro.movimientos = libro.movimientos.filter(m => m.uuid !== uuid);
         f.ultimo = '';
@@ -162,7 +198,7 @@ function despachar(p) {
         libro.movimientos.push({
           uuid, fecha, tipo: f.tipo, categoria: f.concepto, descripcion: '',
           importe: f.importe, cuenta: f.cuenta, persona: f.persona,
-          reparto: f.reparto, origen: 'fijo'
+          reparto: f.reparto, paraMes, origen: 'fijo'
         });
         f.ultimo = fecha;
       }
@@ -171,17 +207,18 @@ function despachar(p) {
 
     case 'cerrar-mes': {
       const mes = d.mes || mesDe(libro.hoy);
-      const suyos = libro.movimientos.filter(m => mesDe(m.fecha) === mes);
+      const suyos = libro.movimientos.filter(m => (m.paraMes || mesDe(m.fecha)) === mes);
       const entrado = suyos.filter(m => m.tipo === 'Ingreso').reduce((s, m) => s + m.importe, 0);
       const gastado = suyos.filter(m => m.tipo === 'Gasto').reduce((s, m) => s + m.importe, 0);
       if (!libro.cierres.some(c => c.mes === mes)) {
-        // Misma definición que el backend real: el plan hace de ingreso.
-        const ahorrado = libro.config.plan + entrado - gastado;
-        libro.cierres.push({ mes, entrado, gastado, plan: libro.config.plan,
+        // Misma definición que el backend real: el techo es lo que entra.
+        const ahorrado = entrado - gastado;
+        libro.cierres.push({ mes, entrado, gastado,
+                             ahorroEsperado: libro.config.ahorroEsperado,
                              ahorrado, totalAhorrado: ahorrado, repartido: 0,
                              sinAsignar: ahorrado, movimientos: suyos });
       }
-      libro.movimientos = libro.movimientos.filter(m => mesDe(m.fecha) !== mes);
+      libro.movimientos = libro.movimientos.filter(m => (m.paraMes || mesDe(m.fecha)) !== mes);
       return { ok: true, cierre: libro.cierres[libro.cierres.length - 1] };
     }
 
@@ -203,10 +240,16 @@ function despachar(p) {
       return { ok: true, metas: libro.metas };
 
     case 'config':
-      ['personas', 'cuentas', 'categorias'].forEach(k => { if (d[k]) libro[k] = d[k]; });
+      ['personas', 'cuentas', 'categorias', 'credito'].forEach(k => { if (d[k]) libro[k] = d[k]; });
       libro.config = Object.assign({}, libro.config, d.config || {});
-      if (d.plan != null) libro.config.plan = d.plan;
-      if (d.limite != null) libro.config.limite = d.limite;
+      /* Igual que el backend real: cambiar un día de cobro o marcar una cuenta
+         como de crédito rehace el «Se usa en» de los gastos ya escritos. Los
+         ingresos no, que su mes lo eligió una persona. */
+      if (d.personas || d.credito !== undefined) {
+        libro.movimientos.forEach(m => {
+          if (m.tipo !== 'Ingreso') m.paraMes = seUsaEn(m);
+        });
+      }
       return { ok: true, datos: libro };
 
     default:

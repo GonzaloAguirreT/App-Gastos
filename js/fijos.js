@@ -154,6 +154,15 @@ const FIJOS = (() => {
           fila('De quién es', f.persona + ' ›',
                () => cambiar({ persona: siguiente(datos.personas.map(p => p.nombre), f.persona) }),
                { clases: 'baja' }),
+          /* Solo los ingresos. Un sueldo pagado el 30 se gasta el mes
+             siguiente; un gasto sale el día que sale, así que preguntarlo
+             sobraría y encima daría a entender que se puede mover. */
+          f.tipo === 'Ingreso'
+            ? fila('Se usa en',
+                   (f.usaEn === 'siguiente' ? 'el mes siguiente' : 'el mes en que se cobra') + ' ›',
+                   () => cambiar({ usaEn: f.usaEn === 'siguiente' ? 'mismo' : 'siguiente' }),
+                   { clases: 'baja' })
+            : null,
           fila('Cuenta como', (f.reparto === 'Común' ? 'común' : 'personal') + ' ›',
                () => cambiar({ reparto: f.reparto === 'Común' ? 'Personal' : 'Común' }), { clases: 'baja' }),
           fila(cargado ? 'Marcar como pendiente' : 'Marcar como cargado', '›',

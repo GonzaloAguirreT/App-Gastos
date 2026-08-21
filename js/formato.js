@@ -125,15 +125,33 @@ const FMT = (() => {
   function cap(texto) { return texto.charAt(0).toUpperCase() + texto.slice(1); }
 
   /** "Hoy · jueves 20", "Ayer · miércoles 19", "Lunes 17". El día relativo
-   *  primero porque es lo que se busca al repasar lo de esta semana. */
-  function etiquetaDia(isoFecha, hoy) {
+   *  primero porque es lo que se busca al repasar lo de esta semana.
+   *
+   *  Si la fecha no es del mes que se está mirando lleva el mes detrás: una
+   *  compra con tarjeta del 25 de julio aparece en agosto porque agosto la
+   *  paga, y "Viernes 25" a secas la haría parecer un error de la app. */
+  function etiquetaDia(isoFecha, hoy, mesMirado) {
     const d = fecha(isoFecha);
     const numero = d.getDate();
     const semana = DIAS_SEMANA[d.getDay()];
     const dias = Math.round((fecha(hoy) - d) / 86400000);
-    if (dias === 0) return `Hoy · ${semana} ${numero}`;
-    if (dias === 1) return `Ayer · ${semana} ${numero}`;
-    return `${cap(semana)} ${numero}`;
+    const fuera = mesMirado && mesDe(isoFecha) !== mesMirado;
+    if (!fuera && dias === 0) return `Hoy · ${semana} ${numero}`;
+    if (!fuera && dias === 1) return `Ayer · ${semana} ${numero}`;
+    return `${cap(semana)} ${numero}` + (fuera ? ` de ${nombreMes(mesDe(isoFecha))}` : '');
+  }
+
+  /** "hoy 14:02", "ayer 09:41". Para el último intento de un envío: lo que hay
+   *  que saber es si fue hace un rato o lleva días atascado, no la fecha. */
+  function momento(ms, ahora = Date.now()) {
+    if (!ms) return '';
+    const d = new Date(ms);
+    const reloj = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    const dias = Math.round(
+      (new Date(ahora).setHours(0, 0, 0, 0) - new Date(ms).setHours(0, 0, 0, 0)) / 86400000);
+    if (dias <= 0) return 'hoy ' + reloj;
+    if (dias === 1) return 'ayer ' + reloj;
+    return 'hace ' + dias + ' días, ' + reloj;
   }
 
   function frecuencia(meses) {
@@ -144,6 +162,6 @@ const FMT = (() => {
   return {
     MESES, DIAS_SEMANA,
     dinero, miles, iso, fecha, mesDe, aMes, mesMas, mesesEntre,
-    nombreMes, nombreMesAnio, diasDelMes, diaDelMes, cap, etiquetaDia, frecuencia
+    nombreMes, nombreMesAnio, diasDelMes, diaDelMes, cap, etiquetaDia, momento, frecuencia
   };
 })();

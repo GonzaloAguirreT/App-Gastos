@@ -52,9 +52,9 @@ const CONFIG = {
      que exista en cada mes. */
   DIAS: [1, 5, 10, 20, 24, 28, 31],
 
-  /* Planes que se ofrecen en el onboarding. Solo son atajos para no tener que
-     teclear siete cifras la primera vez. */
-  PLANES_SUGERIDOS: [1200000, 1600000, 2000000, 2400000],
+  /* Ahorros esperados que se ofrecen en el onboarding. Solo son atajos para no
+     tener que teclear seis cifras la primera vez. */
+  AHORROS_SUGERIDOS: [100000, 200000, 300000, 500000],
 
   /* Colores de persona, en el orden en que se reparten. Son los mismos del
      rediseño y los únicos colores de la app además del acento: aparecen en la
@@ -105,7 +105,15 @@ const CONFIG = {
   SUGERENCIAS_CATEGORIAS: ["Ropa", "Regalos", "Mascotas", "Educación", "Bencina", "Gimnasio"],
   SUGERENCIAS_CUENTAS: ["Cuenta Vista", "Ahorro", "Transferencias"],
 
-  // Valores del primer arranque, hasta que la hoja diga otra cosa.
-  PLAN: 1600000,
-  LIMITE: 200000
+  /* Qué cuentas aplazan el cargo. Tienen que estar tambien en CUENTAS: esta
+     lista solo marca cuáles de ellas facturan a fin de mes. */
+  CREDITO: ["Tarjeta Credito"],
+
+  /* Día en que factura la tarjeta, hasta que la hoja diga el de cada persona.
+     Una compra anterior a ese día entra en la factura de este mes; desde ese
+     día, en la del siguiente. */
+  DIA_COBRO: 5,
+
+  // Valor del primer arranque, hasta que la hoja diga otra cosa.
+  AHORRO_ESPERADO: 200000
 };
