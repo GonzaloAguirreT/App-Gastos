@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las diez, cada una con su servidor
+sh pruebas/todas.sh                  # las quince, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -26,8 +26,13 @@ node pruebas/mes-recien-empezado.mjs # un mes vacío no ha ido mal todavía
 node pruebas/alto-700.mjs            # nada se sale en un móvil de verdad
 node pruebas/botones.mjs             # nada de lo pulsable puede estar muerto
 node pruebas/hoja-y-vestido.mjs      # el vestido cae donde caen los datos
+node pruebas/escribir-meta.mjs       # repintar no puede cerrarte el teclado
+node pruebas/no-saltar-arriba.mjs    # ni devolverte al principio de la pantalla
+node pruebas/vaciar-el-libro.mjs     # vaciar se lleva los datos, no las fórmulas
+node pruebas/libro-sin-migrar.mjs    # las hojas se leen por su cabecera
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
+node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
 ```
 
 No hay marco de pruebas: son archivos de Node que se ejecutan a mano y salen con
@@ -115,6 +120,14 @@ Script no contesta al preflight de CORS), **las lecturas también van por POST**
 (el `doGet` redirige a `script.googleusercontent.com` y ese salto se lleva las
 cabeceras CORS), y deduplicación por `uuid` contra la hoja `_uuids`.
 
+`vaciar()` se ejecuta a mano desde el editor, igual que `instalar()`, y ninguna
+acción del backend llega hasta ella: nada que se pueda tocar desde el teléfono
+borra un año de gastos. Deja el libro sin datos pero con la misma forma —hace
+antes una copia en Drive— y respeta las listas, Config y las columnas de
+fórmula, que están intercaladas entre las de datos. Lo vigila
+`pruebas/vaciar-el-libro.mjs`, porque limpiar un rango de más no da ningún
+error: se lleva las fórmulas y no se nota hasta el primer cierre de mes.
+
 `tareaDiaria` es un disparador que corre de madrugada: cobra los fijos que tocan
 ese día y, el día 1, cierra el mes anterior. Es el "se cierra solo" que promete
 la app; una PWA no se despierta sola.
@@ -125,6 +138,17 @@ la app; una PWA no se despierta sola.
 la última *implementación*. Hay que editar la implementación y elegir **versión
 nueva**. Síntoma: la app manda `accion: 'mes'`, el backend viejo no la conoce y
 contesta `Petición sin movimientos`.
+
+**Leer una hoja por posición fija se rompe en silencio.** Si el contrato de
+columnas cambia y el lector sigue contando, devuelve la columna de al lado, que
+también tiene un valor válido: no lanza nada. Listas pasó de ocho columnas a
+diez y las cuentas salieron llamándose `true` —era la casilla Activa— y las
+categorías «Común» y «Personal» —era el reparto—. Y `instalar()` lee las listas
+y las reescribe, así que escribió esa basura en la hoja y se llevó por delante
+los nombres de verdad. Los lectores preguntan a la cabecera (`columnasPor`, y
+`columnasDeListas` para Listas, que tiene dos columnas ACTIVA). Lo vigila
+`pruebas/libro-sin-migrar.mjs`, que ejecuta el backend en Node contra libros de
+las dos formas.
 
 **Apps Script agrupa las escrituras.** Una excepción salta en el siguiente
 `flush()`, lejos de su causa, y un `try/catch` alrededor de la llamada no la

@@ -101,6 +101,24 @@ const NUCLEO = (() => {
     return conTienda(AJUSTES, 'readonly', t => t.get('mes'));
   }
 
+  /**
+   * Deja este teléfono sin datos: se va la copia del mes y se va la cola.
+   *
+   * La conexión, quién anota aquí y el tema se quedan. Son de este teléfono
+   * pero no son datos de gastos, y borrarlos obligaría a volver a pegar la URL
+   * y el token para recuperar lo que sigue estando en la hoja.
+   *
+   * Devuelve lo que había en la cola. La copia del mes se recupera
+   * sincronizando —la hoja manda—, pero un apunte sin enviar no está en ningún
+   * otro sitio, así que quien llame puede reponerlo.
+   */
+  async function olvidarDatos() {
+    const enCola = await todos();
+    await conTienda(COLA, 'readwrite', t => t.clear());
+    await conTienda(AJUSTES, 'readwrite', t => t.delete('mes'));
+    return enCola;
+  }
+
   /* --------------------------------------------------------------- cola */
 
   /**
@@ -358,7 +376,7 @@ const NUCLEO = (() => {
 
   return {
     MS_DESHACER,
-    leerAjustes, guardarAjustes, guardarMes, leerMes,
+    leerAjustes, guardarAjustes, guardarMes, leerMes, olvidarDatos,
     encolar, todos, contar, borrar, borrarGrupo, reponer, ultimoError,
     pedir, enviar, enviarGrupo, consultarMes, procesar
   };

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las diez pruebas, cada una con el modo de servidor que necesita.
+# Las quince pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -53,10 +53,19 @@ corre() {
   espera_libre || { echo "!!! el puerto $PUERTO sigue ocupado tras $prueba"; fallos=$((fallos + 1)); }
 }
 
-# Esta no necesita navegador ni servidor: lee los dos .gs y compara.
+# Estas tres no necesitan navegador ni servidor: leen los .gs —y la última los
+# ejecuta— para comprobar que las columnas de las que hablan son las que hay.
 echo
 echo "════════ hoja-y-vestido ════════"
 node pruebas/hoja-y-vestido.mjs || { echo "!!! hoja-y-vestido falló"; fallos=$((fallos + 1)); }
+
+echo
+echo "════════ vaciar-el-libro ════════"
+node pruebas/vaciar-el-libro.mjs || { echo "!!! vaciar-el-libro falló"; fallos=$((fallos + 1)); }
+
+echo
+echo "════════ libro-sin-migrar ════════"
+node pruebas/libro-sin-migrar.mjs || { echo "!!! libro-sin-migrar falló"; fallos=$((fallos + 1)); }
 
 corre botones
 corre cola-y-avisos --rechaza
@@ -67,6 +76,9 @@ corre ahorro-proyectado
 corre cerrar-y-reabrir
 corre meses-navegables --mes-viejo
 corre mes-como-fecha --mes-como-fecha
+corre escribir-meta
+corre no-saltar-arriba
+corre vaciar-telefono --rechaza
 
 echo
 if [ "$fallos" -eq 0 ]; then

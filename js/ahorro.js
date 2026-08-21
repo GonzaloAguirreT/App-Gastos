@@ -128,7 +128,7 @@ const AHORRO = (() => {
     const nombre = h('input.entrada.meta', {
       valor: m.nombre,
       placeholder: 'Para qué ahorras',
-      onInput: e => renombrar(m.nombre, e.target.value)
+      onInput: e => renombrar(m.i, e.target.value)
     });
 
     return h('div.meta', [
@@ -153,16 +153,30 @@ const AHORRO = (() => {
 
   /* El nombre es la clave de la meta en la hoja, así que renombrar es mover
      también sus líneas de reparto. Se manda el nombre viejo para que el
-     backend sepa cuál está cambiando. */
+     backend sepa cuál está cambiando.
+
+     Se escribe sobre el objeto, no se busca por nombre: el nombre es justo lo
+     que está cambiando y no sirve de identidad mientras se teclea. */
   let esperaRenombre = null;
-  function renombrar(viejo, nuevo) {
-    clearTimeout(esperaRenombre);
-    const metas = ESTADO.estado().datos.metas.map(m =>
-      m.nombre === viejo ? Object.assign({}, m, { nombre: nuevo, antes: m.antes || viejo }) : m);
+  function renombrar(i, nuevo) {
+    /* Se busca por posición, no por nombre ni guardando el objeto: el nombre es
+       lo que está cambiando, y una sincronización a media palabra reemplaza los
+       objetos de `datos` por otros recién traídos de la hoja. La posición
+       sobrevive a las dos cosas —se escriben y se leen en orden— y es la única
+       identidad que tiene una meta hasta que la hoja le dé un id. */
+    const metas = ESTADO.estado().datos.metas;
+    const viva = metas[i];
+    if (!viva) return;
+
+    // El nombre de antes de empezar a teclear, apuntado una vez. `undefined` y
+    // no un valor falso: una meta recién añadida se llama '' y eso es un nombre
+    // viejo válido —vacío— que no hay que volver a pisar en la segunda letra.
+    if (viva.antes === undefined) viva.antes = viva.nombre;
+    viva.nombre = nuevo;
+
     // Sin espera se enviaría una escritura por cada tecla.
-    esperaRenombre = setTimeout(() => ESTADO.guardarMetas(metas), 600);
-    const meta = ESTADO.estado().datos.metas.find(m => m.nombre === viejo);
-    if (meta) { meta.antes = meta.antes || viejo; meta.nombre = nuevo; }
+    clearTimeout(esperaRenombre);
+    esperaRenombre = setTimeout(() => ESTADO.guardarMetas(metas.slice()), 600);
   }
 
   function anadirMeta() {
