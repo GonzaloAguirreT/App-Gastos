@@ -154,6 +154,45 @@ if (await buscador.count()) {
   ok(false, 'no se ha encontrado el buscador del historial');
 }
 
+/* -------------------- y el objetivo va a UNA meta, no a las que se llamen igual */
+
+/* El nombre tampoco vale como identidad al cambiar el objetivo. Dos metas
+   pueden llamarse igual —o no llamarse todavía, que es como nace una recién
+   añadida—, y entonces poner 60 millones en una se los ponía a las dos. */
+await p.evaluate(async () => {
+  await ESTADO.guardarMetas([
+    { nombre: 'Casa', objetivo: 3000000, guardado: 0, orden: 1, activa: true },
+    { nombre: 'Casa', objetivo: 2000000, guardado: 0, orden: 2, activa: true }
+  ]);
+  VISTA.ir('ahorro');
+});
+await p.waitForTimeout(600);
+
+/* La segunda de las dos, que es la que se cambia. */
+await p.evaluate(() => {
+  const bs = [...document.querySelectorAll('#pantalla-ahorro button.salir')];
+  bs[bs.length - 1].click();
+});
+await p.waitForTimeout(400);
+for (const d of '60000000') {
+  await p.evaluate(t => {
+    [...document.querySelectorAll('#pantalla-anotar .tecla')]
+      .find(x => x.textContent.trim() === t).click();
+  }, d);
+}
+ok(await p.evaluate(() => (document.querySelector('.importe-numero') || {}).textContent) === '60.000.000',
+   'sesenta millones caben en el teclado');
+await p.evaluate(() => {
+  [...document.querySelectorAll('#pantalla-anotar button')]
+    .find(x => /Guardar meta/.test(x.textContent)).click();
+});
+await p.waitForTimeout(1200);
+
+const objetivos = await p.evaluate(() => ESTADO.estado().datos.metas.map(m => m.objetivo));
+ok(JSON.stringify(objetivos) === JSON.stringify([3000000, 60000000]),
+   'el objetivo cae solo en la meta que se tocó, aunque la otra se llame igual: '
+   + JSON.stringify(objetivos));
+
 console.log('\nerrores:', errores.length ? errores : 'ninguno');
 if (errores.length) fallos++;
 console.log(fallos ? `\n${fallos} fallan` : '\nTodo pasa');
