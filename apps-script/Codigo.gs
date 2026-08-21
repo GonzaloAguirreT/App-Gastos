@@ -599,7 +599,13 @@ function ponerFormulasCierre(hoja, desde, hasta) {
   const formulas = [];
   for (var f = desde; f <= hasta; f++) {
     formulas.push([
-      '=IF($A' + f + '=""' + s + '""' + s + '$B' + f + '-$C' + f + ')',
+      /* Total Ahorrado = PLAN + entrado − gastado, no entrado − gastado.
+         El plan hace de ingreso: se fija cada mes a partir de lo que se va a
+         cobrar, así que los sueldos no se anotan como movimientos y sin el plan
+         esta columna daría siempre negativo. Lo que sí se anote —un bono, una
+         devolución— entra por la B y se suma encima.
+         Si se cambia aquí, hay que cambiarlo también en ESTADO.resumen. */
+      '=IF($A' + f + '=""' + s + '""' + s + '$D' + f + '+$B' + f + '-$C' + f + ')',
       '=IF($A' + f + '=""' + s + '""' + s +
         'SUMIF(' + HOJA_REPARTO + '!$A:$A' + s + '$A' + f + s + HOJA_REPARTO + '!$D:$D))',
       '=IF($A' + f + '=""' + s + '""' + s + '$E' + f + '-$F' + f + ')'
@@ -1050,7 +1056,12 @@ function leerCierres(libro) {
     .map(f => {
       const entrado = Number(f[1]) || 0;
       const gastado = Number(f[2]) || 0;
+      const plan = Number(f[3]) || 0;
       const repartido = Number(f[5]) || 0;
+      /* Con el plan haciendo de ingreso, lo ahorrado es plan + entrado −
+         gastado. Misma definición que la fórmula de la columna E y que
+         ESTADO.resumen: si se cambia, se cambia en los tres sitios. */
+      const ahorrado = plan + entrado - gastado;
       /* Lo ahorrado se calcula aquí en vez de leer la celda, aunque la celda
          lo tenga: es una fórmula, y una fórmula puede estar rota, vacía o
          recién escrita y sin recalcular. Si eso pasara, la app enseñaría un
@@ -1061,10 +1072,10 @@ function leerCierres(libro) {
         mes: String(f[0]),
         entrado: entrado,
         gastado: gastado,
-        plan: Number(f[3]) || 0,
-        ahorrado: entrado - gastado,
+        plan: plan,
+        ahorrado: ahorrado,
         repartido: repartido,
-        sinAsignar: (entrado - gastado) - repartido
+        sinAsignar: ahorrado - repartido
       };
     })
     .sort((a, b) => b.mes.localeCompare(a.mes));
@@ -1267,7 +1278,7 @@ function cerrarMes(mes, uuid) {
   formatoSeguro(hoja.getRange(FILA_DATOS, 8), 'yyyy-mm-dd hh:mm');
 
   if (uuid) registrarUuid(uuid, 'cierre de ' + mes);
-  return { ok: true, escritos: 1, ahorrado: entrado - gastado };
+  return { ok: true, escritos: 1, ahorrado: plan + entrado - gastado };
 }
 
 /** Los fijos del mes que aún no han escrito su fila. */

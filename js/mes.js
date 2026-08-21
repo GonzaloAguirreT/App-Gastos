@@ -15,9 +15,13 @@ const MES = (() => {
   let busca = '';
   let seleccionado = null;
 
+  /* Sin repetidos. Al cerrar el mes a mano desde Ajustes, el mes en curso y el
+     recién cerrado son el mismo, y la lista lo traía dos veces: la flecha
+     izquierda quedaba activa apuntando a la posición donde ya estabas. Un botón
+     que se ve encendido y no lleva a ninguna parte. */
   function mesesDisponibles() {
     const cerrados = ESTADO.estado().datos.cierres.map(c => c.mes);
-    return [ESTADO.mesEnCurso()].concat(cerrados);
+    return [...new Set([ESTADO.mesEnCurso()].concat(cerrados))];
   }
 
   function verMes(mes) { mesVisto = mes; pintarMes(); }
@@ -33,22 +37,52 @@ const MES = (() => {
      la pantalla que aparece y desaparece sola, así que van arriba del todo:
      un aviso que se cuela entre dos cifras las desplaza y se lee como un
      error de maquetación. */
+  /**
+   * Reintentar a mano y CONTAR el resultado.
+   *
+   * Un botón que no dice nada al pulsarlo se lee como un botón roto, aunque por
+   * dentro haya hecho su trabajo. Aquí siempre sale una respuesta: cuántas han
+   * salido, o por qué no ha podido ninguna.
+   */
+  async function reintentar() {
+    const r = await APP.vaciarCola({ aMano: true });
+    if (r.enviados && !r.quedan) {
+      VISTA.avisar(r.enviados === 1 ? 'Enviada.' : r.enviados + ' enviadas.');
+    } else if (r.motivo) {
+      VISTA.avisar('No se pudo enviar: ' + r.motivo, { mal: true });
+    } else if (r.quedan) {
+      VISTA.avisar(r.quedan + ' siguen en cola.', { mal: true });
+    } else {
+      VISTA.avisar('No queda nada por enviar.');
+    }
+  }
+
   function banners() {
-    const { datos, pendientes, enLinea } = ESTADO.estado();
+    const { datos, pendientes, enLinea, ultimoFallo } = ESTADO.estado();
     const mes = ESTADO.mesEnCurso();
     const r = ESTADO.resumen(mes);
     const lista = [];
 
     if (!enLinea || pendientes) {
+      const cuantas = pendientes + (pendientes === 1 ? ' anotación' : ' anotaciones');
+
+      /* El motivo, cuando lo hay, va en el propio aviso.
+       *
+       * Antes decía "3 anotaciones sin enviar" y nada más. El backend explica
+       * en claro por qué las rechaza —un despliegue viejo que no entiende la
+       * petición, un token cambiado— y ese texto se guardaba en la cola sin que
+       * lo leyera nadie: había que ir a buscarlo al registro de ejecuciones de
+       * Google. Y al pulsar Reintentar no pasaba nada visible, así que el botón
+       * parecía roto cuando lo roto era el silencio. */
+      const texto = !enLinea
+        ? 'Sin conexión. ' + (pendientes ? cuantas + ' en cola.' : 'Lo que anotes se enviará luego.')
+        : cuantas + ' sin enviar' + (ultimoFallo ? ': ' + ultimoFallo : '.');
+
       lista.push({
         urgente: true,
-        texto: !enLinea
-          ? 'Sin conexión. ' + (pendientes
-              ? pendientes + (pendientes === 1 ? ' anotación en cola.' : ' anotaciones en cola.')
-              : 'Lo que anotes se enviará luego.')
-          : pendientes + (pendientes === 1 ? ' anotación sin enviar.' : ' anotaciones sin enviar.'),
+        texto: texto,
         accion: 'Reintentar',
-        al: () => APP.vaciarCola({ aMano: true })
+        al: reintentar
       });
     }
 

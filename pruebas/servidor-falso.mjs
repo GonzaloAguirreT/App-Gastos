@@ -1,0 +1,222 @@
+/*
+ * Un Apps Script de mentira, y la app de verdad servida a su lado.
+ *
+ * Guarda el libro en memoria y contesta a todas las acciones del backend, así
+ * que la app se comporta como contra la hoja real: lo que anotas aparece, lo
+ * que borras desaparece, y un fijo cobrado se convierte en un movimiento.
+ *
+ *   node pruebas/servidor-falso.mjs              backend que funciona
+ *   node pruebas/servidor-falso.mjs --rechaza    backend de un despliegue viejo
+ *
+ * El modo --rechaza contesta a todo lo que no sea 'mes' con "Petición sin
+ * movimientos", que es literalmente lo que contesta una implementación anterior
+ * al recibir una acción que no conoce. Ese estado —app nueva contra despliegue
+ * viejo— es por donde pasa cualquiera entre pegar el Codigo.gs y volver a
+ * implementar la aplicación web, y costó una mañana de diagnóstico.
+ */
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const RAIZ = path.dirname(new URL('.', import.meta.url).pathname);
+const RECHAZA = process.argv.includes('--rechaza');
+const PUERTO = 8300;
+
+const hoy = () => new Date().toISOString().slice(0, 10);
+const mesDe = iso => iso.slice(0, 7);
+const mesSiguiente = m => {
+  const [a, n] = m.split('-').map(Number);
+  return n === 12 ? (a + 1) + '-01' : a + '-' + String(n + 1).padStart(2, '0');
+};
+
+/* El libro. Se rehace en cada arranque: una prueba que hereda el estado de la
+   anterior deja de comprobar lo que dice comprobar. */
+function libroNuevo() {
+  return {
+    hoy: hoy(),
+    config: {
+      plan: 1600000, limite: 200000, moneda: 'CLP', simbolo: '$',
+      avisos: { fijo: true, saldo: true, semanal: false }, diaCierre: 'último'
+    },
+    personas: [{ nombre: 'Gonzalo', color: '#3D5A6C' }, { nombre: 'Camila', color: '#A34E6B' }],
+    cuentas: ['Cuenta Corriente', 'Tarjeta Credito', 'Efectivo'],
+    categorias: [
+      { nombre: 'Alimentación', tipo: 'Gasto', reparto: 'Común' },
+      { nombre: 'Restaurantes', tipo: 'Gasto', reparto: 'Personal' },
+      { nombre: 'Transporte', tipo: 'Gasto', reparto: 'Común' },
+      { nombre: 'Ocio', tipo: 'Gasto', reparto: 'Personal' },
+      { nombre: 'Suscripciones', tipo: 'Gasto', reparto: 'Común' },
+      { nombre: 'Arriendo', tipo: 'Gasto', reparto: 'Común' },
+      { nombre: 'Sueldo', tipo: 'Ingreso', reparto: 'Personal' }
+    ],
+    movimientos: [
+      { uuid: 'm-1', fecha: hoy(), tipo: 'Gasto', categoria: 'Alimentación',
+        descripcion: 'Feria', importe: 24000, cuenta: 'Cuenta Corriente',
+        persona: 'Camila', reparto: 'Común', origen: 'app' },
+      { uuid: 'm-2', fecha: hoy(), tipo: 'Gasto', categoria: 'Restaurantes',
+        descripcion: 'Almuerzo', importe: 12900, cuenta: 'Efectivo',
+        persona: 'Gonzalo', reparto: 'Personal', origen: 'app' }
+    ],
+    fijos: [
+      { uuid: 'f-1', tipo: 'Gasto', concepto: 'Arriendo', importe: 620000, dia: 5,
+        cada: 1, cuotas: 0, restantes: 0, cuenta: 'Cuenta Corriente',
+        persona: 'Gonzalo', reparto: 'Común', activo: true,
+        prox: mesDe(hoy()) + '-05', ultimo: '' },
+      { uuid: 'f-2', tipo: 'Gasto', concepto: 'Suscripciones', importe: 11900, dia: 17,
+        cada: 1, cuotas: 12, restantes: 8, cuenta: 'Tarjeta Credito',
+        persona: 'Gonzalo', reparto: 'Común', activo: true,
+        prox: mesDe(hoy()) + '-17', ultimo: '' }
+    ],
+    metas: [
+      { nombre: 'Viaje a Japón', objetivo: 3000000, guardado: 400000, orden: 1, activa: true },
+      { nombre: 'Fondo de emergencia', objetivo: 2000000, guardado: 150000, orden: 2, activa: true }
+    ],
+    cierres: []
+  };
+}
+
+let libro = libroNuevo();
+export const peticiones = [];
+
+const buscar = (lista, uuid) => lista.findIndex(x => x.uuid === uuid);
+
+function despachar(p) {
+  const d = p.datos || {};
+  switch (p.accion) {
+    case 'mes':
+      return { ok: true, datos: libro };
+
+    case 'movimientos':
+      (p.movimientos || []).forEach(m => {
+        if (!libro.movimientos.some(x => x.uuid === m.uuid)) libro.movimientos.push(m);
+      });
+      return { ok: true, escritos: (p.movimientos || []).length };
+
+    case 'movimiento-edita': {
+      const i = buscar(libro.movimientos, d.uuid);
+      if (i === -1) return { ok: false, error: 'No existe ese movimiento' };
+      libro.movimientos[i] = Object.assign({}, libro.movimientos[i], d);
+      return { ok: true };
+    }
+
+    case 'movimiento-baja': {
+      const i = buscar(libro.movimientos, d.uuid);
+      if (i === -1) return { ok: false, error: 'No existe ese movimiento' };
+      libro.movimientos.splice(i, 1);
+      return { ok: true };
+    }
+
+    case 'fijo': {
+      const f = d.fijo || d;
+      /* El próximo cargo lo calcula el servidor, igual que el backend real: la
+         app decide el día, no la fecha. Sin esto un fijo recién dado de alta no
+         "cae" en ningún mes y desaparece de los totales. */
+      if (!f.prox) {
+        const dia = String(f.dia || 1).padStart(2, '0');
+        const esteMes = mesDe(libro.hoy) + '-' + dia;
+        f.prox = esteMes >= libro.hoy ? esteMes : mesSiguiente(mesDe(libro.hoy)) + '-' + dia;
+      }
+      const i = buscar(libro.fijos, f.uuid);
+      if (i === -1) libro.fijos.push(f); else libro.fijos[i] = Object.assign({}, libro.fijos[i], f);
+      return { ok: true, fijo: f };
+    }
+
+    case 'fijo-baja': {
+      const i = buscar(libro.fijos, d.uuid);
+      if (i !== -1) libro.fijos.splice(i, 1);
+      return { ok: true };
+    }
+
+    case 'fijo-cargo': {
+      const i = buscar(libro.fijos, d.uuid);
+      if (i === -1) return { ok: false, error: 'No existe ese fijo' };
+      const f = libro.fijos[i];
+      const fecha = (d.mes || mesDe(libro.hoy)) + '-' + String(f.dia).padStart(2, '0');
+      const uuid = 'fijo-' + f.uuid + '-' + mesDe(fecha);
+      if (d.cargado === false) {
+        libro.movimientos = libro.movimientos.filter(m => m.uuid !== uuid);
+        f.ultimo = '';
+      } else if (!libro.movimientos.some(m => m.uuid === uuid)) {
+        libro.movimientos.push({
+          uuid, fecha, tipo: f.tipo, categoria: f.concepto, descripcion: '',
+          importe: f.importe, cuenta: f.cuenta, persona: f.persona,
+          reparto: f.reparto, origen: 'fijo'
+        });
+        f.ultimo = fecha;
+      }
+      return { ok: true, fijo: f };
+    }
+
+    case 'cerrar-mes': {
+      const mes = d.mes || mesDe(libro.hoy);
+      const suyos = libro.movimientos.filter(m => mesDe(m.fecha) === mes);
+      const entrado = suyos.filter(m => m.tipo === 'Ingreso').reduce((s, m) => s + m.importe, 0);
+      const gastado = suyos.filter(m => m.tipo === 'Gasto').reduce((s, m) => s + m.importe, 0);
+      if (!libro.cierres.some(c => c.mes === mes)) {
+        // Misma definición que el backend real: el plan hace de ingreso.
+        const ahorrado = libro.config.plan + entrado - gastado;
+        libro.cierres.push({ mes, entrado, gastado, plan: libro.config.plan,
+                             ahorrado, totalAhorrado: ahorrado, repartido: 0,
+                             sinAsignar: ahorrado, movimientos: suyos });
+      }
+      libro.movimientos = libro.movimientos.filter(m => mesDe(m.fecha) !== mes);
+      return { ok: true, cierre: libro.cierres[libro.cierres.length - 1] };
+    }
+
+    case 'reparto':
+      (d.lineas || []).forEach(l => {
+        const m = libro.metas.find(x => x.nombre === l.meta);
+        if (m) m.guardado += Number(l.monto) || 0;
+      });
+      return { ok: true, metas: libro.metas };
+
+    case 'metas':
+      libro.metas = (d.metas || p.metas || []).map(m => Object.assign({}, m));
+      return { ok: true, metas: libro.metas };
+
+    case 'config':
+      ['personas', 'cuentas', 'categorias'].forEach(k => { if (d[k]) libro[k] = d[k]; });
+      libro.config = Object.assign({}, libro.config, d.config || {});
+      if (d.plan != null) libro.config.plan = d.plan;
+      if (d.limite != null) libro.config.limite = d.limite;
+      return { ok: true, datos: libro };
+
+    default:
+      return { ok: false, error: 'Acción desconocida: ' + p.accion };
+  }
+}
+
+const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+                '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
+                '.woff2': 'font/woff2' };
+
+http.createServer((req, res) => {
+  if (req.method === 'POST') {
+    let cuerpo = '';
+    req.on('data', c => cuerpo += c);
+    req.on('end', () => {
+      let p = {};
+      try { p = JSON.parse(cuerpo || '{}'); } catch (_) { /* da igual */ }
+      peticiones.push(p.accion || '?');
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      if (p.accion === 'reinicio') { libro = libroNuevo(); return res.end(JSON.stringify({ ok: true })); }
+      if (p.accion === 'cuantas') return res.end(JSON.stringify({ ok: true, n: peticiones.length }));
+      if (RECHAZA && p.accion !== 'mes') {
+        return res.end(JSON.stringify({ ok: false, error: 'Petición sin movimientos' }));
+      }
+      res.end(JSON.stringify(despachar(p)));
+    });
+    return;
+  }
+
+  const rel = (req.url.split('?')[0] === '/') ? '/index.html' : req.url.split('?')[0];
+  const f = path.join(RAIZ, rel);
+  if (!f.startsWith(RAIZ) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) {
+    res.writeHead(404); return res.end('no está');
+  }
+  res.writeHead(200, { 'Content-Type': TIPOS[path.extname(f)] || 'application/octet-stream' });
+  res.end(fs.readFileSync(f));
+}).listen(PUERTO, () => {
+  console.log('servidor falso en http://localhost:' + PUERTO +
+              (RECHAZA ? '  (modo despliegue viejo: rechaza todo menos "mes")' : ''));
+});

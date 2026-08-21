@@ -50,11 +50,13 @@ const ANOTAR = (() => {
     VISTA.ir('anotar');
   }
 
-  function nuevoFijo() {
+  /** `tipoInicial` solo cambia con qué pestaña se abre; desde Ahorro se llega
+   *  aquí para anotar un sueldo, y llegar a "Gasto" sería empezar corrigiendo. */
+  function nuevoFijo(tipoInicial) {
     modo = 'fijo';
     digitos = ''; descripcion = ''; objetivo = null;
-    tipo = 'Gasto';
-    categoria = primeraCategoria('Gasto');
+    tipo = tipoInicial === 'Ingreso' ? 'Ingreso' : 'Gasto';
+    categoria = primeraCategoria(tipo);
     cada = 1; dia = 10; cuotas = 0;
     volverA = 'fijos';
     pintar();

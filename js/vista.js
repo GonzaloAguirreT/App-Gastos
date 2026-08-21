@@ -144,6 +144,7 @@ const VISTA = (() => {
     document.getElementById('deshacer-texto').textContent = texto;
     barra.hidden = false;
     const btn = document.getElementById('deshacer-boton');
+    btn.hidden = false;          // avisar() lo esconde; aquí vuelve a hacer falta
     btn.onclick = () => { ocultarDeshacer(); alDeshacer(); };
     clearTimeout(temporizador);
     temporizador = setTimeout(ocultarDeshacer, NUCLEO.MS_DESHACER);
@@ -152,6 +153,28 @@ const VISTA = (() => {
   function ocultarDeshacer() {
     clearTimeout(temporizador);
     document.getElementById('deshacer').hidden = true;
+  }
+
+  /**
+   * La misma barra, sin botón, para contar cómo ha ido algo que has pedido tú.
+   *
+   * Existe porque «Reintentar» no decía nada. Los envíos se reintentaban de
+   * verdad, fallaban con un motivo que el backend explicaba, y la pantalla se
+   * quedaba igual: parecía un botón roto cuando lo roto era el silencio.
+   *
+   * Un fallo se queda más tiempo que un acierto: si algo ha ido mal hay que
+   * poder leerlo entero.
+   */
+  function avisar(texto, { mal = false } = {}) {
+    const barra = document.getElementById('deshacer');
+    document.getElementById('deshacer-texto').textContent = texto;
+    document.getElementById('deshacer-boton').hidden = true;
+    barra.hidden = false;
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => {
+      document.getElementById('deshacer-boton').hidden = false;
+      ocultarDeshacer();
+    }, mal ? 9000 : 3000);
   }
 
   /** La vibración es una cortesía: si el sistema la tiene desactivada o el
@@ -185,6 +208,6 @@ const VISTA = (() => {
   return {
     h, pintar, boton, chip, fila, seccion,
     ir, actual, cuandoCambie,
-    deshacer, ocultarDeshacer, vibrar, aplicarTema
+    deshacer, ocultarDeshacer, avisar, vibrar, aplicarTema
   };
 })();

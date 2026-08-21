@@ -75,10 +75,16 @@ const AHORRO = (() => {
               estilo: { fontSize: '26px', color: r.ahorro < 0 ? 'var(--acc)' : 'var(--ink)' }
             }, FMT.dinero(r.ahorro))
           ]),
+          /* La resta entera, no solo el total. El plan hace de ingreso —se fija
+             cada mes según lo que se va a cobrar— y lo que se anote aparte se
+             suma encima. Enseñarla desglosada es lo que deja ver, sin tener que
+             explicarlo, que anotar un sueldo lo contaría dos veces. */
           h('p.nota', { estilo: { marginTop: '6px' } },
-            FMT.dinero(r.entrado) + ' entraron'
+            FMT.dinero(r.plan) + ' de plan'
+            + (r.entrado ? ' · ' + FMT.dinero(r.entrado) + ' entraron aparte' : '')
             + (r.porEntrar ? ' · ' + FMT.dinero(r.porEntrar) + ' por entrar' : '')
-            + ' · ' + FMT.dinero(r.gastado) + ' gastado · ' + FMT.dinero(r.porVenir) + ' de fijos por venir')
+            + ' · ' + FMT.dinero(r.gastado) + ' gastado'
+            + (r.porVenir ? ' · ' + FMT.dinero(r.porVenir) + ' de fijos por venir' : ''))
         ]),
 
         seccion('Meses cerrados'),
