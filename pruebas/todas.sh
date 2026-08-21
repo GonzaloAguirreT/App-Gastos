@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las quince pruebas, cada una con el modo de servidor que necesita.
+# Las dieciséis pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -66,6 +66,10 @@ node pruebas/vaciar-el-libro.mjs || { echo "!!! vaciar-el-libro falló"; fallos=
 echo
 echo "════════ libro-sin-migrar ════════"
 node pruebas/libro-sin-migrar.mjs || { echo "!!! libro-sin-migrar falló"; fallos=$((fallos + 1)); }
+
+echo
+echo "════════ instalar-el-libro ════════"
+node pruebas/instalar-el-libro.mjs || { echo "!!! instalar-el-libro falló"; fallos=$((fallos + 1)); }
 
 corre botones
 corre cola-y-avisos --rechaza

@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las quince, cada una con su servidor
+sh pruebas/todas.sh                  # las dieciséis, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -30,6 +30,7 @@ node pruebas/escribir-meta.mjs       # repintar no puede cerrarte el teclado
 node pruebas/no-saltar-arriba.mjs    # ni devolverte al principio de la pantalla
 node pruebas/vaciar-el-libro.mjs     # vaciar se lleva los datos, no las fórmulas
 node pruebas/libro-sin-migrar.mjs    # las hojas se leen por su cabecera
+node pruebas/instalar-el-libro.mjs   # instalar aguanta el libro vacío
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
@@ -153,6 +154,15 @@ las dos formas.
 **Apps Script agrupa las escrituras.** Una excepción salta en el siguiente
 `flush()`, lejos de su causa, y un `try/catch` alrededor de la llamada no la
 atrapa. Si un lote falla se pierde todo lo que iba detrás.
+
+**Un rango de cero filas no sale vacío: lanza.** `getRange(2, 1, 0, 1)` da
+«The number of rows in the range must be at least 1», así que toda escritura de
+una tabla que puede venir vacía necesita su `if (filas.length)`. Tumbó a
+`instalar()` sobre un libro recién vaciado, y como para entonces ya había
+retirado Panel y Año, el libro se quedó a medias. Lo vigila
+`pruebas/instalar-el-libro.mjs`, que ejecuta `instalar()` en Node sobre un libro
+vacío, uno con datos y uno del formato viejo; la hoja de mentira de
+`pruebas/backend.mjs` lanza igual que Sheets a propósito.
 
 **`copy()` deja obsoleto el libro desde el que lo llamaste.** `getSheetByName`
 sigue devolviendo una hoja, pero es una hoja cuyo id ya no resuelve, y la

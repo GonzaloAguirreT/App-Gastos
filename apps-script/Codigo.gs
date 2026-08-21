@@ -891,10 +891,15 @@ function escribirMovimientos(libro, movimientos, categorias) {
   /* La última fila se cuenta, no se pregunta. getLastRow() puede venir inflado
      por la sonda que sep() escribe en Z200 para averiguar el separador: aunque
      se borre acto seguido, Sheets no siempre encoge el rango usado, y entonces
-     se daría formato a doscientas filas vacías. */
-  const ultima = movimientos.length + 1;
-  formatoSeguro(hoja.getRange(2, 1, ultima - 1, 1), 'yyyy-mm-dd');
-  formatoSeguro(hoja.getRange(2, 5, ultima - 1, 1), '#,##0');
+     se daría formato a doscientas filas vacías.
+
+     Y con cero movimientos no hay nada que formatear. Un rango de cero filas no
+     sale vacío: lanza «The number of rows in the range must be at least 1», que
+     es lo que paraba a instalar() sobre un libro recién vaciado. */
+  if (movimientos.length) {
+    formatoSeguro(hoja.getRange(2, 1, movimientos.length, 1), 'yyyy-mm-dd');
+    formatoSeguro(hoja.getRange(2, 5, movimientos.length, 1), '#,##0');
+  }
   hoja.setColumnWidth(3, 140).setColumnWidth(4, 200).setColumnWidth(6, 150);
 
   ponerFiltroYDesplegables(hoja, listas);
