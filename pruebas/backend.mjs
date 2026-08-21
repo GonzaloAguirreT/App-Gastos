@@ -66,6 +66,7 @@ export function hoja(filas) {
 export function libro(hojas) {
   return {
     getName: () => 'Gastos - libro de mentira',
+    getId: () => '1i-libro-de-mentira',
     getSheetByName: nombre => hojas[nombre] || null,
     getNumSheets: () => Object.keys(hojas).length,
     getSpreadsheetTimeZone: () => 'America/Santiago',

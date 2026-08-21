@@ -252,6 +252,61 @@ function instalar() {
 }
 
 /**
+ * Qué hojas ve el script y cuál de ellas revienta. NO escribe nada.
+ *
+ * Existe porque «Sheet <id> not found» no dice qué hoja es. Lo lanza
+ * `getSheetByName`, que recorre el libro entero para buscar por nombre, así que
+ * la hoja rota puede ser cualquiera de las diez y no la que se estaba pidiendo.
+ * Esto las recorre una a una, con cada llamada dentro de su propio try, para
+ * que una que falle no tape a las demás.
+ *
+ * Se ejecuta a mano desde el editor y sale todo en el registro.
+ */
+function diagnosticar() {
+  const libro = SpreadsheetApp.getActive();
+
+  try {
+    console.log('Libro: ' + libro.getName() + '  ·  id ' + libro.getId());
+  } catch (e) {
+    console.log('Ni el nombre del libro se puede leer: ' + e.message);
+  }
+
+  var hojas = null;
+  try {
+    hojas = libro.getSheets();
+    console.log('getSheets() devuelve ' + hojas.length + ' hojas:');
+  } catch (e) {
+    console.log('getSheets() REVIENTA: ' + e.message);
+  }
+
+  if (hojas) {
+    for (var i = 0; i < hojas.length; i++) {
+      const h = hojas[i];
+      var id = '?', nombre = '?', tamano = '?';
+      try { id = String(h.getSheetId()); } catch (e) { id = 'REVIENTA(' + e.message + ')'; }
+      try { nombre = h.getName(); } catch (e) { nombre = 'REVIENTA(' + e.message + ')'; }
+      try {
+        tamano = h.getLastRow() + ' filas × ' + h.getLastColumn() + ' col';
+      } catch (e) {
+        tamano = 'REVIENTA(' + e.message + ')';
+      }
+      console.log('  [' + i + '] id ' + id + '  ·  ' + nombre + '  ·  ' + tamano);
+    }
+  }
+
+  console.log('Y buscándolas por nombre, que es por donde falla:');
+  [HOJA_PANEL, HOJA_ANIO, HOJA_MOVIMIENTOS, HOJA_FIJOS, HOJA_METAS, HOJA_CIERRES,
+   HOJA_REPARTO, HOJA_LISTAS, HOJA_CONFIG, HOJA_UUIDS].forEach(nombre => {
+    try {
+      const h = libro.getSheetByName(nombre);
+      console.log('  ' + nombre + ' → ' + (h ? 'id ' + h.getSheetId() : 'no existe'));
+    } catch (e) {
+      console.log('  ' + nombre + ' → REVIENTA: ' + e.message);
+    }
+  });
+}
+
+/**
  * Deja el libro sin un solo dato, pero con la misma forma.
  *
  * Se ejecuta A MANO desde el editor, como instalar(), y no hay ninguna acción
