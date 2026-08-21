@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las nueve pruebas, cada una con el modo de servidor que necesita.
+# Las diez pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -52,6 +52,11 @@ corre() {
   wait $servidor 2>/dev/null
   espera_libre || { echo "!!! el puerto $PUERTO sigue ocupado tras $prueba"; fallos=$((fallos + 1)); }
 }
+
+# Esta no necesita navegador ni servidor: lee los dos .gs y compara.
+echo
+echo "════════ hoja-y-vestido ════════"
+node pruebas/hoja-y-vestido.mjs || { echo "!!! hoja-y-vestido falló"; fallos=$((fallos + 1)); }
 
 corre botones
 corre cola-y-avisos --rechaza

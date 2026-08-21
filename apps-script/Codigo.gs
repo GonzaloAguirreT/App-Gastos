@@ -71,7 +71,7 @@ const CABECERAS_FIJOS = ['UUID', 'TIPO', 'CONCEPTO', 'IMPORTE', 'DÍA', 'CADA (M
                          'ACTIVO', 'PRÓXIMO CARGO', 'ÚLTIMO CARGO', 'MES IMPUTADO'];
 
 const CABECERAS_METAS = ['META', 'OBJETIVO', 'GUARDADO', 'FALTA', 'AVANCE', 'ORDEN', 'ACTIVA', 'NOTAS'];
-const CABECERAS_CIERRES = ['MES', 'ENTRADO', 'GASTADO', 'AHORRO ESPERADO', 'TOTAL AHORRADO',
+const CABECERAS_CIERRES = ['MES', 'ENTRÓ', 'GASTÓ', 'AHORRO ESPERADO', 'TOTAL AHORRADO',
                            'REPARTIDO', 'SIN ASIGNAR', 'CERRADO EL'];
 const CABECERAS_REPARTO = ['MES', 'FECHA', 'META', 'MONTO', 'ORIGEN', 'UUID'];
 /* Tres listas en paralelo. La de personas lleva su día de cobro de tarjeta —es
@@ -359,7 +359,12 @@ function leerFijosParaMigrar(libro) {
 /** Las listas que ya hay en el libro; si no hay ninguna, la semilla. */
 function leerListasExistentes(libro) {
   const hoja = libro.getSheetByName(HOJA_LISTAS);
-  const vacio = { personas: [], cuentas: [], credito: [], categorias: [] };
+  /* `inactivas` no filtra nada: solo recuerda qué está desmarcado. Filtrar aquí
+     sería tirarlo, porque escribirListas vuelca de vuelta lo que esta función
+     devuelve y la siguiente escritura de Listas lo borraría de la hoja. Quien
+     filtra es leerLibro, que es lo que ve la app. */
+  const vacio = { personas: [], cuentas: [], credito: [], categorias: [],
+                  inactivas: { cuentas: [], categorias: [] } };
 
   if (hoja && hoja.getLastRow() >= FILA_DATOS) {
     const filas = hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, 10).getValues();
@@ -370,15 +375,23 @@ function leerListasExistentes(libro) {
         // El día de cobro de SU tarjeta. Vacío o cero significa que no aplaza.
         diaCobro: Number(f[2]) || 0
       });
+      /* «Activa» en FALSE retira la cuenta o la categoría de la app sin
+         borrarla: lo que ya se escribió con ella sigue sumando y el panel sigue
+         cuadrando, pero deja de ofrecerse al anotar. Desmarcar la casilla desde
+         la hoja no hacía absolutamente nada. */
       if (f[3]) {
         vacio.cuentas.push(String(f[3]));
         if (f[4] === true) vacio.credito.push(String(f[3]));
+        if (f[5] === false) vacio.inactivas.cuentas.push(String(f[3]));
       }
-      if (f[6]) vacio.categorias.push({
-        nombre: String(f[6]),
-        tipo: f[7] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-        reparto: f[8] === 'Común' ? 'Común' : 'Personal'
-      });
+      if (f[6]) {
+        vacio.categorias.push({
+          nombre: String(f[6]),
+          tipo: f[7] === 'Ingreso' ? 'Ingreso' : 'Gasto',
+          reparto: f[8] === 'Común' ? 'Común' : 'Personal'
+        });
+        if (f[9] === false) vacio.inactivas.categorias.push(String(f[6]));
+      }
     });
   }
 
@@ -415,6 +428,8 @@ function escribirListas(libro, listas) {
   hoja.getRange(FILA_CABECERA, 1, 1, 10).setValues([CABECERAS_LISTAS]).setFontWeight('bold');
 
   const credito = listas.credito || [];
+  const apagadas = (listas.inactivas || {}).cuentas || [];
+  const apagadasCat = (listas.inactivas || {}).categorias || [];
   const filas = [];
   const cuantas = Math.max(listas.personas.length, listas.cuentas.length,
                            listas.categorias.length, TOPE_CATEGORIAS);
@@ -428,11 +443,11 @@ function escribirListas(libro, listas) {
       p ? (Number(p.diaCobro) || '') : '',
       cuenta,
       cuenta ? credito.indexOf(cuenta) !== -1 : '',
-      cuenta ? true : '',
+      cuenta ? apagadas.indexOf(cuenta) === -1 : '',
       c ? c.nombre : '',
       c ? c.tipo : '',
       c ? c.reparto : '',
-      c ? true : ''
+      c ? apagadasCat.indexOf(c.nombre) === -1 : ''
     ]);
   }
   hoja.getRange(FILA_DATOS, 1, filas.length, 10).setValues(filas);
@@ -739,8 +754,29 @@ function escribirMetas(libro, metas) {
   hoja.getRange(FILA_DATOS, 3, TOPE_METAS, 3).setFormulas(formulas);
 
   hoja.getRange('G5:G' + (FILA_DATOS + TOPE_METAS - 1)).insertCheckboxes();
+
+  /* La fila de total y, dos más abajo, lo que se ha ahorrado y todavía no tiene
+     meta. Sin ese número hay que restar a mano dos columnas de dos hojas para
+     saber si el reparto cuadra, que es justo lo que nadie hace. */
+  const ultima = FILA_DATOS + TOPE_METAS - 1;
+  const filaTotal = ultima + 2;
+  const suma = col => '=SUM(' + col + FILA_DATOS + ':' + col + ultima + ')';
+  hoja.getRange(filaTotal, 1, 1, 4)
+      .setValues([['Total', '', '', '']]);
+  hoja.getRange(filaTotal, 2, 1, 3)
+      .setFormulas([[suma('B'), suma('C'), suma('D')]]);
+
+  const filaLibre = filaTotal + 2;
+  hoja.getRange(filaLibre, 1, 1, 3).setValues([
+    ['SIN ASIGNAR',
+     '=SUM(' + HOJA_CIERRES + '!$E:$E)-SUM($C' + FILA_DATOS + ':$C' + ultima + ')',
+     'ahorro cerrado que aún no tiene meta']
+  ]);
+
   formatoSeguro(hoja.getRange('B5:D'), '#,##0');
   formatoSeguro(hoja.getRange('E5:E'), '0%');
+  formatoSeguro(hoja.getRange(filaTotal, 2, 1, 3), '#,##0');
+  formatoSeguro(hoja.getRange(filaLibre, 2), '#,##0');
   hoja.setColumnWidth(1, 200);
 }
 
@@ -764,8 +800,20 @@ function escribirCierres(libro, cierres) {
   }
 
   ponerFormulasCierre(hoja, FILA_DATOS, FILA_DATOS + TOPE_CIERRES - 1);
+
+  /* La fila de total, dos por debajo de la última. La columna del ahorro
+     esperado se queda vacía a propósito: sumar colchones de meses distintos no
+     da un número que signifique nada. */
+  const ultima = FILA_DATOS + TOPE_CIERRES - 1;
+  const filaTotal = ultima + 2;
+  const suma = col => '=SUM(' + col + FILA_DATOS + ':' + col + ultima + ')';
+  hoja.getRange(filaTotal, 1).setValue('Total');
+  hoja.getRange(filaTotal, 2, 1, 2).setFormulas([[suma('B'), suma('C')]]);
+  hoja.getRange(filaTotal, 5, 1, 3).setFormulas([[suma('E'), suma('F'), suma('G')]]);
+
   formatoSeguro(hoja.getRange('B5:G'), '#,##0');
   formatoSeguro(hoja.getRange('H5:H'), 'yyyy-mm-dd hh:mm');
+  formatoSeguro(hoja.getRange(filaTotal, 2, 1, 6), '#,##0');
   hoja.setColumnWidth(5, 130).setColumnWidth(8, 140);
 }
 
@@ -1172,9 +1220,11 @@ function leerLibro() {
       color: p.color || COLORES_PERSONA[i % COLORES_PERSONA.length],
       diaCobro: Number(p.diaCobro) || 0
     })),
-    cuentas: listas.cuentas,
+    // La app solo ve lo activo; en la hoja sigue estando todo.
+    cuentas: listas.cuentas.filter(c => (listas.inactivas.cuentas || []).indexOf(c) === -1),
     credito: listas.credito,
-    categorias: listas.categorias,
+    categorias: listas.categorias.filter(
+      c => (listas.inactivas.categorias || []).indexOf(c.nombre) === -1),
     movimientos: leerMovimientos(libro, desde),
     fijos: leerFijos(libro),
     metas: leerMetas(libro),

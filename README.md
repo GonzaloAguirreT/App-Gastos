@@ -226,6 +226,35 @@ cuadre con nada.
 
 ---
 
+## Vestir el libro
+
+`apps-script/vestir-hoja.gs` es un segundo archivo del **mismo** proyecto de
+Apps Script. No toca `Codigo.gs`, no lee ni escribe datos: solo pone formato
+—papel crema, cifras en Newsreader, cabeceras en tinta, degradados y las reglas
+que pintan en ladrillo lo que hay que mirar—. Se puede volver a ejecutar las
+veces que haga falta.
+
+1. Apps Script → **+** (Archivos) → *Secuencia de comandos* → llámalo `Vestir`.
+2. Pega el archivo entero.
+3. Elige `vestirLibro` en el desplegable de funciones → **Ejecutar**.
+
+Si tu cuenta rechaza Newsreader o IBM Plex Mono, cambia `TIPO_CIFRA` y `TIPO_UI`
+arriba del archivo por `Playfair Display` y `Roboto Mono`: la proporción del
+diseño se mantiene.
+
+Lo que pinta en ladrillo es lo que no debería estar ahí: una fila de
+`Movimientos` con fecha y sin `Se usa en` —que no aparece en ningún mes—, un mes
+cerrado con ahorro sin repartir, alguien por encima de su tope, y los dos
+controles de `Config` que tienen que dar 0.
+
+Las filas y los topes **no van escritos a mano**: salen de las constantes de
+`Codigo.gs`, que comparten ámbito global. Con rangos fijos, cambiar
+`TOPE_CATEGORIAS` deja el degradado sobre la columna de al lado sin dar ningún
+error, y sale un libro con buena pinta y mal vestido. `pruebas/hoja-y-vestido.mjs`
+comprueba que los dos archivos hablan del mismo libro.
+
+---
+
 ## Cómo se cobran los fijos
 
 Un fijo no escribe filas por adelantado. El día que llega `Próximo cargo`, un

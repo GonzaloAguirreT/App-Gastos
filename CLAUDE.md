@@ -18,13 +18,14 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las nueve, cada una con su servidor
+sh pruebas/todas.sh                  # las diez, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
 node pruebas/mes-recien-empezado.mjs # un mes vacío no ha ido mal todavía
 node pruebas/alto-700.mjs            # nada se sale en un móvil de verdad
 node pruebas/botones.mjs             # nada de lo pulsable puede estar muerto
+node pruebas/hoja-y-vestido.mjs      # el vestido cae donde caen los datos
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 ```
@@ -96,6 +97,14 @@ descuadraría el ahorro.
 
 `apps-script/Codigo.gs` **no se despliega desde el repositorio**: se pega a mano
 en el editor de Apps Script. El contrato completo de la hoja está en el README.
+
+`apps-script/vestir-hoja.gs` es un archivo aparte del mismo proyecto y solo pone
+formato: no lee ni escribe datos. Toma las filas y los topes de las constantes
+de `Codigo.gs` —comparten ámbito global— en vez de llevarlos escritos a mano.
+Con rangos fijos, cambiar `TOPE_CATEGORIAS` deja el degradado sobre la columna
+de al lado y la regla roja apuntando a una celda que no es, y eso **no da
+ningún error**: sale un libro con buena pinta y mal vestido. Lo vigila
+`pruebas/hoja-y-vestido.mjs`.
 
 Acciones: `mes` (una lectura con todo), `movimientos`, `movimiento-edita`,
 `movimiento-baja`, `fijo`, `fijo-baja`, `fijo-cargo`, `cerrar-mes`, `reparto`,
