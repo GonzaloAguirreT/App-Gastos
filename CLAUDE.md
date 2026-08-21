@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las trece, cada una con su servidor
+sh pruebas/todas.sh                  # las catorce, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -28,6 +28,7 @@ node pruebas/botones.mjs             # nada de lo pulsable puede estar muerto
 node pruebas/hoja-y-vestido.mjs      # el vestido cae donde caen los datos
 node pruebas/escribir-meta.mjs       # repintar no puede cerrarte el teclado
 node pruebas/vaciar-el-libro.mjs     # vaciar se lleva los datos, no las fórmulas
+node pruebas/libro-sin-migrar.mjs    # las hojas se leen por su cabecera
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
@@ -136,6 +137,17 @@ la app; una PWA no se despierta sola.
 la última *implementación*. Hay que editar la implementación y elegir **versión
 nueva**. Síntoma: la app manda `accion: 'mes'`, el backend viejo no la conoce y
 contesta `Petición sin movimientos`.
+
+**Leer una hoja por posición fija se rompe en silencio.** Si el contrato de
+columnas cambia y el lector sigue contando, devuelve la columna de al lado, que
+también tiene un valor válido: no lanza nada. Listas pasó de ocho columnas a
+diez y las cuentas salieron llamándose `true` —era la casilla Activa— y las
+categorías «Común» y «Personal» —era el reparto—. Y `instalar()` lee las listas
+y las reescribe, así que escribió esa basura en la hoja y se llevó por delante
+los nombres de verdad. Los lectores preguntan a la cabecera (`columnasPor`, y
+`columnasDeListas` para Listas, que tiene dos columnas ACTIVA). Lo vigila
+`pruebas/libro-sin-migrar.mjs`, que ejecuta el backend en Node contra libros de
+las dos formas.
 
 **Apps Script agrupa las escrituras.** Una excepción salta en el siguiente
 `flush()`, lejos de su causa, y un `try/catch` alrededor de la llamada no la

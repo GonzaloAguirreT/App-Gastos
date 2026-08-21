@@ -432,6 +432,130 @@ function leerFijosParaMigrar(libro) {
 }
 
 /** Las listas que ya hay en el libro; si no hay ninguna, la semilla. */
+/**
+ * En qué columna está cada cabecera, preguntándoselo a la hoja en vez de
+ * contarlas.
+ *
+ * Es la cura de una familia entera de fallos, no de uno. Leer por posición fija
+ * una hoja cuyo contrato ha cambiado devuelve la columna de al lado, y eso
+ * **nunca lanza**: al otro lado hay un valor perfectamente válido. Movimientos
+ * ganó «Se usa en» y Fijos ganó dos columnas en medio; leídas por posición, un
+ * libro sin migrar daba importes a cero, cuentas que eran cantidades y fijos
+ * sin próximo cargo, todo sin un solo error en el registro.
+ *
+ * Sirve para las hojas cuyas cabeceras son únicas. Listas no, porque tiene dos
+ * columnas ACTIVA: esa tiene la suya.
+ */
+function columnasPor(hoja, fila, cabeceras) {
+  const ancho = Math.max(hoja.getLastColumn(), cabeceras.length);
+  const enLaHoja = hoja.getRange(fila, 1, 1, ancho).getValues()[0]
+    .map(v => String(v).trim().toUpperCase());
+
+  const mapa = {};
+  var reconocidas = 0;
+  cabeceras.forEach(nombre => {
+    const donde = enLaHoja.indexOf(nombre.toUpperCase());
+    mapa[nombre] = donde;
+    if (donde !== -1) reconocidas++;
+  });
+
+  /* Sin cabecera que reconocer no hay a quién preguntar, y se vuelve al orden
+     del contrato. Es lo que se hacía siempre, así que no empeora nada: solo
+     deja de ser lo único que se hace. */
+  if (reconocidas < 2) cabeceras.forEach((nombre, i) => { mapa[nombre] = i; });
+  return mapa;
+}
+
+/**
+ * En qué columna está cada cosa de Listas, preguntándoselo a la cabecera.
+ *
+ * Por posición fija NO se puede: Listas ha tenido dos formas. La vieja eran
+ * ocho columnas —PERSONA, COLOR, CUENTA, ACTIVA, CATEGORÍA, TIPO, REPARTO,
+ * ACTIVA— y la de ahora son diez, con DÍA COBRO TC y ES CRÉDITO metidas en
+ * medio. Leer la de ahora sobre un libro con la vieja devuelve la columna de al
+ * lado, y eso **no da ningún error**: las cuentas salen llamándose «true»
+ * —era la casilla Activa— y las categorías «Común» y «Personal» —era el
+ * reparto—. Es exactamente lo que se veía al anotar.
+ *
+ * Hay DOS columnas llamadas ACTIVA, una por lista. Cada una es la primera que
+ * aparece después de la suya, así que se busca a partir de ella y no desde el
+ * principio.
+ */
+function columnasDeListas(hoja) {
+  const ancho = Math.max(hoja.getLastColumn(), 1);
+  const cabecera = hoja.getRange(FILA_CABECERA, 1, 1, ancho).getValues()[0]
+    .map(v => String(v).trim().toUpperCase());
+  const donde = (nombre, desde) => cabecera.indexOf(nombre, desde || 0);
+
+  const cuenta = donde('CUENTA');
+  const categoria = donde('CATEGORÍA');
+
+  /* Sin cabecera reconocible no hay nada a lo que preguntar, y adivinar por
+     posición es lo que rompió esto. Queda el ancho, que distingue las dos
+     formas que han existido: mejor eso que quedarse sin leer y que la
+     siguiente escritura borre las listas de verdad. */
+  if (cuenta === -1 && categoria === -1) {
+    return ancho >= 10
+      ? { persona: 0, color: 1, diaCobro: 2, cuenta: 3, credito: 4, cuentaActiva: 5,
+          categoria: 6, tipo: 7, reparto: 8, categoriaActiva: 9 }
+      : { persona: 0, color: 1, diaCobro: -1, cuenta: 2, credito: -1, cuentaActiva: 3,
+          categoria: 4, tipo: 5, reparto: 6, categoriaActiva: 7 };
+  }
+
+  return {
+    persona: donde('PERSONA'),
+    color: donde('COLOR'),
+    diaCobro: donde('DÍA COBRO TC'),
+    cuenta: cuenta,
+    credito: donde('ES CRÉDITO'),
+    cuentaActiva: cuenta === -1 ? -1 : donde('ACTIVA', cuenta),
+    categoria: categoria,
+    tipo: donde('TIPO'),
+    reparto: donde('REPARTO'),
+    categoriaActiva: categoria === -1 ? -1 : donde('ACTIVA', categoria)
+  };
+}
+
+/**
+ * Las cuentas y las categorías que se usan de verdad, sacadas de los datos.
+ *
+ * Cada fila de Movimientos y de Fijos lleva escrito su nombre de categoría, su
+ * cuenta y su reparto. Eso convierte a los datos en la copia de seguridad de
+ * las listas: aunque Listas se pierda, los nombres siguen ahí.
+ */
+function listasDeLosDatos(libro) {
+  const cuentas = [], categorias = [], vistas = {};
+  const anotarCuenta = nombre => {
+    const n = String(nombre || '').trim();
+    if (n && cuentas.indexOf(n) === -1) cuentas.push(n);
+  };
+  const anotarCategoria = (nombre, tipo, reparto) => {
+    const n = String(nombre || '').trim();
+    if (!n || vistas[n]) return;
+    vistas[n] = true;
+    categorias.push({
+      nombre: n,
+      tipo: tipo === 'Ingreso' ? 'Ingreso' : 'Gasto',
+      reparto: reparto === 'Común' ? 'Común' : 'Personal'
+    });
+  };
+
+  leerMovimientosParaMigrar(libro).forEach(m => {
+    anotarCategoria(m.categoria, m.tipo, m.reparto);
+    anotarCuenta(m.cuenta);
+  });
+  leerFijosParaMigrar(libro).forEach(f => {
+    anotarCategoria(f.concepto, f.tipo, f.reparto);
+    anotarCuenta(f.cuenta);
+  });
+  return { cuentas: cuentas, categorias: categorias };
+}
+
+/** Un valor que era una casilla y acabó de nombre. */
+function pareceBooleano(nombre) {
+  return /^(true|false|verdadero|falso)$/i.test(String(nombre).trim());
+}
+
 function leerListasExistentes(libro) {
   const hoja = libro.getSheetByName(HOJA_LISTAS);
   /* `inactivas` no filtra nada: solo recuerda qué está desmarcado. Filtrar aquí
@@ -442,32 +566,76 @@ function leerListasExistentes(libro) {
                   inactivas: { cuentas: [], categorias: [] } };
 
   if (hoja && hoja.getLastRow() >= FILA_DATOS) {
-    const filas = hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, 10).getValues();
+    const col = columnasDeListas(hoja);
+    const ancho = Math.max(hoja.getLastColumn(), 1);
+    const filas = hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, ancho)
+                      .getValues();
+    // Una columna que no existe en este libro —el día de cobro, «es crédito»—
+    // no es un valor vacío: es que no hay nada que preguntar.
+    const de = (f, cual) => col[cual] === -1 ? undefined : f[col[cual]];
+
     filas.forEach(f => {
-      if (f[0]) vacio.personas.push({
-        nombre: String(f[0]),
-        color: String(f[1] || ''),
-        // El día de cobro de SU tarjeta. Vacío o cero significa que no aplaza.
-        diaCobro: Number(f[2]) || 0
+      if (de(f, 'persona')) vacio.personas.push({
+        nombre: String(de(f, 'persona')),
+        color: String(de(f, 'color') || ''),
+        /* El día de cobro de SU tarjeta. Vacío o cero significa que no aplaza.
+           En un libro viejo esa columna no existía, así que se le pone el día
+           de la semilla: era lo que la app daba por hecho. */
+        diaCobro: col.diaCobro === -1 ? DIA_COBRO_SEMILLA : Number(de(f, 'diaCobro')) || 0
       });
       /* «Activa» en FALSE retira la cuenta o la categoría de la app sin
          borrarla: lo que ya se escribió con ella sigue sumando y el panel sigue
          cuadrando, pero deja de ofrecerse al anotar. Desmarcar la casilla desde
          la hoja no hacía absolutamente nada. */
-      if (f[3]) {
-        vacio.cuentas.push(String(f[3]));
-        if (f[4] === true) vacio.credito.push(String(f[3]));
-        if (f[5] === false) vacio.inactivas.cuentas.push(String(f[3]));
+      if (de(f, 'cuenta')) {
+        const nombre = String(de(f, 'cuenta'));
+        vacio.cuentas.push(nombre);
+        if (de(f, 'credito') === true) vacio.credito.push(nombre);
+        if (de(f, 'cuentaActiva') === false) vacio.inactivas.cuentas.push(nombre);
       }
-      if (f[6]) {
+      if (de(f, 'categoria')) {
+        const nombre = String(de(f, 'categoria'));
         vacio.categorias.push({
-          nombre: String(f[6]),
-          tipo: f[7] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-          reparto: f[8] === 'Común' ? 'Común' : 'Personal'
+          nombre: nombre,
+          tipo: de(f, 'tipo') === 'Ingreso' ? 'Ingreso' : 'Gasto',
+          reparto: de(f, 'reparto') === 'Común' ? 'Común' : 'Personal'
         });
-        if (f[9] === false) vacio.inactivas.categorias.push(String(f[6]));
+        if (de(f, 'categoriaActiva') === false) vacio.inactivas.categorias.push(nombre);
       }
     });
+
+    /* Un libro viejo no sabía de tarjetas de crédito. Se le da la de la
+       semilla si la tiene, que es lo que instalar() haría con un libro nuevo;
+       sin esto, migrar dejaba a todo el mundo sin la regla de la tarjeta. */
+    if (col.credito === -1 && vacio.cuentas.length) {
+      vacio.credito = CREDITO_SEMILLA.filter(c => vacio.cuentas.indexOf(c) !== -1);
+    }
+
+    /* Y la reparación del destrozo que ya está escrito. Leer Listas por
+       posición sobre un libro viejo devolvía basura, e instalar() la escribía
+       de vuelta: entonces la cabecera ya es la nueva y no queda nada que
+       detectar, solo cuentas llamadas «true» y categorías llamadas «Común».
+       Los nombres de verdad siguen en cada fila de Movimientos.
+
+       Solo se mira si hay motivo. Leer Movimientos entero en cada
+       sincronización sería una lectura grande a cambio de nada. */
+    const todasBooleanas = lista => lista.length > 0 && lista.every(pareceBooleano);
+    const nombresCat = vacio.categorias.map(c => c.nombre);
+    const catsSonRepartos = nombresCat.length > 0
+      && nombresCat.every(n => n === 'Común' || n === 'Personal' || pareceBooleano(n));
+
+    if (todasBooleanas(vacio.cuentas) || catsSonRepartos) {
+      const delDato = listasDeLosDatos(libro);
+      if (todasBooleanas(vacio.cuentas) && delDato.cuentas.length) {
+        vacio.cuentas = delDato.cuentas;
+        vacio.credito = CREDITO_SEMILLA.filter(c => delDato.cuentas.indexOf(c) !== -1);
+        vacio.inactivas.cuentas = [];
+      }
+      if (catsSonRepartos && delDato.categorias.length) {
+        vacio.categorias = delDato.categorias;
+        vacio.inactivas.categorias = [];
+      }
+    }
   }
 
   if (!vacio.personas.length) {
@@ -1310,22 +1478,29 @@ function leerLibro() {
 function leerMovimientos(libro, desdeMes) {
   const hoja = libro.getSheetByName(HOJA_MOVIMIENTOS);
   if (!hoja || hoja.getLastRow() < 2) return [];
-  return hoja.getRange(2, 1, hoja.getLastRow() - 1, 11).getValues()
+  const col = columnasPor(hoja, 1, CABECERAS_MOVIMIENTOS);
+  const ancho = Math.max(hoja.getLastColumn(), CABECERAS_MOVIMIENTOS.length);
+  // Una columna que este libro no tiene todavía no es un valor vacío: es que no
+  // hay nada que preguntar. «Se usa en» es la que falta en un libro sin migrar.
+  const v = (f, nombre) => col[nombre] === -1 ? '' : f[col[nombre]];
+
+  return hoja.getRange(2, 1, hoja.getLastRow() - 1, ancho).getValues()
     .map(f => ({
-      uuid: String(f[10] || ''),
-      fecha: f[0] instanceof Date ? iso(f[0]) : '',
-      tipo: f[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-      categoria: String(f[2] || ''),
-      descripcion: String(f[3] || ''),
-      importe: Number(f[4]) || 0,
-      cuenta: String(f[5] || ''),
-      persona: String(f[6] || ''),
-      reparto: f[7] === 'Común' ? 'Común' : 'Personal',
+      uuid: String(v(f, 'UUID') || ''),
+      fecha: v(f, 'FECHA') instanceof Date ? iso(v(f, 'FECHA')) : '',
+      tipo: v(f, 'TIPO') === 'Ingreso' ? 'Ingreso' : 'Gasto',
+      categoria: String(v(f, 'CATEGORÍA') || ''),
+      descripcion: String(v(f, 'DESCRIPCIÓN') || ''),
+      importe: Number(v(f, 'IMPORTE')) || 0,
+      cuenta: String(v(f, 'CUENTA') || ''),
+      persona: String(v(f, 'PERSONA') || ''),
+      reparto: v(f, 'REPARTO') === 'Común' ? 'Común' : 'Personal',
       /* El mes que la paga. Una fila escrita por un despliegue anterior no lo
          trae, y entonces vale el de su fecha: es lo que hacía la app antes y
          para un gasto en efectivo sigue siendo la respuesta correcta. */
-      paraMes: mesDeCelda(f[8]) || (f[0] instanceof Date ? iso(f[0]).slice(0, 7) : ''),
-      origen: String(f[9] || 'app')
+      paraMes: mesDeCelda(v(f, 'SE USA EN'))
+        || (v(f, 'FECHA') instanceof Date ? iso(v(f, 'FECHA')).slice(0, 7) : ''),
+      origen: String(v(f, 'ORIGEN') || 'app')
     }))
     /* Se recorta por el mes que PAGA y no por la fecha: una compra de
        diciembre que se cobra en enero tiene que viajar al teléfono aunque su
@@ -1337,24 +1512,28 @@ function leerMovimientos(libro, desdeMes) {
 function leerFijos(libro) {
   const hoja = libro.getSheetByName(HOJA_FIJOS);
   if (!hoja || hoja.getLastRow() < 2) return [];
-  return hoja.getRange(2, 1, hoja.getLastRow() - 1, 16).getValues()
-    .filter(f => f[2])
+  const col = columnasPor(hoja, 1, CABECERAS_FIJOS);
+  const ancho = Math.max(hoja.getLastColumn(), CABECERAS_FIJOS.length);
+  const v = (f, nombre) => col[nombre] === -1 ? '' : f[col[nombre]];
+
+  return hoja.getRange(2, 1, hoja.getLastRow() - 1, ancho).getValues()
+    .filter(f => v(f, 'CONCEPTO'))
     .map(f => ({
-      uuid: String(f[0] || ''),
-      tipo: f[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-      concepto: String(f[2]),
-      importe: Number(f[3]) || 0,
-      dia: Number(f[4]) || 1,
-      cada: Number(f[5]) || 1,
-      cuotas: Number(f[6]) || 0,
-      restantes: Number(f[7]) || 0,
-      cuenta: String(f[8] || ''),
-      persona: String(f[9] || ''),
-      reparto: f[10] === 'Común' ? 'Común' : 'Personal',
-      usaEn: f[11] === 'mes siguiente' ? 'siguiente' : 'mismo',
-      activo: f[12] !== false,
-      prox: f[13] instanceof Date ? iso(f[13]) : '',
-      ultimo: f[14] instanceof Date ? iso(f[14]) : ''
+      uuid: String(v(f, 'UUID') || ''),
+      tipo: v(f, 'TIPO') === 'Ingreso' ? 'Ingreso' : 'Gasto',
+      concepto: String(v(f, 'CONCEPTO')),
+      importe: Number(v(f, 'IMPORTE')) || 0,
+      dia: Number(v(f, 'DÍA')) || 1,
+      cada: Number(v(f, 'CADA (MESES)')) || 1,
+      cuotas: Number(v(f, 'CUOTAS')) || 0,
+      restantes: Number(v(f, 'RESTANTES')) || 0,
+      cuenta: String(v(f, 'CUENTA') || ''),
+      persona: String(v(f, 'PERSONA') || ''),
+      reparto: v(f, 'REPARTO') === 'Común' ? 'Común' : 'Personal',
+      usaEn: v(f, 'SE USA EN') === 'mes siguiente' ? 'siguiente' : 'mismo',
+      activo: v(f, 'ACTIVO') !== false,
+      prox: v(f, 'PRÓXIMO CARGO') instanceof Date ? iso(v(f, 'PRÓXIMO CARGO')) : '',
+      ultimo: v(f, 'ÚLTIMO CARGO') instanceof Date ? iso(v(f, 'ÚLTIMO CARGO')) : ''
     }));
 }
 
