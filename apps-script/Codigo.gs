@@ -269,13 +269,26 @@ function instalar() {
  * una llamada; su URL sale en el registro.
  */
 function vaciar() {
-  const libro = SpreadsheetApp.getActive();
+  const original = SpreadsheetApp.getActive();
+  const id = original.getId();
   const partes = [];
 
-  const copia = libro.copy(libro.getName() + ' — antes de vaciar '
+  const copia = original.copy(original.getName() + ' — antes de vaciar '
     + Utilities.formatDate(hoy(), zonaDeLaHoja(), 'yyyy-MM-dd HH:mm'));
   console.log('Copia de seguridad: ' + copia.getUrl());
   partes.push('copia guardada en Drive');
+
+  /* Y se vuelve a pedir el libro DESPUÉS de copiarlo.
+
+     `copy()` deja obsoleto el manejador que tenías: getSheetByName sigue
+     devolviendo una hoja, pero es una hoja cuyo id ya no resuelve, y la primera
+     operación sobre ella revienta con «Sheet 196448985 not found». Pasó en la
+     primera limpieza, así que el libro se quedó entero —mal, pero entero—.
+
+     openById devuelve un manejador nuevo, y el flush de antes se asegura de que
+     la copia esté terminada antes de pedirlo. */
+  SpreadsheetApp.flush();
+  const libro = SpreadsheetApp.openById(id);
 
   /* Se limpia el CONTENIDO, nunca la hoja entera: borrar una hoja deja #REF! en
      toda fórmula que la citaba —Metas y Cierres citan Reparto, y Panel y Año

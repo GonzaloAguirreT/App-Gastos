@@ -154,6 +154,12 @@ las dos formas.
 `flush()`, lejos de su causa, y un `try/catch` alrededor de la llamada no la
 atrapa. Si un lote falla se pierde todo lo que iba detrás.
 
+**`copy()` deja obsoleto el libro desde el que lo llamaste.** `getSheetByName`
+sigue devolviendo una hoja, pero es una hoja cuyo id ya no resuelve, y la
+primera operación revienta con «Sheet 196448985 not found». Le pasó a `vaciar()`
+en la primera limpieza, con la copia de seguridad ya hecha. Después de copiar
+hay que volver a pedir el libro con `SpreadsheetApp.openById`.
+
 **Nada de diálogos modales en el backend.** `Ui.alert()` suspende el script
 hasta que alguien pulsa Aceptar, y desde el editor con la hoja cerrada no lo
 pulsa nadie: la ejecución muere a los seis minutos. Usa `console.log` (sale al
