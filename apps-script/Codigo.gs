@@ -252,6 +252,81 @@ function instalar() {
 }
 
 /**
+ * Deja el libro sin un solo dato, pero con la misma forma.
+ *
+ * Se ejecuta A MANO desde el editor, como instalar(), y no hay ninguna acción
+ * de la app que llegue hasta aquí: nada que se pueda tocar sin querer desde el
+ * teléfono borra un año de gastos.
+ *
+ * Se van los movimientos, los fijos, las metas, los cierres, el reparto y los
+ * uuid. Se quedan las listas —categorías, cuentas, personas con su día de
+ * cobro—, Config con su ahorro esperado, y todo el vestido: cabeceras,
+ * fórmulas, formatos, casillas, desplegables y el autofiltro. Panel y Año no se
+ * tocan porque no guardan nada: son fórmulas, y a partir de aquí darán cero.
+ *
+ * Lo primero que hace es una copia del libro entero en Drive. Vaciar es la
+ * única operación de este archivo que no se puede deshacer, y una copia cuesta
+ * una llamada; su URL sale en el registro.
+ */
+function vaciar() {
+  const libro = SpreadsheetApp.getActive();
+  const partes = [];
+
+  const copia = libro.copy(libro.getName() + ' — antes de vaciar '
+    + Utilities.formatDate(hoy(), zonaDeLaHoja(), 'yyyy-MM-dd HH:mm'));
+  console.log('Copia de seguridad: ' + copia.getUrl());
+  partes.push('copia guardada en Drive');
+
+  /* Se limpia el CONTENIDO, nunca la hoja entera: borrar una hoja deja #REF! en
+     toda fórmula que la citaba —Metas y Cierres citan Reparto, y Panel y Año
+     citan Movimientos— y recrearla con el mismo nombre no las recupera. */
+  const limpiar = (nombre, rangos) => {
+    const hoja = libro.getSheetByName(nombre);
+    if (!hoja) return;
+    rangos.forEach(a1 => hoja.getRange(a1).clearContent());
+    partes.push(nombre + ' vacía');
+  };
+
+  // Cabecera en la 1 y datos de la 2 hacia abajo: son tablas con autofiltro.
+  limpiar(HOJA_MOVIMIENTOS, ['A2:K']);
+
+  /* En Fijos se limpia hasta la O y no hasta la P: la P es «Mes imputado», que
+     es fórmula y no dato, y está puesta fila a fila hasta el tope de fijos.
+     Borrarla dejaría los fijos nuevos sin mes imputado y sin dar ningún error. */
+  limpiar(HOJA_FIJOS, ['A2:O']);
+
+  /* En Metas y en Cierres los datos empiezan en FILA_DATOS y ocupan un número
+     fijo de filas, con columnas de fórmula intercaladas que hay que
+     saltarse: en Metas la C, la D y la E (guardado, falta y avance salen de
+     Reparto), y en Cierres la E, la F y la G. Más abajo están las filas de
+     Total y la de SIN ASIGNAR, que también son fórmulas. */
+  const ultimaMeta = FILA_DATOS + TOPE_METAS - 1;
+  limpiar(HOJA_METAS, ['A' + FILA_DATOS + ':B' + ultimaMeta,
+                       'F' + FILA_DATOS + ':H' + ultimaMeta]);
+
+  const ultimoCierre = FILA_DATOS + TOPE_CIERRES - 1;
+  limpiar(HOJA_CIERRES, ['A' + FILA_DATOS + ':D' + ultimoCierre,
+                         'H' + FILA_DATOS + ':H' + ultimoCierre]);
+
+  limpiar(HOJA_REPARTO, ['A' + FILA_DATOS + ':F']);
+
+  /* Los uuid son la memoria de qué se escribió ya. Vaciados a la vez que los
+     movimientos siguen contando la verdad: no hay nada escrito, así que nada
+     está repetido. Dejarlos sería guardar la memoria de un libro que ya no
+     existe. */
+  limpiar(HOJA_UUIDS, ['A2:C']);
+
+  const resumen = 'Libro vaciado: ' + partes.join(', ')
+    + '. Las listas, Config y las fórmulas siguen donde estaban.';
+  console.log(resumen);
+  try {
+    libro.toast(resumen, 'Vaciar', 15);
+  } catch (e) {
+    /* Sin hoja delante no hay dónde enseñarlo, y da igual: está en el registro. */
+  }
+}
+
+/**
  * Los movimientos que ya hay, sea cual sea el formato en que estén.
  *
  * Han existido tres. El primero tenía siete columnas —Fecha, Concepto,

@@ -524,6 +524,24 @@ const ESTADO = (() => {
   }
 
   /**
+   * Vacía este teléfono: la copia del mes, la cola y lo que hay en memoria.
+   *
+   * No toca la hoja. Es la mitad de «dejar la app sin ningún dato» que se hace
+   * desde aquí; la otra mitad la hace `vaciar()` en el Apps Script, y esa sí
+   * borra la hoja.
+   *
+   * Devuelve lo que había en la cola para poder reponerlo: sincronizar
+   * recupera todo lo demás, pero un apunte sin enviar no está en la hoja
+   * todavía y no lo recupera nadie.
+   */
+  async function olvidarDatos() {
+    const enCola = await NUCLEO.olvidarDatos();
+    datos = clonar(datosVacios);
+    await refrescarPendientes();
+    return enCola;
+  }
+
+  /**
    * Cuántos quedan en la cola y CUÁLES.
    *
    * El contador solo servía para el banner. Saber qué apuntes concretos siguen
@@ -754,7 +772,7 @@ const ESTADO = (() => {
     esCredito, diaCobroDe, mesImputado, mesCobroDe, cobradoParaMes, estaPendiente,
     caeEn, cargadoEn, fijosDelMes, diaDeCargo, movimientosDe, resumen,
     proximosMeses, acumulado, sinAsignar, metasCalculadas,
-    iniciar, sincronizar, refrescarPendientes, marcarConexion,
+    iniciar, sincronizar, refrescarPendientes, olvidarDatos, marcarConexion,
     sePuedeCerrar, reabrirMes,
     anotar, editarMovimiento, borrarMovimiento,
     guardarFijo, borrarFijo, marcarFijo,

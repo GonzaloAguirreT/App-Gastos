@@ -90,7 +90,7 @@ Deja el libro con diez pestañas:
 | `Cierres` | la app | Una fila por mes cerrado, con su Total Ahorrado. |
 | `Reparto` | la app | Cada asignación de ahorro a una meta, una línea. |
 | `Listas` | la app | Personas, cuentas y categorías. Se editan desde Ajustes. |
-| `Config` | la app | Plan del mes, límite de aviso y qué avisos están activos. |
+| `Config` | la app | Ahorro esperado, límite de aviso y qué avisos están activos. |
 | `_uuids` | la app | Oculta. Los identificadores ya recibidos, para no escribir dos veces lo mismo. |
 
 `instalar()` **migra y no borra**. Si el libro venía del formato anterior:
@@ -355,8 +355,8 @@ La versión que está sirviendo se ve en **Ajustes → Versión**.
 **Categorías, cuentas y personas** se editan desde Ajustes y viven en la hoja.
 Lo de `config.js` es solo la semilla del primer arranque y el respaldo sin red.
 
-**El plan del mes, el límite y los avisos** también viven en la hoja: son de los
-dos. El tema, quién anota en este teléfono y su cuenta habitual se quedan en el
+**El ahorro esperado, el límite y los avisos** también viven en la hoja: son de
+los dos. El tema, quién anota en este teléfono y su cuenta habitual se quedan en el
 móvil.
 
 **La moneda**: `SIMBOLO` y `DECIMALES` en `config.js`, y el formato `#,##0` en
@@ -370,6 +370,38 @@ dentro de uno de esos bloques.
 
 **Las fuentes** están autoalojadas en `css/fuentes/`. No se enlazan desde Google
 Fonts porque una app que se abre sin red tiene que poder pintarse entera.
+
+---
+
+## Empezar de cero
+
+Para dejarlo todo sin un solo dato hay que hacer las dos mitades, y en este
+orden:
+
+**1. La hoja.** En el editor de Apps Script, elegir `vaciar` en el desplegable
+de funciones y ejecutar. Se ejecuta a mano a propósito: ninguna acción del
+backend llega hasta ella, así que nada que se pueda tocar desde el teléfono
+borra un año de gastos.
+
+Se van los movimientos, los fijos, las metas, los cierres, el reparto y los
+uuid. Se quedan las categorías, las cuentas, las personas con su día de cobro,
+el ahorro esperado y todo el formato: cabeceras, fórmulas, casillas,
+desplegables y el autofiltro. Panel y Año no se tocan porque no guardan nada,
+son fórmulas, y a partir de ahí darán cero.
+
+Antes de borrar nada hace una copia del libro entero en Drive y escribe su URL
+en el registro (**Ver → Registros**). Es la única operación de todo el backend
+que no se puede deshacer, y una copia cuesta una llamada.
+
+**2. El teléfono.** En **Ajustes → Este teléfono → Vaciar este teléfono**. Borra
+la copia del mes y la cola de pendientes; la conexión, el token y quién anota
+aquí se quedan puestos, porque si no habría que volver a pegar la URL y el token
+para recuperar lo que sigue estando en la hoja.
+
+Hace falta aunque ya hayas vaciado la hoja: un apunte que no se llegó a enviar
+sigue en la cola del móvil y se escribiría en el libro recién vaciado. Por eso
+mismo el botón ofrece deshacer, igual que borrar un movimiento: es lo único de
+todo esto que no está en ningún otro sitio.
 
 ---
 

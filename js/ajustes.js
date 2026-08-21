@@ -137,6 +137,18 @@ const AJUSTES = (() => {
                 : 'Se cierra solo la última noche del mes, y a mano solo desde los '
                   + 'últimos días. Cerrarlo a mitad lo archivaría con el mes sin terminar.')
             ]),
+
+        seccion('Este teléfono'),
+        h('div.margen', [
+          fila('Vaciar este teléfono', 'borrar ›', vaciarTelefono),
+          h('p.nota', { estilo: { marginTop: '9px' } },
+            'Borra la copia del mes que guarda este teléfono, no la hoja: al volver a '
+            + 'sincronizar baja otra vez lo que haya en ella. La conexión y quién anota '
+            + 'aquí se quedan puestos.'
+            + (pendientes
+                ? ' Ojo: hay ' + pendientes + ' sin enviar, y eso sí que solo está aquí.'
+                : ''))
+        ]),
         h('div.respiro')
       ])
     ]);
@@ -271,6 +283,27 @@ const AJUSTES = (() => {
         await ESTADO.refrescarPendientes();
         pintarCola();
       });
+  }
+
+  /* Vaciar el teléfono ofrece deshacer, como descartar de la cola: es la misma
+     clase de acción —irreversible y sin preguntar— y merece la misma red.
+     Lo único que hay que reponer es la cola: la copia del mes la recupera la
+     siguiente sincronización, porque la hoja es la que manda. */
+  async function vaciarTelefono() {
+    const enCola = await ESTADO.olvidarDatos();
+    VISTA.vibrar();
+    VISTA.deshacer(
+      enCola.length
+        ? 'Teléfono vaciado, con ' + enCola.length + ' sin enviar'
+        : 'Teléfono vaciado',
+      async () => {
+        await NUCLEO.reponer(enCola);
+        await ESTADO.sincronizar();
+      });
+    /* Y se vuelve a bajar la hoja: sin esto la app se queda enseñando un mes
+       vacío hasta que alguien la cierre y la abra, y parece que se ha perdido
+       lo que sigue estando escrito. */
+    await ESTADO.sincronizar({ silencioso: true });
   }
 
   function cambiarDiaCobro(nombre, dia) {

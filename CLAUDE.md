@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las once, cada una con su servidor
+sh pruebas/todas.sh                  # las trece, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -27,8 +27,10 @@ node pruebas/alto-700.mjs            # nada se sale en un móvil de verdad
 node pruebas/botones.mjs             # nada de lo pulsable puede estar muerto
 node pruebas/hoja-y-vestido.mjs      # el vestido cae donde caen los datos
 node pruebas/escribir-meta.mjs       # repintar no puede cerrarte el teclado
+node pruebas/vaciar-el-libro.mjs     # vaciar se lleva los datos, no las fórmulas
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
+node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
 ```
 
 No hay marco de pruebas: son archivos de Node que se ejecutan a mano y salen con
@@ -115,6 +117,14 @@ Reglas del transporte, todas por un motivo: `Content-Type: text/plain` (Apps
 Script no contesta al preflight de CORS), **las lecturas también van por POST**
 (el `doGet` redirige a `script.googleusercontent.com` y ese salto se lleva las
 cabeceras CORS), y deduplicación por `uuid` contra la hoja `_uuids`.
+
+`vaciar()` se ejecuta a mano desde el editor, igual que `instalar()`, y ninguna
+acción del backend llega hasta ella: nada que se pueda tocar desde el teléfono
+borra un año de gastos. Deja el libro sin datos pero con la misma forma —hace
+antes una copia en Drive— y respeta las listas, Config y las columnas de
+fórmula, que están intercaladas entre las de datos. Lo vigila
+`pruebas/vaciar-el-libro.mjs`, porque limpiar un rango de más no da ningún
+error: se lleva las fórmulas y no se nota hasta el primer cierre de mes.
 
 `tareaDiaria` es un disparador que corre de madrugada: cobra los fijos que tocan
 ese día y, el día 1, cierra el mes anterior. Es el "se cierra solo" que promete
