@@ -24,6 +24,10 @@ const PUERTO = 8300;
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const mesDe = iso => iso.slice(0, 7);
+const mesSiguiente = m => {
+  const [a, n] = m.split('-').map(Number);
+  return n === 12 ? (a + 1) + '-01' : a + '-' + String(n + 1).padStart(2, '0');
+};
 
 /* El libro. Se rehace en cada arranque: una prueba que hereda el estado de la
    anterior deja de comprobar lo que dice comprobar. */
@@ -104,6 +108,14 @@ function despachar(p) {
 
     case 'fijo': {
       const f = d.fijo || d;
+      /* El próximo cargo lo calcula el servidor, igual que el backend real: la
+         app decide el día, no la fecha. Sin esto un fijo recién dado de alta no
+         "cae" en ningún mes y desaparece de los totales. */
+      if (!f.prox) {
+        const dia = String(f.dia || 1).padStart(2, '0');
+        const esteMes = mesDe(libro.hoy) + '-' + dia;
+        f.prox = esteMes >= libro.hoy ? esteMes : mesSiguiente(mesDe(libro.hoy)) + '-' + dia;
+      }
       const i = buscar(libro.fijos, f.uuid);
       if (i === -1) libro.fijos.push(f); else libro.fijos[i] = Object.assign({}, libro.fijos[i], f);
       return { ok: true, fijo: f };
@@ -141,9 +153,11 @@ function despachar(p) {
       const entrado = suyos.filter(m => m.tipo === 'Ingreso').reduce((s, m) => s + m.importe, 0);
       const gastado = suyos.filter(m => m.tipo === 'Gasto').reduce((s, m) => s + m.importe, 0);
       if (!libro.cierres.some(c => c.mes === mes)) {
+        // Misma definición que el backend real: el plan hace de ingreso.
+        const ahorrado = libro.config.plan + entrado - gastado;
         libro.cierres.push({ mes, entrado, gastado, plan: libro.config.plan,
-                             totalAhorrado: entrado - gastado, repartido: 0,
-                             sinAsignar: entrado - gastado, movimientos: suyos });
+                             ahorrado, totalAhorrado: ahorrado, repartido: 0,
+                             sinAsignar: ahorrado, movimientos: suyos });
       }
       libro.movimientos = libro.movimientos.filter(m => mesDe(m.fecha) !== mes);
       return { ok: true, cierre: libro.cierres[libro.cierres.length - 1] };

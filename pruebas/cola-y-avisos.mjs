@@ -2,8 +2,11 @@
  * La app, de verdad, en un navegador de verdad, contra un backend que dice que
  * no. Comprueba lo único que importa cuando algo falla: que la app lo CUENTE.
  *
- *   node pruebas/servidor-falso.mjs &
+ *   node pruebas/servidor-falso.mjs --rechaza &
  *   node pruebas/cola-y-avisos.mjs
+ *
+ * OJO con el --rechaza: sin él el servidor acepta las escrituras, la cola se
+ * vacía sola y no hay ningún fallo que enseñar.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 const errores = [];

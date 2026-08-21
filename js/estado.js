@@ -173,7 +173,13 @@ const ESTADO = (() => {
       queda: plan - gastado - porVenir,
       comun,
       personal: gastado - comun,
-      ahorro: (entrado + porEntrar) - gastado - porVenir,
+      /* El plan ES el ingreso. Gonzalo y Camila lo fijan cada mes a partir de
+         lo que van a cobrar, así que el sueldo no se anota en la app: ya está
+         dentro del plan. Lo que sí se anota —un bono, una devolución— se suma
+         encima, porque eso es dinero que el plan no contemplaba.
+         Si algún día se anotara un sueldo se contaría dos veces; por eso la
+         nota de la pantalla enseña la resta entera en vez de solo el total. */
+      ahorro: plan + entrado + porEntrar - gastado - porVenir,
       porPersona: datos.personas.map(p => {
         const suyos = gastos.filter(m => m.persona === p.nombre);
         return {
