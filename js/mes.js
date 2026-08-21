@@ -15,20 +15,38 @@ const MES = (() => {
   let busca = '';
   let seleccionado = null;
 
-  /* Sin repetidos. Al cerrar el mes a mano desde Ajustes, el mes en curso y el
-     recién cerrado son el mismo, y la lista lo traía dos veces: la flecha
-     izquierda quedaba activa apuntando a la posición donde ya estabas. Un botón
-     que se ve encendido y no lleva a ninguna parte. */
+  /**
+   * Los meses a los que se puede llegar con las flechas, del más nuevo al más
+   * viejo.
+   *
+   * Son tres cosas: el mes en curso, los que están cerrados, y CUALQUIERA que
+   * tenga movimientos. Lo tercero faltaba, y era un agujero: el backend manda
+   * doce meses de movimientos, así que un mes pasado con gastos que nunca se
+   * cerró estaba en memoria y no había forma de llegar a él.
+   *
+   * Los meses vacíos no salen, y es a propósito: pasar por siete pantallas en
+   * blanco para llegar a enero no enseña nada que no diga ya la hoja. Un mes
+   * aparece en cuanto tiene algo dentro.
+   *
+   * Sin repetidos, además: al cerrar el mes a mano el que está en curso y el
+   * recién cerrado son el mismo, y la lista lo traía dos veces —la flecha
+   * izquierda quedaba encendida apuntando a donde ya estabas.
+   */
   function mesesDisponibles() {
-    const cerrados = ESTADO.estado().datos.cierres.map(c => c.mes);
-    return [...new Set([ESTADO.mesEnCurso()].concat(cerrados))];
+    const { datos } = ESTADO.estado();
+    const meses = new Set([ESTADO.mesEnCurso()]);
+    datos.cierres.forEach(c => meses.add(FMT.aMes(c.mes)));
+    datos.movimientos.forEach(m => meses.add(FMT.mesDe(m.fecha)));
+    return [...meses].filter(Boolean).sort().reverse();
   }
 
   function verMes(mes) { mesVisto = mes; pintarMes(); }
 
+  /* Al entrar se enseña el mes en curso, no el primero de la lista: un
+     movimiento con fecha futura pondría su mes el primero y la app abriría en
+     un mes que todavía no ha empezado. */
   function mesActual() {
-    const disponibles = mesesDisponibles();
-    return disponibles.indexOf(mesVisto) === -1 ? disponibles[0] : mesVisto;
+    return mesesDisponibles().indexOf(mesVisto) === -1 ? ESTADO.mesEnCurso() : mesVisto;
   }
 
   /* ------------------------------------------------------------- banners

@@ -15,6 +15,9 @@ node pruebas/cola-y-avisos.mjs             # un fallo de envío tiene que verse
 
 node pruebas/servidor-falso.mjs --mes-como-fecha &
 node pruebas/mes-como-fecha.mjs            # un mes guardado como fecha se lee igual
+
+node pruebas/servidor-falso.mjs --mes-viejo &
+node pruebas/meses-navegables.mjs          # a qué meses llegan las flechas
 ```
 
 **El servidor hay que reiniciarlo entre pruebas.** Guarda el libro en memoria, y

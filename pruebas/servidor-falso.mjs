@@ -24,10 +24,18 @@ const RECHAZA = process.argv.includes('--rechaza');
    "2026-08" en el 1 de agosto y al leerlo vuelve como una fecha en crudo. Las
    filas escritas antes del arreglo del backend siguen así. */
 const MES_COMO_FECHA = process.argv.includes('--mes-como-fecha');
+/* Un mes pasado con gastos que nunca se cerró. Sus movimientos siguen en la
+   hoja y el backend los manda, así que la app tiene que poder llegar a él. */
+const MES_VIEJO = process.argv.includes('--mes-viejo');
 const PUERTO = 8300;
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const mesDe = iso => iso.slice(0, 7);
+const mesAtras = (m, n) => {
+  const [a, x] = m.split('-').map(Number);
+  const t = a * 12 + (x - 1) - n;
+  return Math.floor(t / 12) + '-' + String((t % 12) + 1).padStart(2, '0');
+};
 const mesSiguiente = m => {
   const [a, n] = m.split('-').map(Number);
   return n === 12 ? (a + 1) + '-01' : a + '-' + String(n + 1).padStart(2, '0');
@@ -54,6 +62,11 @@ function libroNuevo() {
       { nombre: 'Sueldo', tipo: 'Ingreso', reparto: 'Personal' }
     ],
     movimientos: [
+      ...(MES_VIEJO ? [{
+        uuid: 'm-viejo', fecha: mesAtras(mesDe(hoy()), 3) + '-14', tipo: 'Gasto',
+        categoria: 'Viajes', descripcion: 'Vuelos', importe: 480000,
+        cuenta: 'Tarjeta Credito', persona: 'Camila', reparto: 'Común', origen: 'app'
+      }] : []),
       { uuid: 'm-1', fecha: hoy(), tipo: 'Gasto', categoria: 'Alimentación',
         descripcion: 'Feria', importe: 24000, cuenta: 'Cuenta Corriente',
         persona: 'Camila', reparto: 'Común', origen: 'app' },
@@ -234,5 +247,6 @@ http.createServer((req, res) => {
 }).listen(PUERTO, () => {
   console.log('servidor falso en http://localhost:' + PUERTO +
               (RECHAZA ? '  (modo despliegue viejo: rechaza todo menos "mes")' : '') +
-              (MES_COMO_FECHA ? '  (con un mes cerrado guardado como fecha)' : ''));
+              (MES_COMO_FECHA ? '  (con un mes cerrado guardado como fecha)' : '') +
+              (MES_VIEJO ? '  (con un mes pasado sin cerrar)' : ''));
 });
