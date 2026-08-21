@@ -22,6 +22,8 @@ const AJUSTES = (() => {
   function pintarAjustes() {
     const { datos, ajustes, pendientes, enLinea } = ESTADO.estado();
     const mes = ESTADO.mesEnCurso();
+    const puedeCerrar = ESTADO.sePuedeCerrar(mes);
+    const cerradoYa = datos.cierres.some(c => c.mes === mes);
     const avisos = datos.config.avisos || {};
 
     const interruptor = (clave, titulo, cuando) => {
@@ -90,12 +92,28 @@ const AJUSTES = (() => {
         ]),
 
         seccion('Cierre del mes'),
-        h('div.margen', [
-          fila('Cerrar ' + FMT.nombreMes(mes) + ' ahora', 'repartir ›',
-               () => AHORRO.cerrarMesYRepartir(mes)),
-          h('p.nota', { estilo: { marginTop: '9px' } },
-            'Se cierra solo la última noche del mes. Al cerrarlo eliges a qué metas va lo ahorrado.')
-        ]),
+        h('div.margen', cerradoYa
+          ? [
+              /* Un mes cerrado por error deja la app en un callejón: la pantalla
+                 Mes pasa a solo lectura y, si no hay ningún otro mes, las dos
+                 flechas se apagan. Tiene que poder deshacerse desde aquí. */
+              fila('Reabrir ' + FMT.nombreMes(mes), 'volver a anotar ›',
+                   () => ESTADO.reabrirMes(mes)),
+              h('p.nota', { estilo: { marginTop: '9px' } },
+                FMT.cap(FMT.nombreMes(mes)) + ' está cerrado, así que la pantalla Mes es de '
+                + 'solo lectura. Reabrirlo borra su fila de Cierres y lo devuelve a en curso.')
+            ]
+          : [
+              /* Sin acción, fila() la pinta como un div en vez de un botón: no
+                 hace falta ninguna clase nueva para que se note que no se puede
+                 tocar, y el "—" de la derecha lo dice. */
+              fila('Cerrar ' + FMT.nombreMes(mes) + ' ahora', puedeCerrar ? 'repartir ›' : '—',
+                   puedeCerrar ? () => AHORRO.cerrarMesYRepartir(mes) : null),
+              h('p.nota', { estilo: { marginTop: '9px' } }, puedeCerrar
+                ? 'Al cerrarlo eliges a qué metas va lo ahorrado.'
+                : 'Se cierra solo la última noche del mes, y a mano solo desde los '
+                  + 'últimos días. Cerrarlo a mitad lo archivaría con el mes sin terminar.')
+            ]),
         h('div.respiro')
       ])
     ]);

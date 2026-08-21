@@ -68,6 +68,32 @@ const ESTADO = (() => {
   function hoy() { return datos.hoy || FMT.iso(); }
   function mesEnCurso() { return FMT.mesDe(hoy()); }
 
+  /**
+   * ¿Se puede cerrar este mes ya?
+   *
+   * Solo si ya terminó, o si le quedan uno o dos días. Cerrar un mes a mitad no
+   * tiene ningún uso y sí un efecto feo: la hoja lo archiva y lo vacía, la
+   * pantalla Mes pasa a solo lectura, y como no existe ningún otro mes las dos
+   * flechas se quedan apagadas. La app entera se queda mirando un agosto
+   * cerrado hasta el 1 de septiembre.
+   *
+   * Pasó de verdad. El botón estaba siempre disponible y no avisaba de nada.
+   */
+  function sePuedeCerrar(mes) {
+    const actual = mesEnCurso();
+    if (mes < actual) return true;               // un mes pasado, siempre
+    if (mes > actual) return false;              // uno que no ha empezado, nunca
+    const total = FMT.diasDelMes(mes);
+    return Number(hoy().slice(8)) >= total - 1;  // el actual, en sus últimos días
+  }
+
+  /** Deshacer un cierre: borra su fila y el mes vuelve a estar en curso. */
+  async function reabrirMes(mes) {
+    datos.cierres = datos.cierres.filter(c => c.mes !== mes);
+    emitir();
+    await encolar('cierre-baja', { uuid: uuid(), mes: mes });
+  }
+
   function persona(nombre) {
     return datos.personas.find(p => p.nombre === nombre) || null;
   }
@@ -511,6 +537,7 @@ const ESTADO = (() => {
     caeEn, cargadoEn, fijosDelMes, diaDeCargo, movimientosDe, resumen,
     proximosMeses, acumulado, sinAsignar, metasCalculadas,
     iniciar, sincronizar, refrescarPendientes, marcarConexion,
+    sePuedeCerrar, reabrirMes,
     anotar, editarMovimiento, borrarMovimiento,
     guardarFijo, borrarFijo, marcarFijo,
     cerrarMes, repartir, guardarMetas, guardarConfig, guardarAjustes

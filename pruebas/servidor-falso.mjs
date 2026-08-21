@@ -172,6 +172,12 @@ function despachar(p) {
       return { ok: true, cierre: libro.cierres[libro.cierres.length - 1] };
     }
 
+    case 'cierre-baja': {
+      const antes = libro.cierres.length;
+      libro.cierres = libro.cierres.filter(c => c.mes !== d.mes);
+      return { ok: true, escritos: antes - libro.cierres.length };
+    }
+
     case 'reparto':
       (d.lineas || []).forEach(l => {
         const m = libro.metas.find(x => x.nombre === l.meta);

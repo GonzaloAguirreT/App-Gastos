@@ -949,6 +949,7 @@ function despachar(peticion) {
     case 'fijo-baja':    return bajaFijo(datos);
     case 'fijo-cargo':   return marcarCargo(datos);
     case 'cerrar-mes':   return cerrarMes(datos.mes, datos.uuid);
+    case 'cierre-baja':  return reabrirMes(datos.mes);
     case 'reparto':      return guardarReparto(datos);
     case 'metas':        return guardarMetas(datos.metas || []);
     case 'config':       return guardarConfig(datos);
@@ -1309,6 +1310,34 @@ function cobrarFijosDelMes(mes) {
     if (cobrarFijo(f, fila, mes)) cobrados++;
   }
   return cobrados;
+}
+
+/**
+ * Deshacer un cierre: quita su fila de Cierres y el mes vuelve a estar en curso.
+ *
+ * Existe porque cerrar un mes a mitad deja la app en un callejón sin salida —la
+ * pantalla Mes pasa a solo lectura y, sin ningún otro mes, las dos flechas se
+ * apagan—. La app ya no deja cerrar a mitad, pero quien lo hizo antes necesita
+ * poder salir sin editar la hoja a mano.
+ *
+ * Las líneas de Reparto de ese mes NO se tocan: si se repartió el ahorro, ese
+ * dinero ya está asignado a metas y borrarlo aquí descuadraría el libro mayor.
+ * Se quitan a mano si hace falta, que es una decisión, no un efecto secundario.
+ */
+function reabrirMes(mes) {
+  if (!/^\d{4}-\d{2}$/.test(String(mes))) return { ok: false, error: 'Mes no válido: ' + mes };
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = libro.getSheetByName(HOJA_CIERRES);
+  if (!hoja) return { ok: false, error: 'No existe la hoja ' + HOJA_CIERRES };
+
+  const meses = hoja.getRange(FILA_DATOS, 1, TOPE_CIERRES, 1).getValues();
+  for (var i = 0; i < meses.length; i++) {
+    if (meses[i][0] && mesDeCelda(meses[i][0]) === mes) {
+      hoja.deleteRow(FILA_DATOS + i);
+      return { ok: true, escritos: 1, mes: mes };
+    }
+  }
+  return { ok: true, escritos: 0, mes: mes };
 }
 
 function guardarReparto(datos) {
