@@ -186,7 +186,7 @@ function instalar() {
   paso('Listas');
   escribirMovimientos(libro, movimientos, listas.categorias);
   paso('Movimientos');
-  escribirFijos(libro, fijos);
+  escribirFijos(libro, fijos, listas.categorias);
   paso('Fijos');
   escribirReparto(libro, reparto);
   paso('Reparto');
@@ -452,8 +452,7 @@ function escribirMovimientos(libro, movimientos, categorias) {
   hoja.getRange(1, 1, 1, 11).setValues([CABECERAS_MOVIMIENTOS]).setFontWeight('bold');
   hoja.setFrozenRows(1);
 
-  const repartoDe = {};
-  categorias.forEach(c => { repartoDe[c.nombre] = c.reparto; });
+  const repartoDe = repartoPorCategoria(categorias);
 
   if (movimientos.length) {
     const filas = movimientos.map(m => [
@@ -495,15 +494,36 @@ function ponerFormulaMes(hoja, desde, hasta) {
   hoja.getRange(desde, 2, formulas.length, 1).setFormulas(formulas);
 }
 
-function escribirFijos(libro, fijos) {
+/**
+ * Qué categorías cuentan como comunes, en forma de tabla para consultarla.
+ *
+ * Es la regla de "el arriendo sí, la ropa no" que vive en Listas!G, y la usan
+ * tanto los movimientos como los fijos: un fijo de Suscripciones tiene que
+ * repartirse igual que un gasto suelto de Suscripciones, o el panel acaba
+ * contando en Personal lo mismo que ya contaba en Común.
+ */
+function repartoPorCategoria(categorias) {
+  const tabla = {};
+  (categorias || []).forEach(c => { tabla[c.nombre] = c.reparto; });
+  return tabla;
+}
+
+function escribirFijos(libro, fijos, categorias) {
   const hoja = hojaLimpia(libro, HOJA_FIJOS);
   hoja.getRange(1, 1, 1, 14).setValues([CABECERAS_FIJOS]).setFontWeight('bold');
   hoja.setFrozenRows(1);
 
+  /* El concepto de un fijo ES una categoría, así que de ahí sale su reparto
+     cuando la regla viene sin él —que es lo que pasa al migrar desde la
+     Suscripciones antigua, donde esa columna no existía—. Antes caía en
+     'Personal' a secas, y quedaban dos suscripciones marcadas Personal en Fijos
+     mientras sus propios movimientos, ya escritos, decían Común. */
+  const repartoDe = repartoPorCategoria(categorias);
+
   if (fijos.length) {
     const filas = fijos.map(f => [
       f.uuid, f.tipo, f.concepto, f.importe, f.dia, f.cada, f.cuotas || '', f.restantes || '',
-      f.cuenta, f.persona, f.reparto || 'Personal', f.activo !== false,
+      f.cuenta, f.persona, f.reparto || repartoDe[f.concepto] || 'Personal', f.activo !== false,
       f.prox || calcularProximo(f, hoy()), f.ultimo || ''
     ]);
     hoja.getRange(2, 1, filas.length, 14).setValues(filas);
