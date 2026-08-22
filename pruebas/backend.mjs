@@ -68,13 +68,19 @@ export function hoja(filas) {
    *
    * `comoFormula` distingue setValues de setFormulas. En un setValues, un texto
    * que empieza por «=» NO se guarda: Sheets lo interpreta, lo calcula, y al
-   * leerlo de vuelta sale el resultado. Salvo que la celda tenga formato texto
-   * («@»), que es la única manera de guardar ese texto tal cual.
+   * leerlo de vuelta sale el resultado. Una meta llamada «=A1» volvió llamándose
+   * «Metas de ahorro», y lo repartido a una meta se busca por su nombre.
    *
-   * Sin esto el libro de mentira era más tolerante que el de verdad justo en
-   * esto: guardaba «=A1» y lo devolvía igual, mientras la hoja real devolvía el
-   * contenido de A1. Una meta llamada «=A1» volvió llamándose «Metas de
-   * ahorro», y lo repartido a una meta se busca por su nombre.
+   * Lo único que lo evita es el apóstrofo delante, que es la marca de texto
+   * literal de Sheets: se guarda el resto y el apóstrofo no forma parte del
+   * valor, así que getValue() devuelve «=A1».
+   *
+   * El formato de celda NO sirve para esto, y este arnés llegó a creer que sí.
+   * «Texto plano» cambia cómo se MUESTRA un valor, no cómo se interpreta lo que
+   * se escribe por la API: `setValue('=A1')` crea una fórmula tenga la celda el
+   * formato que tenga. Con esa suposición metida aquí, una prueba confirmaba un
+   * arreglo que en la hoja de verdad no arreglaba nada — que es exactamente el
+   * fallo que este archivo existe para no dejar pasar.
    *
    * No se calcula nada: basta con que lo que vuelve no sea lo que se escribió.
    */
@@ -85,9 +91,9 @@ export function hoja(filas) {
       while (filas.length <= f) filas.push([]);
       linea.forEach((v, j) => {
         const c = col + j - 1;
+        if (typeof v === 'string' && v.charAt(0) === "'") { filas[f][c] = v.slice(1); return; }
         const esFormula = typeof v === 'string' && v.charAt(0) === '=';
-        const texto = formatos.get(marca(f, c)) === '@';
-        filas[f][c] = (esFormula && !comoFormula && !texto) ? evaluada : v;
+        filas[f][c] = (esFormula && !comoFormula) ? evaluada : v;
       });
     });
   };

@@ -175,9 +175,23 @@ cerrar. Cerrar sin ingresos.
 
 Contra la hoja de verdad, con un S24 conducido por adb + CDP.
 
-~~**Un nombre que empieza por `=` se evalúa como fórmula.**~~ Arreglado: texto
-plano en las columnas que teclea una persona, y antes de escribirlas. Lo vigila
-`pruebas/texto-que-empieza-por-igual.mjs`. Se guardó una meta
+~~**Un nombre que empieza por `=` se evalúa como fórmula.**~~ Arreglado con un
+apóstrofo delante —`literal()`—, que es la marca de texto literal de Sheets. Lo
+vigila `pruebas/texto-que-empieza-por-igual.mjs`.
+
+**Y el primer arreglo fue falso**, que es lo que hay que recordar de todo esto.
+Se hizo poniendo las columnas en «texto plano» con `setNumberFormat('@')`, con
+su prueba en verde, se desplegó, y en la hoja de verdad la meta `=A1` seguía
+volviendo llamada «Metas de ahorro». El formato cambia cómo se VE un valor, no
+cómo se interpreta lo que escribe la API: `setValue('=A1')` crea una fórmula
+tenga la celda el formato que tenga.
+
+Lo que lo hizo pasar desapercibido es peor que el fallo: el libro de mentira se
+había creído la misma suposición, porque la escribió quien escribió el arreglo.
+La prueba no comprobaba Sheets, comprobaba una idea de Sheets. **Cuando una
+prueba nueva y un arreglo nuevo salen de la misma cabeza en el mismo rato, lo
+que se está midiendo puede ser la suposición y no el comportamiento**; contra
+eso solo vale ejecutarlo contra la hoja, que es de lo que va este archivo. Se guardó una meta
 llamada `=A1` y la hoja la devolvió llamada «Metas de ahorro», que es lo que hay
 en la celda A1 de esa hoja. El backend escribe con `setValues` y `appendRow`, y
 las dos interpretan fórmulas.
