@@ -255,14 +255,13 @@ function despachar(p) {
     case 'config':
       ['personas', 'cuentas', 'categorias', 'credito'].forEach(k => { if (d[k]) libro[k] = d[k]; });
       libro.config = Object.assign({}, libro.config, d.config || {});
-      /* Igual que el backend real: cambiar un día de cobro o marcar una cuenta
-         como de crédito rehace el «Se usa en» de los gastos ya escritos. Los
-         ingresos no, que su mes lo eligió una persona. */
-      if (d.personas || d.credito !== undefined) {
-        libro.movimientos.forEach(m => {
-          if (m.tipo !== 'Ingreso') m.paraMes = seUsaEn(m);
-        });
-      }
+      /* Igual que el backend real: cambiar un día de cobro NO rehace el «Se usa
+         en» de los gastos ya escritos. Una compra facturada con el corte que
+         había se facturó así de verdad, y el corte nuevo manda desde ahora.
+
+         Aquí llegó a hacerse, copiando lo que hacía el backend, y por eso hay
+         que cambiarlo a la vez: un servidor falso que imita el comportamiento
+         viejo hace fallar la prueba del nuevo por un motivo que no es suyo. */
       return { ok: true, datos: libro };
 
     default:

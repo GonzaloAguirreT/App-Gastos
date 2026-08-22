@@ -68,11 +68,20 @@ const efectivo = await p.evaluate(() => ESTADO.mesImputado({
 }));
 ok(efectivo === enCurso, 'una cuenta que no es de crédito no aplaza nada');
 
-/* -------------------------------- 2. cambiar el día mueve el mes y el saldo */
+/* ------------------------- 2. cambiar el día NO mueve lo que ya está escrito */
 
 /* El servidor falso arranca con una compra de Gonzalo del 25 del mes pasado,
-   posterior a su día de cobro: su factura llega a este mes. Subirle el día de
-   cobro por encima del 25 tiene que devolverla a su mes. */
+   posterior a su día de cobro: su factura llega a este mes.
+
+   Subirle el día de cobro por encima del 25 la devolvía a su mes, y este
+   bloque comprobaba justo eso. Ya no: una compra facturada con el corte que
+   había se facturó así de verdad, y reescribirla es inventarse un pasado que
+   no ocurrió —la factura de septiembre no puede cambiar en diciembre—. El
+   corte nuevo manda desde que se cambia y hacia delante.
+
+   Así que lo que se comprueba ahora es lo contrario, y con el mismo montaje:
+   que el mes y el saldo NO se mueven. Quien vigila la otra mitad —que el corte
+   nuevo sí manda en lo que se anote después— es corte-que-no-reescribe.mjs. */
 const saldo = () => p.evaluate(() => ESTADO.resumen(ESTADO.mesEnCurso()).queda);
 const gastado = () => p.evaluate(() => ESTADO.resumen(ESTADO.mesEnCurso()).gastado);
 
@@ -95,12 +104,12 @@ const despuesSaldo = await saldo();
 const despuesGasto = await gastado();
 console.log('  ·  saldo ' + antesSaldo + ' → ' + despuesSaldo
             + ' · gastado ' + antesGasto + ' → ' + despuesGasto);
-ok(despuesGasto === antesGasto - tarjetaAntes,
-   'subir el día de cobro saca la compra del mes: el gastado baja justo esa factura');
-ok(despuesSaldo === antesSaldo + tarjetaAntes, 'y el saldo sube lo mismo');
+ok(despuesGasto === antesGasto,
+   'subir el día de cobro no saca del mes una compra ya facturada');
+ok(despuesSaldo === antesSaldo, 'y el saldo no se mueve');
 ok(await p.evaluate(() =>
-     ESTADO.resumen(ESTADO.mesEnCurso()).porPersona.every(x => x.tarjeta === 0)),
-   'ya no queda tramo de tarjeta de otro mes');
+     ESTADO.resumen(ESTADO.mesEnCurso()).porPersona.reduce((a, x) => a + x.tarjeta, 0)) === tarjetaAntes,
+   'el tramo de tarjeta de otro mes sigue donde estaba');
 
 /* ------------------------------------------------- 3. la barra sigue cuadrando */
 

@@ -174,7 +174,19 @@ const ESTADO = (() => {
    */
   function mesImputado(m) {
     const mes = FMT.mesDe(m.fecha);
-    if (m.tipo === 'Ingreso') return m.paraMes ? FMT.aMes(m.paraMes) : mes;
+    /* Lo que ya está escrito manda, y para los gastos también.
+
+       El mes que paga una compra lo fija el backend cuando escribe la fila, y
+       desde ese momento esa compra está facturada. Recalcularlo aquí con el
+       corte de HOY hacía que cambiar el día de cobro moviera de mes gastos de
+       hace meses: la factura de septiembre cambiaba en diciembre.
+
+       Ahora el corte nuevo manda desde que se cambia y hacia delante. Se sigue
+       calculando cuando no hay `paraMes`, que es el instante entre tocar
+       Guardar y que la fila llegue a la hoja: así el saldo se pinta sin esperar
+       y sale el mismo número que va a quedar escrito. */
+    if (m.paraMes) return FMT.aMes(m.paraMes);
+    if (m.tipo === 'Ingreso') return mes;
     if (!esCredito(m.cuenta)) return mes;
     const corte = diaCobroDe(m.persona);
     if (!corte) return mes;

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las veintidós pruebas, cada una con el modo de servidor que necesita.
+# Las veintitrés pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -92,6 +92,7 @@ corre ajuste-huerfano
 corre categorias-de-ingreso
 corre cola-y-avisos --rechaza
 corre calendario-chileno
+corre corte-que-no-reescribe
 corre mes-recien-empezado
 corre alto-700
 corre ahorro-proyectado

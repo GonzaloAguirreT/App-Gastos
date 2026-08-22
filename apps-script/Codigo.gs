@@ -2130,11 +2130,21 @@ function guardarConfig(datos) {
         }));
     }
     escribirListas(libro, listas);
-    /* Cambiar un día de cobro o marcar una cuenta como de crédito cambia el mes
-       que paga las compras YA escritas. Si la columna no se rehace, el Panel
-       sigue sumando con el reparto de antes del cambio y contradice a la app,
-       que sí recalcula. */
-    if (datos.personas || datos.credito !== undefined) recalcularSeUsaEn(libro, listas);
+    /* Y aquí NO se recalcula el «Se usa en» de lo ya escrito, a propósito.
+
+       Antes sí: cambiar un día de cobro reescribía el mes que paga todas las
+       compras del libro. La idea era que la hoja quedase coherente con una sola
+       regla, pero reescribe historia que era correcta. Si tu tarjeta cortaba el
+       5 y pasa a cortar el 20, las compras de antes se facturaron con el corte
+       viejo; eso ya pasó, y el banco no las va a recobrar.
+
+       Peor con un mes cerrado: sus movimientos podían cambiar de mes mientras
+       su fila de Cierres se quedaba con el total de antes, y ahí la hoja deja
+       de cuadrar consigo misma sin que nada avise.
+
+       El corte nuevo manda desde ahora. Para lo de antes está
+       `recalcularSeUsaEn`, que se ejecuta a mano desde el editor y respeta los
+       meses cerrados. */
   }
 
   return { ok: true, escritos: 1 };
@@ -2151,28 +2161,56 @@ function guardarConfig(datos) {
  * cuatrocientas llamadas al servicio de Sheets y este script ya se ha muerto
  * dos veces por tiempo.
  */
+/**
+ * Rehace el «Se usa en» de los gastos con las reglas de AHORA. **A mano.**
+ *
+ * No la llama nadie: se ejecuta desde el editor, y solo si de verdad se quiere
+ * reescribir el pasado. Cambiar el día de corte no la dispara, porque una
+ * compra ya facturada con el corte anterior se facturó así de verdad y el banco
+ * no la va a recobrar.
+ *
+ * Sirve para el caso contrario: descubrir que una cuenta llevaba meses sin
+ * estar marcada como de crédito, o que el día de cobro estaba mal desde el
+ * principio. Ahí sí lo escrito está mal y hay que rehacerlo.
+ *
+ * Los meses cerrados no se tocan nunca. Su fila de Cierres tiene un Total
+ * Ahorrado ya escrito, y mover sus movimientos a otro mes dejaría ese total sin
+ * nada que lo respalde: la hoja dejaría de cuadrar consigo misma en silencio,
+ * que es peor que estar desactualizada.
+ *
+ * Devuelve cuántas filas cambió y cuántas se saltó por estar en un mes cerrado.
+ */
 function recalcularSeUsaEn(libro, listas) {
   const hoja = libro.getSheetByName(HOJA_MOVIMIENTOS);
-  if (!hoja || hoja.getLastRow() < 2) return 0;
+  if (!hoja || hoja.getLastRow() < 2) return { cambios: 0, intocables: 0 };
+
+  const datos = listas || leerListasExistentes(libro);
+  const cerrados = {};
+  leerTablaExistente(libro, HOJA_CIERRES, 8, TOPE_CIERRES)
+    .forEach(c => { if (c[0]) cerrados[String(c[0]).slice(0, 7)] = true; });
 
   const alto = hoja.getLastRow() - 1;
   const filas = hoja.getRange(2, 1, alto, 11).getValues();
   const columna = [];
-  var cambios = 0;
+  var cambios = 0, intocables = 0;
 
   filas.forEach(f => {
     const actual = String(f[8] || '');
     if (!(f[0] instanceof Date) || f[1] === 'Ingreso') { columna.push([actual]); return; }
+    // Un mes cerrado se queda como está, venga de donde venga y valga lo que valga.
+    if (cerrados[actual.slice(0, 7)]) { columna.push([actual]); intocables++; return; }
     const nuevo = seUsaEn({
       fecha: iso(f[0]), tipo: 'Gasto',
       cuenta: String(f[5] || ''), persona: String(f[6] || '')
-    }, listas);
+    }, datos);
     if (nuevo !== actual) cambios++;
     columna.push([nuevo]);
   });
 
   if (cambios) hoja.getRange(2, 9, alto, 1).setValues(columna);
-  return cambios;
+  console.log('recalcularSeUsaEn · ' + cambios + ' filas cambiadas, '
+              + intocables + ' intactas por estar en un mes cerrado');
+  return { cambios: cambios, intocables: intocables };
 }
 
 /* ========================================================================
