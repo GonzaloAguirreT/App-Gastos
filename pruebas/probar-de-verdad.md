@@ -171,6 +171,58 @@ cerrar. Cerrar sin ingresos.
 
 ---
 
+## Lo que salió del barrido del 22 de agosto de 2026
+
+Contra la hoja de verdad, con un S24 conducido por adb + CDP.
+
+**Un nombre que empieza por `=` se evalúa como fórmula.** Se guardó una meta
+llamada `=A1` y la hoja la devolvió llamada «Metas de ahorro», que es lo que hay
+en la celda A1 de esa hoja. El backend escribe con `setValues` y `appendRow`, y
+las dos interpretan fórmulas.
+
+Duele más de lo que parece porque **lo repartido a una meta se busca por su
+nombre** —`SUMIF(Reparto!$C:$C, $A5, Reparto!$D:$D)`—, así que un nombre que
+cambia solo desconecta el dinero de su meta. El arreglo está ya en casa: la
+columna «Se usa en» de Movimientos se protege con `formatoSeguro(rango, '@')`,
+y es lo mismo que hace falta en las columnas de texto libre. Sin verificar en
+cuentas, categorías, descripciones y conceptos, pero escriben por la misma vía.
+
+Lo demás aguantó: `+1`, `Cena; bebida` —el `;` que usa `sep()`—, `Café ☕`, y
+120 caracteres vuelven intactos. Los espacios de los extremos no se recortan,
+que es menor pero está.
+
+**Una baja que no encuentra su fila contesta que sí.**
+
+```js
+function bajaMovimiento(datos) {                                   // :1792
+  const fila = buscarFilaPorUuid(HOJA_MOVIMIENTOS, 11, datos.objetivo);
+  if (fila) ...deleteRow(fila);
+  return { ok: true, escritos: fila ? 1 : 0 };
+}
+```
+
+Con `ok: true` la app saca el registro de la cola, así que un borrado que no
+ocurrió es indistinguible de uno que sí. Encadenando bajas se ve: de cuatro
+seguidas quedó una sin borrar, y de dos seguidas, otra. Sueltas siempre
+funcionan. `marcarCargo` ya hace lo correcto en el mismo caso —devuelve
+`aviso: 'No se encontró el fijo'`—, así que hay de dónde copiar.
+
+No está averiguado *por qué* falla la búsqueda al encadenar. Lo que sí está
+claro es que, falle por lo que falle, el backend lo tapa.
+
+**Y lo que pasó y no era un fallo**, apuntado para que nadie lo vuelva a
+perseguir: la cola manda de uno en uno y con su ventana de deshacer cada uno,
+así que cinco apuntes tardan más de medio minuto en estar todos en la hoja.
+Mirar antes de tiempo hace pensar que se han perdido escrituras. Antes de
+declarar que algo no llegó, hay que esperar a que `NUCLEO.todos()` quede vacío
+—y aun así darle unos segundos más a la hoja.
+
+**Lo que pasó y está bien:** el teclado nativo no se cierra al escribir el
+nombre de una meta letra a letra, y el foco no se va (`mInputShown=true` en cada
+letra, medido con `adb shell dumpsys input_method`). Y la regla de la tarjeta
+acierta los cuatro casos contra Apps Script: la víspera del corte cae en su mes,
+el día del corte ya cae en el siguiente, y el débito no aplaza nunca.
+
 ## Las reglas de la casa
 
 Están en `CLAUDE.md`, pero estas tres son las que más se olvidan:
