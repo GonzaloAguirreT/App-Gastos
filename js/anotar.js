@@ -388,7 +388,11 @@ const ANOTAR = (() => {
 
     if (modo === 'ahorro-esperado') { await ESTADO.guardarConfig({ config: { ahorroEsperado: n } }); }
     else if (modo === 'meta') {
-      const metas = datos.metas.map(m => m.nombre === objetivo.nombre
+      /* Por posición y no por nombre. Dos metas pueden llamarse igual —o no
+         llamarse todavía, que es como nace una recién añadida—, y entonces
+         cambiar el objetivo de una se lo cambiaba a todas las que compartían
+         nombre. `metasCalculadas` trae ese índice justo para esto. */
+      const metas = datos.metas.map((m, i) => i === objetivo.i
         ? Object.assign({}, m, { objetivo: n }) : m);
       await ESTADO.guardarMetas(metas);
     }

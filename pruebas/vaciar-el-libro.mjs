@@ -56,28 +56,55 @@ const cuerpo = codigo.match(/function vaciar\(\) \{([\s\S]*?)\n\}/);
 if (!cuerpo) throw new Error('no se encuentra function vaciar()');
 
 const limpiado = {};
-const libroFalso = {
-  getName: () => 'Gastos - libro de la app',
-  copy: () => ({ getUrl: () => 'https://docs.google.com/copia' }),
-  toast: () => {},
+
+const hojasQueApuntan = () => ({
   getSheetByName: nombre => ({
     getRange: a1 => ({
       clearContent: () => { limpiado[nombre] = (limpiado[nombre] || []).concat([a1]); }
     })
   })
+});
+
+/* El libro de mentira envejece igual que el de verdad.
+
+   `copy()` deja obsoleto el manejador desde el que se llamó: getSheetByName
+   sigue devolviendo algo, pero es una hoja cuyo id ya no resuelve, y la
+   siguiente operación revienta con «Sheet 196448985 not found». Eso paró
+   vaciar() en la PRIMERA limpieza, con la copia ya hecha y el libro sin tocar.
+
+   Aquí se reproduce a propósito: a partir de la copia, el manejador viejo
+   lanza. El bueno se pide con openById, que es lo que hay que hacer. */
+let copiado = false;
+const libroViejo = {
+  getId: () => '1i-2MO16r8xgmKK4XYc5DQLAONtBWKzbAKuxf2cuQeNU',
+  getName: () => 'Gastos - libro de la app',
+  copy: () => { copiado = true; return { getUrl: () => 'https://docs.google.com/copia' }; },
+  toast: () => {},
+  getSheetByName: nombre => {
+    if (copiado) throw new Error('Sheet 196448985 not found');
+    return hojasQueApuntan().getSheetByName(nombre);
+  }
 };
+const libroNuevo = Object.assign({}, libroViejo, hojasQueApuntan());
 
-new Function('SpreadsheetApp', 'Utilities', 'hoy', 'zonaDeLaHoja', 'console',
-             'FILA_DATOS', 'TOPE_METAS', 'TOPE_CIERRES',
-             'HOJA_MOVIMIENTOS', 'HOJA_FIJOS', 'HOJA_METAS', 'HOJA_CIERRES',
-             'HOJA_REPARTO', 'HOJA_UUIDS', cuerpo[1])(
-  { getActive: () => libroFalso },
-  { formatDate: () => '2026-08-21 12:00' },
-  () => new Date(), () => 'UTC', { log: () => {} },
-  FILA_DATOS, TOPE_METAS, TOPE_CIERRES,
-  'Movimientos', 'Fijos', 'Metas', 'Cierres', 'Reparto', '_uuids');
+let reventó = null;
+try {
+  new Function('SpreadsheetApp', 'Utilities', 'hoy', 'zonaDeLaHoja', 'console',
+               'FILA_DATOS', 'TOPE_METAS', 'TOPE_CIERRES',
+               'HOJA_MOVIMIENTOS', 'HOJA_FIJOS', 'HOJA_METAS', 'HOJA_CIERRES',
+               'HOJA_REPARTO', 'HOJA_UUIDS', cuerpo[1])(
+    { getActive: () => libroViejo, openById: () => libroNuevo, flush: () => {} },
+    { formatDate: () => '2026-08-21 12:00' },
+    () => new Date(), () => 'UTC', { log: () => {} },
+    FILA_DATOS, TOPE_METAS, TOPE_CIERRES,
+    'Movimientos', 'Fijos', 'Metas', 'Cierres', 'Reparto', '_uuids');
+} catch (e) {
+  reventó = e.message;
+}
 
-ok(Object.keys(limpiado).length > 0, 'vaciar() ha pedido limpiar algo');
+ok(reventó === null,
+   'vaciar() sobrevive a que copy() deje obsoleto el libro: ' + reventó);
+ok(Object.keys(limpiado).length > 0, 'y llega a limpiar algo');
 
 /* Un rango A1 —'A5:B14', 'A2:K'— a las columnas y filas que toca. Sin fila
    final significa «hasta abajo», que aquí es infinito. */
@@ -167,8 +194,8 @@ for (const [hoja, tope] of [['Metas', TOPE_METAS], ['Cierres', TOPE_CIERRES]]) {
    ejecuta a mano desde el editor, como instalar(). */
 const despachar = codigo.match(/function despachar\([\s\S]*?\n\}/)[0];
 ok(!/vaciar/.test(despachar), 'ninguna acción del backend llama a vaciar()');
-ok(/libro\.copy\(/.test(cuerpo[1]), 'vaciar() hace una copia del libro antes de nada');
-ok(cuerpo[1].indexOf('libro.copy(') < cuerpo[1].indexOf('limpiar('),
+ok(/\.copy\(/.test(cuerpo[1]), 'vaciar() hace una copia del libro antes de nada');
+ok(cuerpo[1].indexOf('.copy(') < cuerpo[1].indexOf('limpiar('),
    'y la hace ANTES de limpiar, que es cuando todavía sirve de algo');
 ok(!/getUi\(\)\s*\.\s*alert/.test(cuerpo[1]),
    'no hay Ui.alert(): suspende el script hasta que alguien pulsa Aceptar');

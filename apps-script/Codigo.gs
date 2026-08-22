@@ -252,6 +252,61 @@ function instalar() {
 }
 
 /**
+ * Qué hojas ve el script y cuál de ellas revienta. NO escribe nada.
+ *
+ * Existe porque «Sheet <id> not found» no dice qué hoja es. Lo lanza
+ * `getSheetByName`, que recorre el libro entero para buscar por nombre, así que
+ * la hoja rota puede ser cualquiera de las diez y no la que se estaba pidiendo.
+ * Esto las recorre una a una, con cada llamada dentro de su propio try, para
+ * que una que falle no tape a las demás.
+ *
+ * Se ejecuta a mano desde el editor y sale todo en el registro.
+ */
+function diagnosticar() {
+  const libro = SpreadsheetApp.getActive();
+
+  try {
+    console.log('Libro: ' + libro.getName() + '  ·  id ' + libro.getId());
+  } catch (e) {
+    console.log('Ni el nombre del libro se puede leer: ' + e.message);
+  }
+
+  var hojas = null;
+  try {
+    hojas = libro.getSheets();
+    console.log('getSheets() devuelve ' + hojas.length + ' hojas:');
+  } catch (e) {
+    console.log('getSheets() REVIENTA: ' + e.message);
+  }
+
+  if (hojas) {
+    for (var i = 0; i < hojas.length; i++) {
+      const h = hojas[i];
+      var id = '?', nombre = '?', tamano = '?';
+      try { id = String(h.getSheetId()); } catch (e) { id = 'REVIENTA(' + e.message + ')'; }
+      try { nombre = h.getName(); } catch (e) { nombre = 'REVIENTA(' + e.message + ')'; }
+      try {
+        tamano = h.getLastRow() + ' filas × ' + h.getLastColumn() + ' col';
+      } catch (e) {
+        tamano = 'REVIENTA(' + e.message + ')';
+      }
+      console.log('  [' + i + '] id ' + id + '  ·  ' + nombre + '  ·  ' + tamano);
+    }
+  }
+
+  console.log('Y buscándolas por nombre, que es por donde falla:');
+  [HOJA_PANEL, HOJA_ANIO, HOJA_MOVIMIENTOS, HOJA_FIJOS, HOJA_METAS, HOJA_CIERRES,
+   HOJA_REPARTO, HOJA_LISTAS, HOJA_CONFIG, HOJA_UUIDS].forEach(nombre => {
+    try {
+      const h = libro.getSheetByName(nombre);
+      console.log('  ' + nombre + ' → ' + (h ? 'id ' + h.getSheetId() : 'no existe'));
+    } catch (e) {
+      console.log('  ' + nombre + ' → REVIENTA: ' + e.message);
+    }
+  });
+}
+
+/**
  * Deja el libro sin un solo dato, pero con la misma forma.
  *
  * Se ejecuta A MANO desde el editor, como instalar(), y no hay ninguna acción
@@ -269,13 +324,26 @@ function instalar() {
  * una llamada; su URL sale en el registro.
  */
 function vaciar() {
-  const libro = SpreadsheetApp.getActive();
+  const original = SpreadsheetApp.getActive();
+  const id = original.getId();
   const partes = [];
 
-  const copia = libro.copy(libro.getName() + ' — antes de vaciar '
+  const copia = original.copy(original.getName() + ' — antes de vaciar '
     + Utilities.formatDate(hoy(), zonaDeLaHoja(), 'yyyy-MM-dd HH:mm'));
   console.log('Copia de seguridad: ' + copia.getUrl());
   partes.push('copia guardada en Drive');
+
+  /* Y se vuelve a pedir el libro DESPUÉS de copiarlo.
+
+     `copy()` deja obsoleto el manejador que tenías: getSheetByName sigue
+     devolviendo una hoja, pero es una hoja cuyo id ya no resuelve, y la primera
+     operación sobre ella revienta con «Sheet 196448985 not found». Pasó en la
+     primera limpieza, así que el libro se quedó entero —mal, pero entero—.
+
+     openById devuelve un manejador nuevo, y el flush de antes se asegura de que
+     la copia esté terminada antes de pedirlo. */
+  SpreadsheetApp.flush();
+  const libro = SpreadsheetApp.openById(id);
 
   /* Se limpia el CONTENIDO, nunca la hoja entera: borrar una hoja deja #REF! en
      toda fórmula que la citaba —Metas y Cierres citan Reparto, y Panel y Año
@@ -823,10 +891,15 @@ function escribirMovimientos(libro, movimientos, categorias) {
   /* La última fila se cuenta, no se pregunta. getLastRow() puede venir inflado
      por la sonda que sep() escribe en Z200 para averiguar el separador: aunque
      se borre acto seguido, Sheets no siempre encoge el rango usado, y entonces
-     se daría formato a doscientas filas vacías. */
-  const ultima = movimientos.length + 1;
-  formatoSeguro(hoja.getRange(2, 1, ultima - 1, 1), 'yyyy-mm-dd');
-  formatoSeguro(hoja.getRange(2, 5, ultima - 1, 1), '#,##0');
+     se daría formato a doscientas filas vacías.
+
+     Y con cero movimientos no hay nada que formatear. Un rango de cero filas no
+     sale vacío: lanza «The number of rows in the range must be at least 1», que
+     es lo que paraba a instalar() sobre un libro recién vaciado. */
+  if (movimientos.length) {
+    formatoSeguro(hoja.getRange(2, 1, movimientos.length, 1), 'yyyy-mm-dd');
+    formatoSeguro(hoja.getRange(2, 5, movimientos.length, 1), '#,##0');
+  }
   hoja.setColumnWidth(3, 140).setColumnWidth(4, 200).setColumnWidth(6, 150);
 
   ponerFiltroYDesplegables(hoja, listas);

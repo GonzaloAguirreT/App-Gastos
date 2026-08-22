@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las quince, cada una con su servidor
+sh pruebas/todas.sh                  # las dieciséis, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -30,6 +30,7 @@ node pruebas/escribir-meta.mjs       # repintar no puede cerrarte el teclado
 node pruebas/no-saltar-arriba.mjs    # ni devolverte al principio de la pantalla
 node pruebas/vaciar-el-libro.mjs     # vaciar se lleva los datos, no las fórmulas
 node pruebas/libro-sin-migrar.mjs    # las hojas se leen por su cabecera
+node pruebas/instalar-el-libro.mjs   # instalar aguanta el libro vacío
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
@@ -154,6 +155,21 @@ las dos formas.
 `flush()`, lejos de su causa, y un `try/catch` alrededor de la llamada no la
 atrapa. Si un lote falla se pierde todo lo que iba detrás.
 
+**Un rango de cero filas no sale vacío: lanza.** `getRange(2, 1, 0, 1)` da
+«The number of rows in the range must be at least 1», así que toda escritura de
+una tabla que puede venir vacía necesita su `if (filas.length)`. Tumbó a
+`instalar()` sobre un libro recién vaciado, y como para entonces ya había
+retirado Panel y Año, el libro se quedó a medias. Lo vigila
+`pruebas/instalar-el-libro.mjs`, que ejecuta `instalar()` en Node sobre un libro
+vacío, uno con datos y uno del formato viejo; la hoja de mentira de
+`pruebas/backend.mjs` lanza igual que Sheets a propósito.
+
+**`copy()` deja obsoleto el libro desde el que lo llamaste.** `getSheetByName`
+sigue devolviendo una hoja, pero es una hoja cuyo id ya no resuelve, y la
+primera operación revienta con «Sheet 196448985 not found». Le pasó a `vaciar()`
+en la primera limpieza, con la copia de seguridad ya hecha. Después de copiar
+hay que volver a pedir el libro con `SpreadsheetApp.openById`.
+
 **Nada de diálogos modales en el backend.** `Ui.alert()` suspende el script
 hasta que alguien pulsa Aceptar, y desde el editor con la hoja cerrada no lo
 pulsa nadie: la ejecución muere a los seis minutos. Usa `console.log` (sale al
@@ -178,6 +194,16 @@ la app **dos veces** tras desplegar.
 
 ## Al terminar un cambio
 
-Ejecuta las tres pruebas, sube la versión de `sw.js` si tocaste la app, y ten en
-cuenta que `main` se fusiona en aplastado: si una rama sobrevive a su PR, hay que
-rehacerla sobre `origin/main` con `cherry-pick` en vez de fusionar.
+Ejecuta `sh pruebas/todas.sh` y ten en cuenta que `main` se fusiona en aplastado:
+si una rama sobrevive a su PR, hay que rehacerla sobre `origin/main` con
+`cherry-pick` en vez de fusionar.
+
+**Si el cambio toca la app, sube `CACHE` en `sw.js` y FUSIONA EL PR.** Sin
+fusionar no llega a nadie: Pages sirve desde `main`, así que una rama con el
+arreglo es un arreglo que no existe. Y no hay que preguntar cada vez — es la
+única forma de que lo que se acaba de arreglar se pueda probar en el teléfono.
+
+Tocar la app es tocar `index.html`, `config.js`, `css/` o `js/`. Un cambio que
+solo toca `apps-script/` no necesita fusión para probarse —eso se pega a mano en
+el editor— pero se fusiona igual para que el repositorio y el editor digan lo
+mismo.
