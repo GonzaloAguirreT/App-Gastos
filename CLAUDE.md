@@ -194,6 +194,16 @@ la app **dos veces** tras desplegar.
 
 ## Al terminar un cambio
 
-Ejecuta las tres pruebas, sube la versión de `sw.js` si tocaste la app, y ten en
-cuenta que `main` se fusiona en aplastado: si una rama sobrevive a su PR, hay que
-rehacerla sobre `origin/main` con `cherry-pick` en vez de fusionar.
+Ejecuta `sh pruebas/todas.sh` y ten en cuenta que `main` se fusiona en aplastado:
+si una rama sobrevive a su PR, hay que rehacerla sobre `origin/main` con
+`cherry-pick` en vez de fusionar.
+
+**Si el cambio toca la app, sube `CACHE` en `sw.js` y FUSIONA EL PR.** Sin
+fusionar no llega a nadie: Pages sirve desde `main`, así que una rama con el
+arreglo es un arreglo que no existe. Y no hay que preguntar cada vez — es la
+única forma de que lo que se acaba de arreglar se pueda probar en el teléfono.
+
+Tocar la app es tocar `index.html`, `config.js`, `css/` o `js/`. Un cambio que
+solo toca `apps-script/` no necesita fusión para probarse —eso se pega a mano en
+el editor— pero se fusiona igual para que el repositorio y el editor digan lo
+mismo.
