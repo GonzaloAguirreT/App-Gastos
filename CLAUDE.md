@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las veintidós, cada una con su servidor
+sh pruebas/todas.sh                  # las veintitrés, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -37,6 +37,7 @@ node pruebas/instalar-dos-veces.mjs  # instalar() dos veces deja el libro igual
 node pruebas/texto-que-empieza-por-igual.mjs   # un nombre con «=» es un nombre
 node pruebas/la-baja-que-no-encuentra.mjs      # una baja que no borra lo dice
 node pruebas/categorias-de-ingreso.mjs         # sin ellas no se puede anotar un ingreso
+node pruebas/corte-que-no-reescribe.mjs        # cambiar el corte no reescribe el pasado
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
@@ -93,6 +94,21 @@ siguiente; un sueldo puede declarar que se usa el mes que viene. Eso es
 `ESTADO.mesImputado`, y por ahí pasa `movimientosDe`, el resumen del mes, el
 cierre y las fórmulas del Panel. Filtrar por la fecha en cualquier sitio nuevo
 vuelve a descuadrar el mes en silencio.
+
+**Y ese mes se decide UNA vez: al escribir la fila.** Lo calcula el backend, se
+guarda en «Se usa en», y desde entonces esa compra está facturada. Cambiar el
+día de corte manda de ahí en adelante y no toca nada de lo escrito: la factura
+de septiembre no puede cambiar en diciembre. Por eso `mesImputado` respeta
+`paraMes` cuando existe y solo calcula mientras la fila no ha llegado a la hoja
+—los segundos entre Guardar y el envío—, y por eso `guardarConfig` ya no rehace
+la columna. Si de verdad hay que reescribir el pasado —una cuenta que llevaba
+meses sin estar marcada como de crédito— está `recalcularSeUsaEn`, que se
+ejecuta a mano desde el editor y nunca toca un mes cerrado.
+
+Las dos mitades van juntas: arreglar solo la app o solo el backend deja a una
+diciendo un mes y a la otra diciendo otro, que es peor que el fallo. Lo vigila
+`pruebas/corte-que-no-reescribe.mjs`, y el servidor falso tuvo que cambiar con
+ellas.
 
 **El techo del mes es lo que entra**, no un presupuesto escrito a mano. `Config!B4`
 es el *ahorro esperado*: el colchón que se aparta antes de repartir, del que sale
