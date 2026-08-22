@@ -17,8 +17,13 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const RAIZ = path.dirname(new URL('.', import.meta.url).pathname);
+/* fileURLToPath y no .pathname: en Windows una URL de archivo da
+   "/C:/Users/.../App%20Gastos/", con la barra de delante y el espacio sin
+   descodificar, y con esa ruta no existe ningún archivo. El servidor arrancaba
+   igual y contestaba 404 a todo, que parece un problema de la app. */
+const RAIZ = path.dirname(fileURLToPath(new URL('.', import.meta.url)));
 const RECHAZA = process.argv.includes('--rechaza');
 /* Reproduce una hoja cuya columna de mes NO se forzó a texto: Sheets convirtió
    "2026-08" en el 1 de agosto y al leerlo vuelve como una fecha en crudo. Las

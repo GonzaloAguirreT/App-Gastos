@@ -32,7 +32,7 @@ verdad cierra el agujero del todo**.
 ## Lo que ya está cubierto — no lo repitas
 
 ```sh
-sh pruebas/todas.sh      # dieciséis pruebas, ~194 comprobaciones
+sh pruebas/todas.sh      # dieciocho pruebas, ~220 comprobaciones
 ```
 
 Cubierto y verde: el calendario de la tarjeta y los topes, un mes recién
@@ -190,9 +190,33 @@ lo que convierte un fallo en dos fallos menos.
 
 ## Lo que está abierto ahora mismo
 
-- **Cuatro apuntes sin enviar** en el teléfono de Gonzalo, sin diagnosticar.
-  Ajustes → Pendientes de enviar → ver dice el motivo de cada uno. Si son de
-  antes de los arreglos de hoy, basta con reintentar; si no, hay algo vivo.
+- ~~**Cuatro apuntes sin enviar** en el teléfono de Gonzalo~~. Cerrado: al
+  abrir la app con cobertura la cola se vació sola y no dejó ninguno. No hay
+  registro de lo que eran, así que no se pudo diagnosticar más.
+
+- **El teléfono se puede conducir desde el PC**, y por ahí salió el fallo de la
+  cuenta huérfana. Con la depuración USB puesta:
+
+  ```sh
+  adb forward tcp:9222 localabstract:chrome_devtools_remote
+  curl http://127.0.0.1:9222/json/list          # las pestañas, con su ws
+  ```
+
+  Y desde ahí, CDP por WebSocket: `Runtime.evaluate` para leer el DOM y el
+  estado de verdad, `Input.dispatchTouchEvent` para tocar como un dedo,
+  `adb exec-out screencap -p > foto.png` para ver la pantalla. No hace falta
+  Playwright: Node ya trae `fetch` y `WebSocket`.
+
+  Dos cosas que costaron un rato: Chrome **solo crea el socket de depuración al
+  arrancar**, así que si ya estaba abierto cuando pusiste la depuración USB hay
+  que matarlo (`adb shell am force-stop com.android.chrome`); y en Git Bash las
+  rutas del móvil se convierten solas —`/sdcard/x.png` acaba siendo una ruta de
+  Windows—, por eso `exec-out` y no `screencap` a un archivo.
+
+- **Medir los objetivos táctiles con `elementFromPoint`**, no con
+  `getBoundingClientRect`: lo que importa es dónde acierta el dedo, y el padding
+  del padre puede agrandar el área o no llegar a hacerlo. Las flechas de mes dan
+  19×29 CSS de área real, un tercio del mínimo de 44×44.
 - **`diagnosticar()`** está en `Codigo.gs` y nunca se llegó a ejecutar. No
   escribe nada: recorre las hojas una a una y dice cuál revienta. Es lo que
   hay que ejecutar si vuelve un `Sheet <id> not found`.
