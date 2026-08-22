@@ -771,20 +771,18 @@ function escribirListas(libro, listas) {
     const c = listas.categorias[i];
     const cuenta = listas.cuentas[i] || '';
     filas.push([
-      p ? p.nombre : '',
+      p ? literal(p.nombre) : '',
       p ? (p.color || COLORES_PERSONA[i % COLORES_PERSONA.length]) : (i < TOPE_PERSONAS ? COLORES_PERSONA[i] : ''),
       p ? (Number(p.diaCobro) || '') : '',
-      cuenta,
+      literal(cuenta),
       cuenta ? credito.indexOf(cuenta) !== -1 : '',
       cuenta ? apagadas.indexOf(cuenta) === -1 : '',
-      c ? c.nombre : '',
+      c ? literal(c.nombre) : '',
       c ? c.tipo : '',
       c ? c.reparto : '',
       c ? apagadasCat.indexOf(c.nombre) === -1 : ''
     ]);
   }
-  // Los tres nombres los teclea una persona: texto plano antes de escribirlos.
-  columnasDeTexto(hoja, ['A', 'D', 'G']);
   hoja.getRange(FILA_DATOS, 1, filas.length, 10).setValues(filas);
   // Casillas de verdad: «es crédito» se marca con el dedo desde la hoja igual
   // que desde la app, y una casilla no se puede escribir mal.
@@ -887,10 +885,6 @@ function escribirMovimientos(libro, movimientos, categorias) {
      leerlo vuelve "Sat Aug 01 2026 00:00:00 GMT+0200" y ningún SUMIFS casa con
      él. Es la misma trampa que ya costó un mes cerrado llamado "Undefined". */
   formatoSeguro(hoja.getRange('I:I'), '@');
-  /* Y las columnas donde escribe una persona, por la otra mitad de la misma
-     trampa: un texto que empieza por «=» lo interpreta Sheets como fórmula, lo
-     calcula, y lo que se lee de vuelta ya no es lo que se tecleó. */
-  columnasDeTexto(hoja, ['C', 'D', 'F', 'G']);
 
   if (movimientos.length) {
     const filas = movimientos.map(m => {
@@ -1026,8 +1020,8 @@ function escribirFijos(libro, fijos, categorias) {
 
   if (fijos.length) {
     const filas = fijos.map(f => [
-      f.uuid, f.tipo, f.concepto, f.importe, f.dia, f.cada, f.cuotas || '', f.restantes || '',
-      f.cuenta, f.persona, f.reparto || repartoDe[f.concepto] || 'Personal',
+      f.uuid, f.tipo, literal(f.concepto), f.importe, f.dia, f.cada, f.cuotas || '', f.restantes || '',
+      literal(f.cuenta), literal(f.persona), f.reparto || repartoDe[f.concepto] || 'Personal',
       textoUsaEn(f), f.activo !== false,
       f.prox || calcularProximo(f, hoy()), f.ultimo || '', ''
     ]);
@@ -1080,7 +1074,7 @@ function escribirMetas(libro, metas) {
     const f = FILA_DATOS + i;
     const previa = metas[i];
     datos.push(previa
-      ? [previa[0], previa[1], previa[5] || i + 1, previa[6] !== false, previa[7] || '']
+      ? [literal(previa[0]), previa[1], previa[5] || i + 1, previa[6] !== false, previa[7] || '']
       : ['', '', '', false, '']);
     /* Lo guardado NO es un campo: sale de sumar las líneas de Reparto de esa
        meta. Así el ahorro siempre se puede auditar y nunca hay un total que no
@@ -1093,8 +1087,6 @@ function escribirMetas(libro, metas) {
         'MIN(1' + s + '$C' + f + '/$B' + f + '))'
     ]);
   }
-  // El nombre de la meta lo escribe una persona, y por él se busca lo repartido.
-  columnasDeTexto(hoja, ['A']);
   hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).setValues(datos.map(d => [d[0], d[1]]));
   hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).setValues(datos.map(d => [d[2], d[3], d[4]]));
   hoja.getRange(FILA_DATOS, 3, TOPE_METAS, 3).setFormulas(formulas);
@@ -1771,19 +1763,14 @@ function escribirFilaMovimiento(m) {
      hoja, pero quien decide es el backend: es el único sitio donde el cálculo
      es el mismo para los dos teléfonos. Un ingreso es la excepción —el «se usa
      en» lo eligió un dedo, no una regla—, y seUsaEn() ya lo respeta. */
-  /* Texto plano en las columnas que teclea una persona, y ANTES de escribir:
-     un «=» delante convierte lo que sea en fórmula, Sheets la calcula, y lo que
-     se lee de vuelta ya no es lo que se anotó. Después de appendRow llega
-     tarde: para entonces el texto ya se perdió. */
-  const destino = hoja.getLastRow() + 1;
-  formatoSeguro(hoja.getRange(destino, 3, 1, 2), '@');   // categoría, descripción
-  formatoSeguro(hoja.getRange(destino, 6, 1, 2), '@');   // cuenta, persona
-
+  /* Los cuatro campos que teclea una persona pasan por literal(): si empiezan
+     por «=», Sheets los tomaría por fórmula y lo que se lea de vuelta ya no
+     sería lo que se anotó. */
   hoja.appendRow([
     fechaDesdeISO(m.fecha),
-    m.tipo, m.categoria, m.descripcion || '',
+    m.tipo, literal(m.categoria), literal(m.descripcion || ''),
     Number(m.importe),   // número de verdad, no texto: los SUMIFS lo necesitan
-    m.cuenta, m.persona, m.reparto || 'Personal',
+    literal(m.cuenta), literal(m.persona), m.reparto || 'Personal',
     seUsaEn(m), m.origen || 'app', m.uuid
   ]);
 
@@ -1858,15 +1845,10 @@ function guardarFijo(datos) {
   const anterior = fila <= hoja.getLastRow() ? hoja.getRange(fila, 15).getValue() : '';
   const ultimo = anterior instanceof Date ? anterior : (f.ultimo ? fechaDesdeISO(f.ultimo) : '');
 
-  /* Concepto, cuenta y persona los teclea alguien, así que van en texto plano
-     antes de escribirlos: un «=» delante los convertiría en fórmula. */
-  formatoSeguro(hoja.getRange(fila, 3), '@');
-  formatoSeguro(hoja.getRange(fila, 9, 1, 2), '@');
-
   hoja.getRange(fila, 1, 1, 15).setValues([[
-    f.uuid, f.tipo, f.concepto, Number(f.importe), Number(f.dia), Number(f.cada),
+    f.uuid, f.tipo, literal(f.concepto), Number(f.importe), Number(f.dia), Number(f.cada),
     Number(f.cuotas) || '', Number(f.restantes) || '',
-    f.cuenta, f.persona, f.reparto || 'Personal', textoUsaEn(f), f.activo !== false,
+    literal(f.cuenta), literal(f.persona), f.reparto || 'Personal', textoUsaEn(f), f.activo !== false,
     calcularProximo(f, hoy()), ultimo
   ]]);
 
@@ -2084,14 +2066,9 @@ function guardarMetas(metas) {
   const cola = [];
   for (var i = 0; i < TOPE_METAS; i++) {
     const m = metas[i];
-    nombres.push([m ? (m.nombre || '') : '', m ? Number(m.objetivo) || 0 : '']);
+    nombres.push([m ? literal(m.nombre || '') : '', m ? Number(m.objetivo) || 0 : '']);
     cola.push(m ? [i + 1, m.activa !== false, m.notas || ''] : ['', '', '']);
   }
-  /* El nombre en texto plano, y antes de escribirlo. Una meta llamada «=A1» se
-     guardaba como fórmula, Sheets la calculaba, y volvía llamándose otra cosa:
-     lo repartido a una meta se busca por su nombre, así que el dinero se
-     quedaba huérfano sin que nada avisara. */
-  columnasDeTexto(hoja, ['A']);
   hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).setValues(nombres);
   hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).setValues(cola);
 
@@ -2474,16 +2451,28 @@ function ponerNombre(libro, nombre, rango) {
  * y ni el try lo atrapa ni el rastro de pila señala al culpable.
  */
 /**
- * Deja en texto plano las columnas donde escribe una persona.
+ * Un texto que Sheets no vaya a interpretar como fórmula.
  *
  * Un nombre que empieza por «=» es un nombre —«=A1» como meta salió del
- * teléfono de Gonzalo— pero Sheets ve el igual, lo interpreta y lo calcula: al
- * leerlo de vuelta ya no está lo que se escribió. La única forma de guardarlo
- * tal cual es que la celda sea texto ANTES de la escritura.
+ * teléfono de Gonzalo— pero Sheets ve el igual, lo calcula, y al leerlo de
+ * vuelta ya no está lo que se escribió: aquella meta volvió llamándose «Metas
+ * de ahorro», que es lo que hay en la celda A1 de esa hoja. Duele porque lo
+ * repartido a una meta se busca por su nombre, así que un nombre que cambia
+ * solo desconecta el dinero de su meta, y no salta nada.
  *
- * Duele porque lo repartido a una meta se busca por su nombre, así que un
- * nombre que cambia solo desconecta el dinero de su meta. Y no salta nada.
+ * El apóstrofo delante es la marca de texto literal de Sheets: se guarda el
+ * resto, el apóstrofo no forma parte del valor, y getValue() devuelve «=A1».
+ *
+ * Poner la celda en «texto plano» NO sirve, aunque lo parezca: el formato
+ * cambia cómo se ve un valor, no cómo se interpreta lo que escribe la API.
+ * setValue('=A1') crea una fórmula tenga la celda el formato que tenga. Se
+ * intentó así primero, con su prueba en verde, y en la hoja de verdad no
+ * arreglaba nada: el libro de mentira se había creído lo mismo.
  */
+function literal(v) {
+  return (typeof v === 'string' && v.charAt(0) === '=') ? "'" + v : v;
+}
+
 /**
  * En minúsculas y sin tildes, para comparar nombres escritos por gente.
  *
@@ -2494,10 +2483,6 @@ function sinTildes(texto) {
   return String(texto || '').toLowerCase()
     .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i')
     .replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u');
-}
-
-function columnasDeTexto(hoja, letras) {
-  letras.forEach(letra => formatoSeguro(hoja.getRange(letra + ':' + letra), '@'));
 }
 
 function formatoSeguro(rango, formato) {
