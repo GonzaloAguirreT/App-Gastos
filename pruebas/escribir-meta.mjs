@@ -41,13 +41,18 @@ await p.waitForTimeout(400);
 
 /* ------------------------------------------- una meta nueva, sin nombre */
 
-/* El nombre vacío es el caso que rompía: es como empieza siempre una meta
-   recién añadida, y era ahí donde la búsqueda por nombre dejaba de encontrarla. */
+/* Una meta recién añadida es donde rompía: la búsqueda por nombre dejaba de
+   encontrarla en cuanto la primera tecla le cambiaba el nombre.
+
+   Nace llamándose «Meta N» —sin nombre la hoja no la guarda— así que renombrarla
+   es lo que hace cualquiera con una carpeta nueva: seleccionar lo que hay y
+   escribir encima. */
 await p.locator('.pantalla.activa').getByText('+ Añadir meta').click();
 await p.waitForTimeout(700);
 
 const campo = () => p.locator('#pantalla-ahorro input.meta').last();
 await campo().click();
+await p.keyboard.press('Control+a');
 for (const letra of 'Viaje') {
   await p.keyboard.type(letra);
   await p.waitForTimeout(120);
@@ -192,6 +197,52 @@ const objetivos = await p.evaluate(() => ESTADO.estado().datos.metas.map(m => m.
 ok(JSON.stringify(objetivos) === JSON.stringify([3000000, 60000000]),
    'el objetivo cae solo en la meta que se tocó, aunque la otra se llame igual: '
    + JSON.stringify(objetivos));
+
+/* ---------------------- una meta recién añadida tiene que sobrevivir */
+
+/* En la hoja una meta ES su nombre: «Guardado» es un SUMIF sobre él en Reparto,
+   y por eso el backend descarta las filas sin nombre al leer. Una meta añadida
+   y todavía sin nombrar se escribía y no se volvía a leer jamás: la añadías, y
+   a la siguiente sincronización ya no estaba, sin un solo error por ningún
+   lado. Se veía como «he añadido un ahorro y no se ha guardado». */
+await p.evaluate(async () => {
+  await ESTADO.guardarMetas([{ nombre: 'Casa', objetivo: 3000000, guardado: 0, orden: 1, activa: true }]);
+  VISTA.ir('ahorro');
+});
+await p.waitForTimeout(600);
+
+const antesDeAnadir = await p.evaluate(() => ESTADO.estado().datos.metas.length);
+await p.locator('.pantalla.activa').getByText('+ Añadir meta').click();
+await p.waitForTimeout(900);
+
+const recien = await p.evaluate(() => ESTADO.estado().datos.metas.map(m => m.nombre));
+ok(recien.length === antesDeAnadir + 1, 'añadir una meta la pone en pantalla');
+ok(recien.every(n => String(n).trim()),
+   'y nace CON nombre, porque sin él la hoja no la guarda: ' + JSON.stringify(recien));
+
+/* La prueba de fuego: bajarla de la hoja otra vez. */
+await p.evaluate(() => ESTADO.sincronizar());
+await p.waitForTimeout(800);
+const traeLaHoja = await p.evaluate(() => ESTADO.estado().datos.metas.map(m => m.nombre));
+ok(traeLaHoja.length === antesDeAnadir + 1,
+   'y sigue ahí después de sincronizar, que es donde se perdía: '
+   + JSON.stringify(traeLaHoja));
+
+/* Y borrarle el nombre no puede escribirla sin él. */
+const campoNuevo = p.locator('#pantalla-ahorro input.meta').last();
+await campoNuevo.click();
+await p.evaluate(() => {
+  const i = [...document.querySelectorAll('#pantalla-ahorro input.meta')].pop();
+  i.value = '';
+  i.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await p.waitForTimeout(1200);
+await p.evaluate(() => document.activeElement.blur());
+await p.evaluate(() => ESTADO.sincronizar());
+await p.waitForTimeout(800);
+ok(await p.evaluate(() => ESTADO.estado().datos.metas.length) === antesDeAnadir + 1,
+   'y vaciarle el nombre no la borra de la hoja: '
+   + JSON.stringify(await p.evaluate(() => ESTADO.estado().datos.metas.map(m => m.nombre))));
 
 console.log('\nerrores:', errores.length ? errores : 'ninguno');
 if (errores.length) fallos++;

@@ -37,10 +37,15 @@ function encadenable(base) {
   return p;
 }
 
-/** Una hoja de mentira a partir de una tabla: `filas[0]` es la fila 1. */
+/**
+ * Una hoja de mentira a partir de una tabla: `filas[0]` es la fila 1.
+ *
+ * Guarda lo que le escriben, que es lo que permite probar la ida y la vuelta:
+ * escribir con guardarMetas y volver a leer con leerMetas. Sin eso el libro era
+ * de solo lectura y no se podía ver, por ejemplo, que una meta sin nombre se
+ * escribe pero no se vuelve a leer nunca.
+ */
 export function hoja(filas) {
-  const alto = filas.length;
-  const ancho = filas.reduce((m, f) => Math.max(m, f.length), 0);
   const celda = (f, c) => (filas[f - 1] || [])[c - 1];
   const trozo = (fila, col, nFilas, nCols) => {
     const salida = [];
@@ -54,11 +59,28 @@ export function hoja(filas) {
     }
     return salida;
   };
+  const escribir = (fila, col, valores) => {
+    valores.forEach((linea, i) => {
+      const f = fila + i - 1;
+      while (filas.length <= f) filas.push([]);
+      linea.forEach((v, j) => { filas[f][col + j - 1] = v; });
+    });
+  };
 
-  const rango = valores => encadenable({
-    getValues: () => valores,
-    getValue: () => valores[0][0]
+  const rango = (fila, col, nFilas, nCols) => encadenable({
+    getValues: () => trozo(fila, col, nFilas, nCols),
+    getValue: () => { const v = celda(fila, col); return v === undefined ? '' : v; },
+    setValues: v => { escribir(fila, col, v); return rango(fila, col, nFilas, nCols); },
+    setValue: v => { escribir(fila, col, [[v]]); return rango(fila, col, 1, 1); },
+    setFormulas: v => { escribir(fila, col, v); return rango(fila, col, nFilas, nCols); },
+    clearContent: () => {
+      escribir(fila, col, trozo(fila, col, nFilas, nCols).map(l => l.map(() => '')));
+      return rango(fila, col, nFilas, nCols);
+    }
   });
+
+  const alto = () => filas.length;
+  const ancho = () => filas.reduce((m, f) => Math.max(m, f.length), 0);
 
   return encadenable({
     /* getRange en sus dos formas: por números y en A1.
@@ -69,19 +91,19 @@ export function hoja(filas) {
        tolerante que el de verdad y dejaba pasar justo el fallo que sale al
        instalar sobre un libro recién vaciado. */
     getRange: (a, b, c, d) => {
-      if (typeof a !== 'number') return rango([['']]);
+      if (typeof a !== 'number') return rango(1, 1, 1, 1);
       const nFilas = c === undefined ? 1 : c;
       const nCols = d === undefined ? 1 : d;
       if (nFilas < 1) throw new Error('The number of rows in the range must be at least 1.');
       if (nCols < 1) throw new Error('The number of columns in the range must be at least 1.');
-      return rango(trozo(a, b, nFilas, nCols));
+      return rango(a, b, nFilas, nCols);
     },
-    getLastRow: () => alto,
-    getLastColumn: () => ancho,
-    getMaxRows: () => Math.max(alto, 1000),
-    getMaxColumns: () => Math.max(ancho, 26),
+    getLastRow: alto,
+    getLastColumn: ancho,
+    getMaxRows: () => Math.max(alto(), 1000),
+    getMaxColumns: () => Math.max(ancho(), 26),
     getFilter: () => null,
-    getDataRange: () => rango(trozo(1, 1, Math.max(alto, 1), Math.max(ancho, 1)))
+    getDataRange: () => rango(1, 1, Math.max(alto(), 1), Math.max(ancho(), 1))
   });
 }
 
