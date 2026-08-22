@@ -174,14 +174,30 @@ const AHORRO = (() => {
     if (viva.antes === undefined) viva.antes = viva.nombre;
     viva.nombre = nuevo;
 
-    // Sin espera se enviaría una escritura por cada tecla.
+    /* Y no se guarda un nombre vacío: la hoja no sabe guardar una meta sin
+       nombre, así que escribirla así sería perderla. Se queda con lo tecleado
+       en pantalla y se guarda en cuanto vuelva a tener nombre. */
     clearTimeout(esperaRenombre);
+    if (!String(nuevo).trim()) return;
+
+    // Sin espera se enviaría una escritura por cada tecla.
     esperaRenombre = setTimeout(() => ESTADO.guardarMetas(metas.slice()), 600);
   }
 
+  /* Una meta nace CON nombre, aunque sea uno de relleno.
+
+     En la hoja una meta ES su nombre: «Guardado» es un SUMIF sobre él en
+     Reparto, y por eso leerMetas descarta las filas sin nombre. Una meta
+     añadida y todavía sin nombrar se escribía en la hoja y no se volvía a leer
+     jamás — la añadías, y a la siguiente sincronización ya no estaba, sin un
+     solo error por ningún lado. */
   function anadirMeta() {
     const metas = ESTADO.estado().datos.metas.slice();
-    metas.push({ nombre: '', objetivo: 1000000, guardado: 0, orden: metas.length + 1, activa: true });
+    const usados = metas.map(m => m.nombre);
+    var n = metas.length + 1;
+    while (usados.indexOf('Meta ' + n) !== -1) n++;
+    metas.push({ nombre: 'Meta ' + n, objetivo: 1000000, guardado: 0,
+                 orden: metas.length + 1, activa: true });
     ESTADO.guardarMetas(metas);
   }
 

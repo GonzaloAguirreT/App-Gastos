@@ -236,7 +236,15 @@ function despachar(p) {
       return { ok: true, metas: libro.metas };
 
     case 'metas':
-      libro.metas = (d.metas || p.metas || []).map(m => Object.assign({}, m));
+      /* Se descartan las metas sin nombre, igual que el backend de verdad.
+
+         En la hoja una meta ES su nombre —«Guardado» es un SUMIF sobre él— y
+         por eso `leerMetas` filtra las filas vacías. Este servidor las guardaba
+         tan contento, así que era más permisivo que Apps Script y dejaba pasar
+         que una meta recién añadida no llegara nunca a la hoja. */
+      libro.metas = (d.metas || p.metas || [])
+        .filter(m => String(m.nombre || '').trim())
+        .map(m => Object.assign({}, m));
       return { ok: true, metas: libro.metas };
 
     case 'config':
