@@ -244,3 +244,30 @@ lo que convierte un fallo en dos fallos menos.
   libro de mentira de `backend.mjs` no invalida el id de una hoja borrada.
   Hacerlo fallar como Sheets es la mitad del trabajo, y es la mitad que importa:
   sin eso, la prueba pasa con y sin arreglo.
+
+- **`instalar()` convierte sus propias filas de resumen en datos**, y esto ya
+  escribió basura en el libro de verdad. `escribirMetas` deja debajo de las
+  metas una fila «Total» y otra «SIN ASIGNAR»; `escribirCierres` deja otra
+  «Total». Son resumen. Pero la lectura previa es
+
+  ```js
+  hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, ancho)
+      .getValues().filter(f => f[0] !== '' && f[0] !== null)   // :728
+  ```
+
+  —hasta la última fila con algo escrito—, así que se las traga, y la pasada
+  siguiente las reescribe arriba como metas y cierres de verdad. **Crece cada
+  vez**: con «Total» en la 5 y en la 16, la lectura devuelve las dos.
+
+  Lo que se ve hoy en el libro de Gonzalo: dos metas llamadas «Total» y «SIN
+  ASIGNAR», editables desde Ahorro, y un cierre con `mes: ""`. Lo peor es el
+  nombre: SIN ASIGNAR ya significa algo en la app —el ahorro cerrado que aún no
+  tiene meta— y ahora existe además como meta. `Reparto` se salva porque
+  `escribirReparto` no escribe fila de resumen.
+
+  El arreglo previsible es leer solo las filas de datos —pasarle a
+  `leerTablaExistente` el tope de la tabla, `TOPE_METAS` y `TOPE_CIERRES`— en
+  vez de llegar hasta `getLastRow()`. La prueba se puede escribir en Node tal
+  como está el arnés, sin tocarlo: **instalar() dos veces seguidas tiene que
+  dejar el libro igual que una**. El libro de mentira guarda lo que le
+  escriben, así que la segunda pasada ve las filas de resumen igual que Sheets.
