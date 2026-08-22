@@ -1,0 +1,198 @@
+# Probar de verdad
+
+Este archivo es para una sesión que corre **en la máquina de Gonzalo**, no en el
+contenedor de Claude Code en la nube. Existe porque hay tres cosas que desde la
+nube no se pueden hacer y que son justo por donde se han escapado los fallos.
+
+Léelo entero antes de empezar. El orden es por valor, no por comodidad.
+
+## Por qué hace falta esto
+
+Todos los fallos que han llegado al teléfono de Gonzalo tienen la misma forma:
+**mi imitación del backend era más permisiva que Apps Script**. La app hacía
+algo que el servidor falso aceptaba y la hoja de verdad rechazaba en silencio.
+
+Tres veces en dos días:
+
+| lo que la app hacía | el servidor falso | Apps Script |
+|---|---|---|
+| leer Listas por posición fija | no aplica | devolvía la columna de al lado: cuentas llamadas `true` |
+| `getRange(2, 1, 0, 1)` con cero movimientos | devolvía un rango vacío | **lanza** y dejó el libro a medias |
+| guardar una meta con el nombre vacío | la guardaba tan contenta | la escribe y **no la vuelve a leer jamás** |
+
+Los tres se descubrieron en el móvil, con datos reales, después de desplegar. Y
+los tres eran invisibles para las pruebas porque las pruebas hablaban con una
+mentira.
+
+Las dos primeras ya están cerradas en el arnés: `pruebas/backend.mjs` ejecuta el
+`Codigo.gs` de verdad y su hoja falsa lanza igual que Sheets. Pero sigue siendo
+una imitación escrita por quien escribió el código: **solo una hoja de Google de
+verdad cierra el agujero del todo**.
+
+## Lo que ya está cubierto — no lo repitas
+
+```sh
+sh pruebas/todas.sh      # dieciséis pruebas, ~194 comprobaciones
+```
+
+Cubierto y verde: el calendario de la tarjeta y los topes, un mes recién
+empezado, que nada se salga en 390×700, que nada pulsable esté muerto, el
+vestido de la hoja, que repintar no cierre el teclado ni te devuelva al
+principio, vaciar el libro sin llevarse las fórmulas, vaciar el teléfono sin
+llevarse la conexión, leer las hojas por su cabecera, e `instalar()` sobre un
+libro vacío, con datos y del formato viejo.
+
+Empezar por rehacer esto sería tiempo tirado. Empieza por lo que sigue.
+
+---
+
+## Paso 1 — La hoja de pruebas desechable
+
+Lo que más vale, con diferencia. Una copia del libro con su propio despliegue,
+para poder escribirle basura sin miedo.
+
+### Montarla
+
+1. En Drive, duplicar el libro: **Archivo → Hacer una copia**. Llámala
+   `Gastos — PRUEBAS`.
+2. Abrir su editor: **Extensiones → Apps Script**. La copia trae su propio
+   proyecto, separado del bueno.
+3. Pegar `apps-script/Codigo.gs` y `apps-script/vestir-hoja.gs`.
+4. **Configuración del proyecto → Propiedades del script**: `TOKEN` con
+   cualquier cosa. Da igual que se filtre, no protege nada real.
+5. Ejecutar `instalar()` una vez.
+6. **Implementar → Nueva implementación → Aplicación web**, ejecutar como *yo*,
+   acceso *cualquier persona*. Copiar la URL que acaba en `/exec`.
+
+### Guardar las credenciales sin que entren en git
+
+Variables de entorno, no un archivo. Así no hay nada que se pueda commitear por
+descuido:
+
+```sh
+export GASTOS_ENDPOINT='https://script.google.com/macros/s/.../exec'
+export GASTOS_TOKEN='loquesea'
+```
+
+### Qué construir
+
+Una prueba nueva, `pruebas/contra-la-hoja.mjs`, que hable con ese endpoint en vez
+de con el servidor falso. **No hace falta navegador**: es `fetch` contra
+`/exec`, igual que hace `NUCLEO.enviar`. Recuerda las reglas del transporte, que
+están en el README y no son negociables: `Content-Type: text/plain`, y **las
+lecturas también van por POST**.
+
+Lo que tiene que comprobar es la **ida y la vuelta**, que es donde vive esta
+clase de fallo: escribir algo y volver a leerlo. Empieza por los tres casos de
+la tabla de arriba, que ya sabemos que fallaban, y sigue por:
+
+- una meta con nombre, y la misma meta renombrada — ¿se mueven sus líneas de
+  Reparto?
+- un movimiento con tarjeta de crédito el día del corte y el día anterior —
+  ¿cae en el mes que toca en la columna «Se usa en»?
+- un ingreso marcado «mes siguiente»
+- cerrar un mes y reabrirlo
+- un reparto que suma más de lo disponible
+- el mismo `uuid` dos veces — la deduplicación de `_uuids`
+- `vaciar()` y acto seguido `instalar()`
+
+Si el endpoint no está en el entorno, la prueba debe **saltarse sola** con un
+aviso claro y salir con 0. No puede romper `todas.sh` en el contenedor de la
+nube, donde nunca habrá endpoint.
+
+---
+
+## Paso 2 — El teléfono de verdad
+
+Segundo en valor. Es lo único que prueba el teclado del móvil, los toques y la
+PWA instalada.
+
+```sh
+# En el móvil: Opciones de desarrollador → Depuración por USB
+adb devices                                              # que aparezca
+adb forward tcp:9222 localabstract:chrome_devtools_remote
+```
+
+Con Chrome abierto en el teléfono, Playwright se engancha por CDP:
+
+```js
+const navegador = await chromium.connectOverCDP('http://localhost:9222');
+const pagina = navegador.contexts()[0].pages()[0];
+```
+
+(Existe también `playwright._android`, más directo pero experimental. Si CDP da
+guerra, pruébalo.)
+
+### Qué probar ahí y solo ahí
+
+- **El teclado.** Escribir el nombre de una meta letra a letra y comprobar que
+  el teclado no se cierra. Aquí se mide de verdad: en Chromium solo se puede
+  mirar el foco. Fue el fallo que abrió todo esto.
+- **Los toques.** Que las teclas del teclado propio y los chips se puedan pulsar
+  con el pulgar sin fallar. En el escritorio siempre aciertas.
+- **El alto real.** 780 px de alto no son los 844 del prototipo, y lo que se
+  queda fuera es el teclado.
+- **La PWA instalada**: arranque en frío desde el icono, sin barra de
+  direcciones, y el atajo `?anotar=1`.
+- **Background Sync**: anotar en modo avión, cerrar la app del todo, recuperar
+  cobertura, y comprobar que la fila aparece en la hoja sin abrir nada.
+
+---
+
+## Paso 3 — El barrido exploratorio
+
+Con los dos pasos anteriores montados, esto vale el doble. Sin ellos, también
+sirve. La consigna es **romperla**, no comprobar que funciona.
+
+Sitios donde esta app ya ha demostrado ser frágil:
+
+**Fechas y meses.** El día del corte de la tarjeta y el día anterior. El día 1.
+El 31 en un mes de 30. Febrero. Un mes sin nada anotado. Las flechas de mes en
+el primero y en el último.
+
+**Nombres.** Dos metas iguales. Dos categorías iguales. Una cuenta y una
+categoría con el mismo nombre. Un nombre vacío. Un nombre larguísimo. Con emoji.
+Con comillas. **Uno que empiece por `=`**, que en una celda es una fórmula. Uno
+con `;` o `,`, que es lo que `sep()` usa para separar argumentos.
+
+**Números.** Cero. Nueve cifras. Borrar todos los dígitos y guardar. Un reparto
+mayor que lo disponible. Un objetivo menor que lo ya guardado.
+
+**Borrar lo que está en uso.** Una categoría que tienen movimientos ya escritos.
+Una cuenta que usa un fijo. Desmarcar «Activa» de las dos. ¿Cuadra el mes
+después?
+
+**La cola.** Anotar sin cobertura. Deshacer dentro de los siete segundos.
+Recuperar cobertura. Cerrar la app con cosas pendientes. Dos escrituras del
+mismo grupo. Y lo que ya mordió: **vaciar la hoja con algo pendiente en la cola**.
+
+**El cierre.** Cerrar a mitad de mes. Cerrar dos veces. Reabrir y volver a
+cerrar. Cerrar sin ingresos.
+
+---
+
+## Las reglas de la casa
+
+Están en `CLAUDE.md`, pero estas tres son las que más se olvidan:
+
+1. **Un fallo solo cuenta si trae una prueba** en `pruebas/` que falle con el
+   código de ahora y pase con el arreglo. Compruébalo en las dos direcciones,
+   siempre — más de una vez ha resultado que la prueba no medía lo que decía.
+2. **Si el cambio toca la app** (`index.html`, `config.js`, `css/`, `js/`),
+   sube `CACHE` en `sw.js` **y fusiona el PR**. Sin fusionar no llega a nadie:
+   Pages sirve desde `main`.
+3. `main` se fusiona en aplastado. Si una rama sobrevive a su PR, hay que
+   rehacerla sobre `origin/main` con `cherry-pick`, no fusionar.
+
+Y la de este archivo: **cuando encuentres un caso donde el servidor falso sea
+más permisivo que Apps Script, arregla el servidor falso además del código.** Es
+lo que convierte un fallo en dos fallos menos.
+
+## Lo que está abierto ahora mismo
+
+- **Cuatro apuntes sin enviar** en el teléfono de Gonzalo, sin diagnosticar.
+  Ajustes → Pendientes de enviar → ver dice el motivo de cada uno. Si son de
+  antes de los arreglos de hoy, basta con reintentar; si no, hay algo vivo.
+- **`diagnosticar()`** está en `Codigo.gs` y nunca se llegó a ejecutar. No
+  escribe nada: recorre las hojas una a una y dice cuál revienta. Es lo que
+  hay que ejecutar si vuelve un `Sheet <id> not found`.
