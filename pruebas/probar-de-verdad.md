@@ -220,3 +220,27 @@ lo que convierte un fallo en dos fallos menos.
 - **`diagnosticar()`** está en `Codigo.gs` y nunca se llegó a ejecutar. No
   escribe nada: recorre las hojas una a una y dice cuál revienta. Es lo que
   hay que ejecutar si vuelve un `Sheet <id> not found`.
+
+- **`instalar()` muere sobre un libro que ya tiene el formato de ahora.** Visto
+  el 22 de agosto de 2026 en el libro de verdad:
+
+  ```
+  Exception: Sheet 1853955774 not found
+  leerListasExistentes @ Código.gs:636
+  instalar             @ Código.gs:170
+  ```
+
+  La línea 170 es la lectura previa —«leer ANTES de tocar nada»— y revienta en
+  el primer `getLastRow()`. La causa es la misma familia que la trampa de
+  `copy()`: `hojaLimpia` borra la hoja y la recrea, y la referencia que se pidió
+  antes queda muerta. Se nota en que Listas aparece la última del libro, que es
+  donde `insertSheet` la deja.
+
+  El libro **no se rompe** —falla leyendo, antes de escribir nada— pero la
+  migración no se hace. El arreglo previsible es volver a pedir el libro con
+  `openById` después de borrar hojas, igual que ya se hace tras copiar.
+
+  Cuidado al escribir la prueba: `instalar-el-libro.mjs` no lo pilla porque el
+  libro de mentira de `backend.mjs` no invalida el id de una hoja borrada.
+  Hacerlo fallar como Sheets es la mitad del trabajo, y es la mitad que importa:
+  sin eso, la prueba pasa con y sin arreglo.

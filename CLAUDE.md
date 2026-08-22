@@ -42,6 +42,11 @@ No hay marco de pruebas: son archivos de Node que se ejecutan a mano y salen con
 código distinto de cero si algo falla. Playwright vive en
 `/opt/node22/lib/node_modules/playwright`, fuera del proyecto.
 
+Esa ruta es la del contenedor Linux. En Windows no existe, pero Node resuelve
+`/opt/...` como `C:\opt\...`, así que basta con instalarlo en
+`C:\opt\node22\lib` y las pruebas corren sin tocar sus imports. Y `adb`, para
+conducir el teléfono, lo pone winget fuera del PATH de las shells ya abiertas.
+
 Cada prueba quiere un arranque distinto del servidor falso, y un servidor
 heredado de la anterior trae su libro ya tocado —el mes cerrado, los movimientos
 borrados— y hace fallar a la siguiente por un motivo que no es el suyo. Para eso
@@ -138,9 +143,23 @@ la app; una PWA no se despierta sola.
 ## Trampas que ya han costado tiempo
 
 **Guardar en el editor de Apps Script no despliega nada.** La URL `/exec` sirve
-la última *implementación*. Hay que editar la implementación y elegir **versión
-nueva**. Síntoma: la app manda `accion: 'mes'`, el backend viejo no la conoce y
-contesta `Petición sin movimientos`.
+la última *implementación*. El camino exacto es **Implementar → Gestionar
+implementaciones → el lápiz → Versión: nueva → Implementar**. Síntoma: la app
+manda `accion: 'mes'`, el backend viejo no la conoce y contesta `Petición sin
+movimientos`.
+
+Y hay dos formas de equivocarse aquí, las dos silenciosas:
+
+**«Nueva implementación» no es lo mismo que editar la que hay.** Te da una URL
+distinta, y la vieja *sigue publicada respondiendo con el código de antes*. El
+teléfono que no actualice su endpoint sigue anotando —los gastos llegan a la
+misma hoja, no se pierde nada— pero sin la lógica nueva y sin ningún error. Si
+se hace a propósito, hay que pegar la URL nueva en Ajustes → Conexión de **los
+dos teléfonos** y archivar la vieja.
+
+**`instalar()` no es un paso de despliegue.** Es una migración: reescribe el
+libro entero. Para desplegar código solo hay que pegar y hacer versión nueva.
+Ejecutarla creyendo que despliega no arregla nada y arriesga el libro.
 
 **Leer una hoja por posición fija se rompe en silencio.** Si el contrato de
 columnas cambia y el lector sigue contando, devuelve la columna de al lado, que
@@ -171,6 +190,14 @@ sigue devolviendo una hoja, pero es una hoja cuyo id ya no resuelve, y la
 primera operación revienta con «Sheet 196448985 not found». Le pasó a `vaciar()`
 en la primera limpieza, con la copia de seguridad ya hecha. Después de copiar
 hay que volver a pedir el libro con `SpreadsheetApp.openById`.
+
+**Y `hojaLimpia` hace lo mismo sin copiar nada.** Borra la hoja y la recrea, así
+que cualquier referencia pedida antes queda muerta igual. `instalar()` sobre un
+libro que ya tiene el formato de ahora muere en su primera lectura con
+«Sheet *id* not found» desde `leerListasExistentes`. El libro no se rompe —falla
+al leer, antes de escribir— pero la migración no llega a hacerse. Sin arreglar:
+está apuntado en `pruebas/probar-de-verdad.md`, y `instalar-el-libro.mjs` no
+cubre la segunda pasada porque el libro de mentira no invalida ids.
 
 **Nada de diálogos modales en el backend.** `Ui.alert()` suspende el script
 hasta que alguien pulsa Aceptar, y desde el editor con la hoja cerrada no lo
