@@ -164,13 +164,28 @@ const MES = (() => {
           onClick: () => verMes(disponibles[Math.max(0, i - 1)])
         }, '›')
       ]),
-      h('span.etiqueta.corta', cerrado
-        ? 'cerrado'
-        : 'día ' + Number(ESTADO.hoy().slice(8)) + ' de ' + FMT.diasDelMes(mes))
+      h('span.etiqueta.corta', comoVaElMes(mes, cerrado))
     ]);
 
     VISTA.pintar(document.getElementById('pantalla-mes'),
       [cabeza, cerrado ? cuerpoCerrado(cerrado) : cuerpoEnCurso(mes)]);
+  }
+
+  /**
+   * Por dónde va el mes que se está mirando.
+   *
+   * «Día 22 de 31» solo quiere decir algo en el mes en curso: es cuánto llevas.
+   * Se pintaba en todos, así que julio decía «día 22 de 31» estando ya en
+   * agosto, y septiembre «día 22 de 30» antes de haber empezado. El número era
+   * siempre el día de hoy, mirases el mes que mirases.
+   */
+  function comoVaElMes(mes, cerrado) {
+    if (cerrado) return 'cerrado';
+    const actual = ESTADO.mesEnCurso();
+    const total = FMT.diasDelMes(mes);
+    if (mes > actual) return 'aún no empieza';
+    if (mes < actual) return 'terminó · ' + total + ' días';
+    return 'día ' + Number(ESTADO.hoy().slice(8)) + ' de ' + total;
   }
 
   function cuerpoEnCurso(mes) {
@@ -534,7 +549,10 @@ const MES = (() => {
         grupos.map(g => h('div', [
           h('div.grupo-dia', [
             h('span.etiqueta', FMT.etiquetaDia(g.fecha, ESTADO.hoy(), mes)),
-            h('span.grupo-total', FMT.dinero(g.suma))
+            /* Un día en el que solo entró dinero no ha gastado $0: no ha
+               gastado nada, y poner «$0» al lado de un sueldo de siete cifras
+               se lee como que el sueldo vale cero. */
+            h('span.grupo-total', g.suma ? FMT.dinero(g.suma) : '')
           ]),
           /* Los que siguen en el teléfono se marcan. Un movimiento que no ha
              llegado a la hoja se veía exactamente igual que uno que sí, y no

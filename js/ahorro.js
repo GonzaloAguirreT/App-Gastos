@@ -279,9 +279,13 @@ const AHORRO = (() => {
             boton('monto' + (monto ? '' : ' vacio'),
                   { onClick: () => ANOTAR.asignarReparto(m, disponible) },
                   monto ? FMT.dinero(monto) : '—'),
+            /* Lo que falta DESPUÉS de lo que acabas de asignarle. Antes decía
+               «faltan $1.000.000 de $1.000.000» con setecientos mil ya puestos
+               encima, que es justo el número que estás intentando decidir. */
             h('span.pista', m.completa
               ? 'ya completa · ' + FMT.dinero(m.guardado)
-              : 'faltan ' + FMT.dinero(m.falta) + ' de ' + FMT.dinero(m.objetivo)),
+              : 'faltan ' + FMT.dinero(Math.max(0, m.falta - monto))
+                + ' de ' + FMT.dinero(m.objetivo)),
             boton('accion' + (monto ? ' quita' : ''), {
               onClick: () => monto
                 ? asignarA(m.nombre, 0)

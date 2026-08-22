@@ -71,9 +71,28 @@ const [izq2, der2] = await flechas();
 ok(izq2, 'allí la ‹ se apaga: no hay más hacia atrás');
 ok(!der2, 'y la › se enciende para volver');
 
+/* Y lo que dice la cabecera de ese mes.
+
+   «Día 22 de 31» solo significa algo en el mes en curso: es cuánto llevas. Se
+   pintaba en todos, con el día de HOY, así que un mes que terminó hace tres
+   meses decía «día 22 de 31» y uno que no ha empezado, lo mismo. */
+const etiqueta = () => p.evaluate(() =>
+  (document.querySelector('#pantalla-mes .etiqueta.corta') || {}).textContent || '');
+
+const enElViejo = await etiqueta();
+ok(!/^día \d+ de/.test(enElViejo),
+   'un mes que ya terminó no cuenta los días de hoy: ' + JSON.stringify(enElViejo));
+ok(/termin/i.test(enElViejo), 'dice que terminó: ' + JSON.stringify(enElViejo));
+
 await derecha.click();
 await p.waitForTimeout(600);
 ok((await titulo()) === enCurso, 'y volver deja donde estabas');
+
+const enElActual = await etiqueta();
+ok(/^día \d+ de \d+$/.test(enElActual),
+   'y en el mes en curso sí se cuentan los días: ' + JSON.stringify(enElActual));
+const hoy = await p.evaluate(() => Number(ESTADO.hoy().slice(8)));
+ok(enElActual.indexOf('día ' + hoy + ' ') === 0, 'con el día de hoy: ' + hoy);
 
 console.log('\nerrores: ' + (errores.length ? '' : 'ninguno'));
 [...new Set(errores)].forEach(e => console.log('  ! ' + e));

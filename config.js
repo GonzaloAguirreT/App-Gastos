@@ -74,11 +74,18 @@ const CONFIG = {
 
   PERSONAS: ["Gonzalo", "Camila"],
 
+  /* Con sus tildes y sin inventarse ninguna: esta lista es lo que se ve antes
+     de la primera lectura de la hoja, y de aquí salía una «Cuenta Corriente»
+     que no existía en el libro. El ajuste de «la cuenta de siempre» se quedaba
+     apuntando a ella y en Anotar no se marcaba ningún cajetín.
+
+     Tiene que decir lo mismo que CUENTAS_SEMILLA de Codigo.gs: son la misma
+     lista escrita dos veces, una para cada lado. */
   CUENTAS: [
-    "Cuenta Corriente",
-    "Tarjeta Credito",
-    "Tarjeta Debito",
-    "Efectivo"
+    "Tarjeta de Débito",
+    "Tarjeta de Crédito",
+    "Efectivo",
+    "Ahorro"
   ],
 
   /* Categorías con su tipo y su reparto. `reparto` es la regla de "el arriendo
@@ -112,7 +119,7 @@ const CONFIG = {
 
   /* Qué cuentas aplazan el cargo. Tienen que estar tambien en CUENTAS: esta
      lista solo marca cuáles de ellas facturan a fin de mes. */
-  CREDITO: ["Tarjeta Credito"],
+  CREDITO: ["Tarjeta de Crédito"],
 
   /* Día en que factura la tarjeta, hasta que la hoja diga el de cada persona.
      Una compra anterior a ese día entra en la factura de este mes; desde ese
