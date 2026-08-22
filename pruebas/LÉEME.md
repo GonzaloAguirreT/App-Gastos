@@ -1,5 +1,9 @@
 # Pruebas
 
+Para probar la app **de verdad** —contra una hoja de Google real y en un
+teléfono real— hay un plan aparte en [`probar-de-verdad.md`](probar-de-verdad.md).
+Lo de aquí abajo es lo que se puede hacer sin ninguna de las dos cosas.
+
 No hay marco de pruebas ni dependencias: son archivos de Node que se ejecutan a
 mano, igual que la app no tiene build. Cada uno sale con código distinto de cero
 si algo falla.
