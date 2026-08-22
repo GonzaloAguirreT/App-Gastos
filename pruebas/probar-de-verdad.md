@@ -223,6 +223,81 @@ letra, medido con `adb shell dumpsys input_method`). Y la regla de la tarjeta
 acierta los cuatro casos contra Apps Script: la víspera del corte cae en su mes,
 el día del corte ya cae en el siguiente, y el débito no aplaza nunca.
 
+## El barrido completo del 22 de agosto de 2026
+
+Todas las pantallas, con datos sembrados en la hoja de verdad y el S24 conducido
+por adb + CDP. Lo que sigue es lo que salió mal; lo que no está aquí, funcionó.
+
+### No se puede anotar ningún ingreso
+
+El más grave, y son tres piezas que se muerden la cola:
+
+1. La pantalla Categorías **solo sabe crear categorías de gasto**. El alta es
+   literal —`{ nombre: k, tipo: 'Gasto', reparto: 'Personal' }`— y las seis
+   sugeridas también. No hay ningún sitio en la app donde elegir el tipo.
+2. Con cero categorías de ingreso, Anotar en modo Ingreso **no pinta ninguna
+   tira** de categorías, y guarda con `categoria: ""`.
+3. `validarMovimiento` rechaza: `Falta la categoría`. El apunte se queda en la
+   cola reintentando para siempre.
+
+Así que en un libro sin categorías de ingreso —el que deja `instalar()`— los
+ingresos son imposibles desde la app. Y los ingresos son de donde sale el techo
+del mes, o sea todo el cálculo. Solo se ve entrando a Ajustes → Pendientes.
+
+### Convertir un movimiento en fijo le cambia la cuenta y la persona
+
+Un gasto de Camila en Efectivo se convirtió en un fijo de Gonzalo en Tarjeta
+Débito. Concepto, importe y día sí se respetan; cuenta y persona se toman de los
+ajustes de *este teléfono*. Si la cuenta que pone es de crédito y la original no
+lo era, además cambia el mes al que se imputa cada cargo.
+
+### El motivo que se enseña sin cobertura es «Failed to fetch»
+
+En Ajustes → Pendientes, un apunte sin cobertura dice «Último intento hoy 16:15
+· Failed to fetch». El comentario de `filaCola` dice que distinguir «sin
+conexión» de «la hoja no respondió» es la mitad del valor de esa pantalla, y ahí
+se enseña el error crudo del navegador, en inglés.
+
+### «Día 22 de 31» en un mes que no es el de hoy
+
+El contador de la cabecera de Mes es siempre el día de hoy. Navegando a julio
+—que terminó— sigue diciendo «día 22 de 31», y en septiembre «día 22 de 30»
+antes de que empiece. Un mes cerrado sí lo hace bien: pone «cerrado».
+
+### La semilla de config.js no se parece al libro
+
+`CONFIG.CUENTAS` son `Cuenta Corriente, Tarjeta Credito, Tarjeta Debito,
+Efectivo`: una que no existe, dos sin tilde y falta `Ahorro`. Esa semilla es lo
+que se usa antes de la primera lectura de la hoja, y **de ahí salió la «Cuenta
+Corriente» huérfana** que costó la mañana. `sanearAjustes` ya lo corrige en la
+primera sincronización, pero la semilla sigue mintiendo.
+
+### Cosas menores, por si alguna vez toca
+
+- En Historial, la cabecera de un día que solo tiene ingresos dice `$0`.
+- Editando el importe, el cajetín de cuenta marcado es el del teléfono y no el
+  del movimiento. No cambia el dato al guardar: es solo lo que se ve.
+- Al borrar un fijo, el cargo que ya hizo se queda (razonable, pero no se dice).
+- En el reparto, «faltan $1.000.000» no descuenta lo que acabas de asignar.
+- `Conexión · correcta ✓` fuerza una sincronización y no da ninguna señal.
+- Configurar cuotas en un fijo no se refleja en su cabecera hasta cargarlo.
+
+### Lo que se probó y está bien
+
+Navegación de meses y flechas que se apagan donde toca · Detalle del mes con sus
+topes · Historial con filtros por persona y búsqueda · editar importe, cuenta y
+persona de un movimiento (los tres ciclan y respetan el resto) · fijos: crear,
+periodicidad, día, cuotas, reparto, cargar, descargar y borrar · cierre de mes y
+reparto del ahorro a metas · reabrir · metas: crear, nombrar, objetivo, quitar ·
+Anotar gasto e ingreso con su «se usa en» · el teclado propio · tema claro y
+oscuro · avisos · ahorro esperado · días de cobro · cuentas de crédito ·
+categorías y cuentas: añadir, quitar, sugeridas · atajo · la cola: motivo,
+enviar ahora, descartar con deshacer, y **recuperación sola en 8 s al volver la
+cobertura** · borrar con deshacer dentro de la ventana.
+
+No se probó **Vaciar este teléfono**: habría cortado la sesión de QA. Tiene su
+prueba en `vaciar-telefono.mjs`.
+
 ## Las reglas de la casa
 
 Están en `CLAUDE.md`, pero estas tres son las que más se olvidan:
