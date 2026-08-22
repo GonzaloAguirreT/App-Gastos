@@ -103,9 +103,18 @@ const AJUSTES = (() => {
 
         seccion('Hoja de cálculo'),
         h('div.margen', [
+          /* Tocarla vuelve a preguntarle a la hoja, y ahora lo dice: antes
+             sincronizaba en silencio y la fila se quedaba igual, así que
+             parecía un botón muerto. Es el mismo motivo por el que «Reintentar»
+             acabó contando cómo le fue. */
           fila('Conexión', h('span.fila-valor', {
             estilo: { color: enLinea ? 'var(--mut)' : 'var(--acc)' }
-          }, enLinea ? 'correcta ✓' : 'sin conexión'), () => ESTADO.sincronizar()),
+          }, enLinea ? 'correcta ✓' : 'sin conexión'), () => {
+            VISTA.avisar('Preguntando a la hoja…');
+            ESTADO.sincronizar().then(bien => VISTA.avisar(
+              bien ? 'La hoja contesta. Todo al día.' : 'La hoja no contestó.',
+              { mal: !bien }));
+          }),
           fila('Pendientes de enviar (' + pendientes + ')', h('span.fila-valor', {
             estilo: { color: pendientes ? 'var(--acc)' : 'var(--mut)' }
           }, pendientes ? 'ver ›' : 'todo al día ›'),
@@ -345,20 +354,37 @@ const AJUSTES = (() => {
 
     const guardar = categorias => ESTADO.guardarConfig({ categorias });
 
+    const cambiar = (c, campo) => guardar(datos.categorias.map(x =>
+      x.nombre === c.nombre ? Object.assign({}, x, campo) : x));
+
     const filas = datos.categorias.map(c => {
       const comun = c.reparto === 'Común';
+      const esIngreso = c.tipo === 'Ingreso';
       const n = usoCategoria(c.nombre);
       return h('div.editable', [
         h('span.nombre', c.nombre),
+        /* El tipo decide en cuál de las dos mitades de Anotar sale esta
+           categoría, y hasta ahora no se podía tocar desde ninguna pantalla:
+           todo lo que se creaba aquí nacía como gasto.
+
+           Un libro sin ninguna categoría de ingreso no dejaba anotar ni un
+           sueldo. Anotar → Ingreso no pintaba tira, se guardaba con la
+           categoría vacía, y el backend contestaba «Falta la categoría»: el
+           apunte se quedaba en la cola reintentando para siempre, y eso solo
+           se ve entrando a Ajustes → Pendientes. */
+        boton('chip pequeno' + (esIngreso ? ' activo' : ''), {
+          onClick: () => cambiar(c, { tipo: esIngreso ? 'Gasto' : 'Ingreso' })
+        }, esIngreso ? 'ingreso' : 'gasto'),
         boton('chip pequeno' + (comun ? ' activo' : ''), {
-          onClick: () => guardar(datos.categorias.map(x => x.nombre === c.nombre
-            ? Object.assign({}, x, { reparto: comun ? 'Personal' : 'Común' }) : x))
+          onClick: () => cambiar(c, { reparto: comun ? 'Personal' : 'Común' })
         }, comun ? 'común' : 'personal'),
         boton('quitar', {
           onClick: () => guardar(datos.categorias.filter(x => x.nombre !== c.nombre))
         }, 'quitar'),
         h('span.uso', (n ? n + (n === 1 ? ' movimiento este mes' : ' movimientos este mes') : 'sin usar este mes')
-          + (comun ? ' · se reparte entre los dos' : ' · gasto de cada uno'))
+          + (esIngreso
+              ? (comun ? ' · entra para los dos' : ' · entra para quien lo anota')
+              : (comun ? ' · se reparte entre los dos' : ' · gasto de cada uno')))
       ]);
     });
 

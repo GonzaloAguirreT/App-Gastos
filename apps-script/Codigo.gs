@@ -99,9 +99,9 @@ const COLORES_PERSONA = ['#3D5A6C', '#A34E6B', '#5E7A52', '#9A7A3F'];
 /* Semilla de las listas, solo para un libro vacío. En cuanto hay algo escrito,
    manda la hoja. */
 const PERSONAS_SEMILLA = ['Gonzalo', 'Camila'];
-const CUENTAS_SEMILLA = ['Cuenta Corriente', 'Tarjeta Credito', 'Tarjeta Debito', 'Efectivo'];
+const CUENTAS_SEMILLA = ['Tarjeta de Débito', 'Tarjeta de Crédito', 'Efectivo', 'Ahorro'];
 /* Cuáles de esas cuentas aplazan el cargo al mes que las factura. */
-const CREDITO_SEMILLA = ['Tarjeta Credito'];
+const CREDITO_SEMILLA = ['Tarjeta de Crédito'];
 /* Y con qué día, hasta que cada persona ponga el suyo en Listas!C. */
 const DIA_COBRO_SEMILLA = 5;
 const CATEGORIAS_SEMILLA = [
@@ -168,8 +168,8 @@ function instalar() {
   const movimientos = leerMovimientosParaMigrar(libro);
   const fijos = leerFijosParaMigrar(libro);
   const listas = leerListasExistentes(libro);
-  const metas = leerTablaExistente(libro, HOJA_METAS, 8);
-  const cierres = leerTablaExistente(libro, HOJA_CIERRES, 8);
+  const metas = leerTablaExistente(libro, HOJA_METAS, 8, TOPE_METAS);
+  const cierres = leerTablaExistente(libro, HOJA_CIERRES, 8, TOPE_CIERRES);
   const reparto = leerTablaExistente(libro, HOJA_REPARTO, 6);
 
   const config = leerConfigActual(libro);
@@ -672,11 +672,15 @@ function leerListasExistentes(libro) {
       }
     });
 
-    /* Un libro viejo no sabía de tarjetas de crédito. Se le da la de la
-       semilla si la tiene, que es lo que instalar() haría con un libro nuevo;
-       sin esto, migrar dejaba a todo el mundo sin la regla de la tarjeta. */
+    /* Un libro viejo no sabía de tarjetas de crédito. Sin esto, migrar dejaba a
+       todo el mundo sin la regla de la tarjeta.
+
+       Se busca por la palabra y no contra una lista literal: los libros de
+       antes escribían «Tarjeta Credito» sin tilde, y comparar nombre a nombre
+       con la semilla —que sí la lleva— no casaba con ninguno. La cuenta se
+       llame como se llame, si dice «crédito» es la que aplaza. */
     if (col.credito === -1 && vacio.cuentas.length) {
-      vacio.credito = CREDITO_SEMILLA.filter(c => vacio.cuentas.indexOf(c) !== -1);
+      vacio.credito = vacio.cuentas.filter(c => sinTildes(c).indexOf('credito') !== -1);
     }
 
     /* Y la reparación del destrozo que ya está escrito. Leer Listas por
@@ -722,10 +726,28 @@ function leerListasExistentes(libro) {
 }
 
 /** Las filas de una hoja del formato nuevo, para volver a escribirlas igual. */
-function leerTablaExistente(libro, nombre, ancho) {
+/**
+ * Las filas de datos de una tabla, sin lo que haya escrito debajo.
+ *
+ * `cuantas` es el tope de la tabla y no es opcional por gusto: Metas y Cierres
+ * llevan debajo de sus datos filas de resumen —«Total» en las dos, y «SIN
+ * ASIGNAR» en Metas— y `getLastRow()` llega hasta ellas. Sin el tope, esas
+ * filas entraban como datos y la siguiente instalación las reescribía arriba
+ * convertidas en metas y en meses cerrados de verdad. Y crecía cada vez, porque
+ * entonces «Total» estaba en la fila de datos y también en la de resumen.
+ *
+ * Lo peor era el nombre: SIN ASIGNAR ya significa algo en la app —el ahorro
+ * cerrado que todavía no tiene meta— y pasaba a existir además como meta.
+ *
+ * Reparto no lo necesita: no tiene fila de resumen y su largo no está acotado.
+ */
+function leerTablaExistente(libro, nombre, ancho, cuantas) {
   const hoja = libro.getSheetByName(nombre);
   if (!hoja || hoja.getLastRow() < FILA_DATOS) return [];
-  return hoja.getRange(FILA_DATOS, 1, hoja.getLastRow() - FILA_CABECERA, ancho)
+  const hasta = hoja.getLastRow() - FILA_CABECERA;
+  const filas = cuantas ? Math.min(cuantas, hasta) : hasta;
+  if (filas < 1) return [];
+  return hoja.getRange(FILA_DATOS, 1, filas, ancho)
     .getValues()
     .filter(f => f[0] !== '' && f[0] !== null);
 }
@@ -761,6 +783,8 @@ function escribirListas(libro, listas) {
       c ? apagadasCat.indexOf(c.nombre) === -1 : ''
     ]);
   }
+  // Los tres nombres los teclea una persona: texto plano antes de escribirlos.
+  columnasDeTexto(hoja, ['A', 'D', 'G']);
   hoja.getRange(FILA_DATOS, 1, filas.length, 10).setValues(filas);
   // Casillas de verdad: «es crédito» se marca con el dedo desde la hoja igual
   // que desde la app, y una casilla no se puede escribir mal.
@@ -863,6 +887,10 @@ function escribirMovimientos(libro, movimientos, categorias) {
      leerlo vuelve "Sat Aug 01 2026 00:00:00 GMT+0200" y ningún SUMIFS casa con
      él. Es la misma trampa que ya costó un mes cerrado llamado "Undefined". */
   formatoSeguro(hoja.getRange('I:I'), '@');
+  /* Y las columnas donde escribe una persona, por la otra mitad de la misma
+     trampa: un texto que empieza por «=» lo interpreta Sheets como fórmula, lo
+     calcula, y lo que se lee de vuelta ya no es lo que se tecleó. */
+  columnasDeTexto(hoja, ['C', 'D', 'F', 'G']);
 
   if (movimientos.length) {
     const filas = movimientos.map(m => {
@@ -1065,6 +1093,8 @@ function escribirMetas(libro, metas) {
         'MIN(1' + s + '$C' + f + '/$B' + f + '))'
     ]);
   }
+  // El nombre de la meta lo escribe una persona, y por él se busca lo repartido.
+  columnasDeTexto(hoja, ['A']);
   hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).setValues(datos.map(d => [d[0], d[1]]));
   hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).setValues(datos.map(d => [d[2], d[3], d[4]]));
   hoja.getRange(FILA_DATOS, 3, TOPE_METAS, 3).setFormulas(formulas);
@@ -1741,6 +1771,14 @@ function escribirFilaMovimiento(m) {
      hoja, pero quien decide es el backend: es el único sitio donde el cálculo
      es el mismo para los dos teléfonos. Un ingreso es la excepción —el «se usa
      en» lo eligió un dedo, no una regla—, y seUsaEn() ya lo respeta. */
+  /* Texto plano en las columnas que teclea una persona, y ANTES de escribir:
+     un «=» delante convierte lo que sea en fórmula, Sheets la calcula, y lo que
+     se lee de vuelta ya no es lo que se anotó. Después de appendRow llega
+     tarde: para entonces el texto ya se perdió. */
+  const destino = hoja.getLastRow() + 1;
+  formatoSeguro(hoja.getRange(destino, 3, 1, 2), '@');   // categoría, descripción
+  formatoSeguro(hoja.getRange(destino, 6, 1, 2), '@');   // cuenta, persona
+
   hoja.appendRow([
     fechaDesdeISO(m.fecha),
     m.tipo, m.categoria, m.descripcion || '',
@@ -1791,8 +1829,14 @@ function editarMovimiento(datos) {
 
 function bajaMovimiento(datos) {
   const fila = buscarFilaPorUuid(HOJA_MOVIMIENTOS, 11, datos.objetivo);
-  if (fila) SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_MOVIMIENTOS).deleteRow(fila);
-  return { ok: true, escritos: fila ? 1 : 0 };
+  /* Un `ok` a secas cuando no se encontró la fila hace que la app saque el
+     registro de la cola y dé el borrado por hecho: un borrado que no ocurrió
+     queda igual que uno que sí, y el movimiento se queda en la hoja sin que
+     nadie se entere. El `ok` se mantiene —reintentar no va a encontrar lo que
+     no está— pero con el aviso, como ya hacen editarMovimiento y marcarCargo. */
+  if (!fila) return { ok: true, escritos: 0, aviso: 'No se encontró el movimiento' };
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_MOVIMIENTOS).deleteRow(fila);
+  return { ok: true, escritos: 1 };
 }
 
 /**
@@ -1814,6 +1858,11 @@ function guardarFijo(datos) {
   const anterior = fila <= hoja.getLastRow() ? hoja.getRange(fila, 15).getValue() : '';
   const ultimo = anterior instanceof Date ? anterior : (f.ultimo ? fechaDesdeISO(f.ultimo) : '');
 
+  /* Concepto, cuenta y persona los teclea alguien, así que van en texto plano
+     antes de escribirlos: un «=» delante los convertiría en fórmula. */
+  formatoSeguro(hoja.getRange(fila, 3), '@');
+  formatoSeguro(hoja.getRange(fila, 9, 1, 2), '@');
+
   hoja.getRange(fila, 1, 1, 15).setValues([[
     f.uuid, f.tipo, f.concepto, Number(f.importe), Number(f.dia), Number(f.cada),
     Number(f.cuotas) || '', Number(f.restantes) || '',
@@ -1829,8 +1878,10 @@ function guardarFijo(datos) {
 
 function bajaFijo(datos) {
   const fila = buscarFilaPorUuid(HOJA_FIJOS, 1, datos.objetivo);
-  if (fila) SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_FIJOS).deleteRow(fila);
-  return { ok: true, escritos: fila ? 1 : 0 };
+  // Lo mismo que en bajaMovimiento: callar un borrado que no ocurrió sale caro.
+  if (!fila) return { ok: true, escritos: 0, aviso: 'No se encontró el fijo' };
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_FIJOS).deleteRow(fila);
+  return { ok: true, escritos: 1 };
 }
 
 /**
@@ -2036,6 +2087,11 @@ function guardarMetas(metas) {
     nombres.push([m ? (m.nombre || '') : '', m ? Number(m.objetivo) || 0 : '']);
     cola.push(m ? [i + 1, m.activa !== false, m.notas || ''] : ['', '', '']);
   }
+  /* El nombre en texto plano, y antes de escribirlo. Una meta llamada «=A1» se
+     guardaba como fórmula, Sheets la calculaba, y volvía llamándose otra cosa:
+     lo repartido a una meta se busca por su nombre, así que el dinero se
+     quedaba huérfano sin que nada avisara. */
+  columnasDeTexto(hoja, ['A']);
   hoja.getRange(FILA_DATOS, 1, TOPE_METAS, 2).setValues(nombres);
   hoja.getRange(FILA_DATOS, 6, TOPE_METAS, 3).setValues(cola);
 
@@ -2417,6 +2473,33 @@ function ponerNombre(libro, nombre, rango) {
  * siguiente llamada que fuerce el envío —en su día, el getRange() del gráfico—
  * y ni el try lo atrapa ni el rastro de pila señala al culpable.
  */
+/**
+ * Deja en texto plano las columnas donde escribe una persona.
+ *
+ * Un nombre que empieza por «=» es un nombre —«=A1» como meta salió del
+ * teléfono de Gonzalo— pero Sheets ve el igual, lo interpreta y lo calcula: al
+ * leerlo de vuelta ya no está lo que se escribió. La única forma de guardarlo
+ * tal cual es que la celda sea texto ANTES de la escritura.
+ *
+ * Duele porque lo repartido a una meta se busca por su nombre, así que un
+ * nombre que cambia solo desconecta el dinero de su meta. Y no salta nada.
+ */
+/**
+ * En minúsculas y sin tildes, para comparar nombres escritos por gente.
+ *
+ * «Tarjeta Credito» y «Tarjeta de Crédito» son la misma tarjeta para quien la
+ * usa, y los libros viejos la escribían sin tilde.
+ */
+function sinTildes(texto) {
+  return String(texto || '').toLowerCase()
+    .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i')
+    .replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u');
+}
+
+function columnasDeTexto(hoja, letras) {
+  letras.forEach(letra => formatoSeguro(hoja.getRange(letra + ':' + letra), '@'));
+}
+
 function formatoSeguro(rango, formato) {
   try {
     rango.setNumberFormat(formato);

@@ -219,7 +219,7 @@ const NUCLEO = (() => {
     try {
       ajustes = await leerAjustes();
     } catch (error) {
-      return { enviados: 0, motivo: String(error.message || error) };
+      return { enviados: 0, motivo: motivoEnClaro(error) };
     }
     try {
       await enviar(suyos.map(r => r.fila), ajustes, suyos[0].accion);
@@ -227,7 +227,7 @@ const NUCLEO = (() => {
       return { enviados: suyos.length, motivo: '' };
     } catch (error) {
       await posponer(suyos, error);
-      return { enviados: 0, motivo: String(error.message || error) };
+      return { enviados: 0, motivo: motivoEnClaro(error) };
     }
   }
 
@@ -294,6 +294,28 @@ const NUCLEO = (() => {
     return datos;
   }
 
+  /**
+   * El motivo de un fallo, en algo que se pueda leer.
+   *
+   * Cuando la petición no llega a salir, `fetch` lanza «Failed to fetch», y eso
+   * es lo que acababa impreso en Ajustes → Pendientes: en inglés y sin decir
+   * nada. Distinguir «no hay cobertura» de «la hoja ha contestado que no» es la
+   * mitad del valor de esa pantalla —la primera se arregla sola y la segunda
+   * casi nunca—, así que el mensaje tiene que decirlo.
+   *
+   * Un fallo del servidor se deja tal cual: ese texto lo ha escrito el backend
+   * para que alguien lo lea.
+   */
+  function motivoEnClaro(error) {
+    if (error && error.delServidor) return String(error.message || error);
+    const texto = String((error && error.message) || error || '');
+    /* Cada navegador lo dice a su manera: Chrome «Failed to fetch», Firefox
+       «NetworkError when attempting to fetch resource», Safari «Load failed». */
+    return /failed to fetch|networkerror|load failed|network request failed/i.test(texto)
+      ? 'Sin conexión'
+      : texto;
+  }
+
   /* ------------------------------------------------------------ vaciado */
 
   /**
@@ -347,7 +369,7 @@ const NUCLEO = (() => {
         enviados += registrosDelGrupo.length;
       } catch (error) {
         fallidos += registrosDelGrupo.length;
-        motivo = String(error.message || error);
+        motivo = motivoEnClaro(error);
         await posponer(registrosDelGrupo, error);
       }
     }
@@ -364,7 +386,7 @@ const NUCLEO = (() => {
       const espera = Math.min(MS_DESHACER * Math.pow(2, intentos), MAX_ESPERA);
       return {
         ...r, intentos,
-        ultimoError: String(error.message || error),
+        ultimoError: motivoEnClaro(error),
         // Cuándo se intentó, no cuándo toca el siguiente: es lo que hay que
         // poder leer en la pantalla de pendientes.
         ultimoIntento: ahora,

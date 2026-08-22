@@ -175,7 +175,9 @@ cerrar. Cerrar sin ingresos.
 
 Contra la hoja de verdad, con un S24 conducido por adb + CDP.
 
-**Un nombre que empieza por `=` se evalúa como fórmula.** Se guardó una meta
+~~**Un nombre que empieza por `=` se evalúa como fórmula.**~~ Arreglado: texto
+plano en las columnas que teclea una persona, y antes de escribirlas. Lo vigila
+`pruebas/texto-que-empieza-por-igual.mjs`. Se guardó una meta
 llamada `=A1` y la hoja la devolvió llamada «Metas de ahorro», que es lo que hay
 en la celda A1 de esa hoja. El backend escribe con `setValues` y `appendRow`, y
 las dos interpretan fórmulas.
@@ -191,7 +193,9 @@ Lo demás aguantó: `+1`, `Cena; bebida` —el `;` que usa `sep()`—, `Café �
 120 caracteres vuelven intactos. Los espacios de los extremos no se recortan,
 que es menor pero está.
 
-**Una baja que no encuentra su fila contesta que sí.**
+~~**Una baja que no encuentra su fila contesta que sí.**~~ Arreglado: las dos
+bajas devuelven ya el mismo aviso que `editarMovimiento` y `marcarCargo`. Lo
+vigila `pruebas/la-baja-que-no-encuentra.mjs`.
 
 ```js
 function bajaMovimiento(datos) {                                   // :1792
@@ -228,7 +232,12 @@ el día del corte ya cae en el siguiente, y el débito no aplaza nunca.
 Todas las pantallas, con datos sembrados en la hoja de verdad y el S24 conducido
 por adb + CDP. Lo que sigue es lo que salió mal; lo que no está aquí, funcionó.
 
-### No se puede anotar ningún ingreso
+### ~~No se puede anotar ningún ingreso~~ · arreglado
+
+Cerrado: Ajustes → Categorías tiene ahora un cajetín gasto/ingreso, y con él ya
+se puede crear una categoría de ingreso desde la app. Lo vigila
+`pruebas/categorias-de-ingreso.mjs`.
+
 
 El más grave, y son tres piezas que se muerden la cola:
 
@@ -244,27 +253,42 @@ Así que en un libro sin categorías de ingreso —el que deja `instalar()`— l
 ingresos son imposibles desde la app. Y los ingresos son de donde sale el techo
 del mes, o sea todo el cálculo. Solo se ve entrando a Ajustes → Pendientes.
 
-### Convertir un movimiento en fijo le cambia la cuenta y la persona
+### Convertir un movimiento en fijo le cambia la cuenta y la persona · **sin arreglar, a propósito**
+
+Gonzalo prefiere que el fijo use los ajustes del teléfono que lo crea.
+
 
 Un gasto de Camila en Efectivo se convirtió en un fijo de Gonzalo en Tarjeta
 Débito. Concepto, importe y día sí se respetan; cuenta y persona se toman de los
 ajustes de *este teléfono*. Si la cuenta que pone es de crédito y la original no
 lo era, además cambia el mes al que se imputa cada cargo.
 
-### El motivo que se enseña sin cobertura es «Failed to fetch»
+### ~~El motivo que se enseña sin cobertura es «Failed to fetch»~~ · arreglado
+
+Ahora dice «Sin conexión». `motivoEnClaro` en `nucleo.js`.
+
 
 En Ajustes → Pendientes, un apunte sin cobertura dice «Último intento hoy 16:15
 · Failed to fetch». El comentario de `filaCola` dice que distinguir «sin
 conexión» de «la hoja no respondió» es la mitad del valor de esa pantalla, y ahí
 se enseña el error crudo del navegador, en inglés.
 
-### «Día 22 de 31» en un mes que no es el de hoy
+### ~~«Día 22 de 31» en un mes que no es el de hoy~~ · arreglado
+
+`comoVaElMes` en `mes.js`: el contador solo sale en el mes en curso, los
+pasados dicen «terminó» y los futuros «aún no empieza». Lo vigila
+`meses-navegables.mjs`.
+
 
 El contador de la cabecera de Mes es siempre el día de hoy. Navegando a julio
 —que terminó— sigue diciendo «día 22 de 31», y en septiembre «día 22 de 30»
 antes de que empiece. Un mes cerrado sí lo hace bien: pone «cerrado».
 
-### La semilla de config.js no se parece al libro
+### ~~La semilla de config.js no se parece al libro~~ · arreglado
+
+`CONFIG.CUENTAS` y `CUENTAS_SEMILLA` dicen ya lo mismo, con sus tildes y sin
+inventarse ninguna cuenta.
+
 
 `CONFIG.CUENTAS` son `Cuenta Corriente, Tarjeta Credito, Tarjeta Debito,
 Efectivo`: una que no existe, dos sin tilde y falta `Ahorro`. Esa semilla es lo
@@ -272,7 +296,8 @@ que se usa antes de la primera lectura de la hoja, y **de ahí salió la «Cuent
 Corriente» huérfana** que costó la mañana. `sanearAjustes` ya lo corrige en la
 primera sincronización, pero la semilla sigue mintiendo.
 
-### Cosas menores, por si alguna vez toca
+### Cosas menores · arregladas
+
 
 - En Historial, la cabecera de un día que solo tiene ingresos dice `$0`.
 - Editando el importe, el cajetín de cuenta marcado es el del teléfono y no el
@@ -372,8 +397,10 @@ lo que convierte un fallo en dos fallos menos.
   Hacerlo fallar como Sheets es la mitad del trabajo, y es la mitad que importa:
   sin eso, la prueba pasa con y sin arreglo.
 
-- **`instalar()` convierte sus propias filas de resumen en datos**, y esto ya
-  escribió basura en el libro de verdad. `escribirMetas` deja debajo de las
+- ~~**`instalar()` convierte sus propias filas de resumen en datos**~~.
+  Arreglado: `leerTablaExistente` recibe el tope de la tabla y ya no lee las
+  filas de resumen. Lo vigila `pruebas/instalar-dos-veces.mjs`. Lo que sigue
+  explica de qué iba, porque `escribirMetas` deja debajo de las
   metas una fila «Total» y otra «SIN ASIGNAR»; `escribirCierres` deja otra
   «Total». Son resumen. Pero la lectura previa es
 

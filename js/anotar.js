@@ -211,7 +211,13 @@ const ANOTAR = (() => {
        cambiar tocando el pie, que rotaba a la siguiente: para llegar a la
        tercera había que tocar tres veces y leer el texto entre toque y toque.
        Con cuatro cuentas eso es peor que enseñarlas. */
-    const cuentaActual = ajustes.cuenta || datos.cuentas[0];
+    /* Editando, la cuenta que se marca es la del movimiento o el fijo que se
+       está tocando, no la de siempre de este teléfono. Marcar la del teléfono
+       hacía creer que al guardar la cuenta iba a cambiar —no cambiaba— y, con
+       un gasto en efectivo, no había ningún cajetín que dijera «efectivo». */
+    const editando = modo === 'edita-mov' || modo === 'edita-fijo';
+    const cuentaActual = (editando && objetivo && objetivo.cuenta)
+      || ajustes.cuenta || datos.cuentas[0];
     const chipsCuenta = conChips
       ? h('div.margen', { estilo: { padding: '14px 26px 0' } }, [
           h('div.etiqueta.mini', { estilo: { paddingBottom: '7px' } },

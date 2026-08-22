@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las dieciocho, cada una con su servidor
+sh pruebas/todas.sh                  # las veintidós, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -33,6 +33,10 @@ node pruebas/libro-sin-migrar.mjs    # las hojas se leen por su cabecera
 node pruebas/instalar-el-libro.mjs   # instalar aguanta el libro vacío
 node pruebas/listas-que-crecen.mjs   # un nombre que no estaba en Listas se apunta
 node pruebas/ajuste-huerfano.mjs     # y un ajuste que ya no señala a nada, se cae
+node pruebas/instalar-dos-veces.mjs  # instalar() dos veces deja el libro igual
+node pruebas/texto-que-empieza-por-igual.mjs   # un nombre con «=» es un nombre
+node pruebas/la-baja-que-no-encuentra.mjs      # una baja que no borra lo dice
+node pruebas/categorias-de-ingreso.mjs         # sin ellas no se puede anotar un ingreso
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión

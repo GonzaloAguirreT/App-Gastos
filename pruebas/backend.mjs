@@ -59,11 +59,36 @@ export function hoja(filas) {
     }
     return salida;
   };
-  const escribir = (fila, col, valores) => {
+  /* El formato de cada celda, solo para saber cuáles son texto plano. */
+  const formatos = new Map();
+  const marca = (f, c) => f + ':' + c;
+
+  /**
+   * Escribe como escribe Sheets: lo que empieza por «=» es una fórmula.
+   *
+   * `comoFormula` distingue setValues de setFormulas. En un setValues, un texto
+   * que empieza por «=» NO se guarda: Sheets lo interpreta, lo calcula, y al
+   * leerlo de vuelta sale el resultado. Salvo que la celda tenga formato texto
+   * («@»), que es la única manera de guardar ese texto tal cual.
+   *
+   * Sin esto el libro de mentira era más tolerante que el de verdad justo en
+   * esto: guardaba «=A1» y lo devolvía igual, mientras la hoja real devolvía el
+   * contenido de A1. Una meta llamada «=A1» volvió llamándose «Metas de
+   * ahorro», y lo repartido a una meta se busca por su nombre.
+   *
+   * No se calcula nada: basta con que lo que vuelve no sea lo que se escribió.
+   */
+  const evaluada = '#FÓRMULA EVALUADA#';
+  const escribir = (fila, col, valores, comoFormula) => {
     valores.forEach((linea, i) => {
       const f = fila + i - 1;
       while (filas.length <= f) filas.push([]);
-      linea.forEach((v, j) => { filas[f][col + j - 1] = v; });
+      linea.forEach((v, j) => {
+        const c = col + j - 1;
+        const esFormula = typeof v === 'string' && v.charAt(0) === '=';
+        const texto = formatos.get(marca(f, c)) === '@';
+        filas[f][c] = (esFormula && !comoFormula && !texto) ? evaluada : v;
+      });
     });
   };
 
@@ -72,15 +97,79 @@ export function hoja(filas) {
     getValue: () => { const v = celda(fila, col); return v === undefined ? '' : v; },
     setValues: v => { escribir(fila, col, v); return rango(fila, col, nFilas, nCols); },
     setValue: v => { escribir(fila, col, [[v]]); return rango(fila, col, 1, 1); },
-    setFormulas: v => { escribir(fila, col, v); return rango(fila, col, nFilas, nCols); },
+    setFormulas: v => { escribir(fila, col, v, true); return rango(fila, col, nFilas, nCols); },
+    setFormula: v => { escribir(fila, col, [[v]], true); return rango(fila, col, 1, 1); },
+    /* Solo interesa cuáles quedan en texto plano: es lo que decide si un «=»
+       se guarda o se evalúa. */
+    setNumberFormat: f => {
+      for (let i = 0; i < nFilas; i++) {
+        for (let j = 0; j < nCols; j++) formatos.set(marca(fila + i - 1, col + j - 1), f);
+      }
+      return rango(fila, col, nFilas, nCols);
+    },
     clearContent: () => {
       escribir(fila, col, trozo(fila, col, nFilas, nCols).map(l => l.map(() => '')));
       return rango(fila, col, nFilas, nCols);
+    },
+
+    /* Buscar de verdad dentro del rango.
+
+       Sin esto, `encadenable` devolvía el propio proxy para createTextFinder y
+       para findNext, y un proxy nunca es null: TODA búsqueda por uuid
+       encontraba algo. Así que `if (!fila) return 'no lo encontré'` no se
+       ejecutaba jamás y las pruebas no podían ver la diferencia entre borrar
+       una fila y no borrar ninguna. */
+    createTextFinder: texto => {
+      const buscado = String(texto);
+      let donde = null;
+      for (let f = fila; f < fila + nFilas && !donde; f++) {
+        for (let c = col; c < col + nCols && !donde; c++) {
+          const v = celda(f, c);
+          if (v !== undefined && String(v) === buscado) donde = { f: f, c: c };
+        }
+      }
+      const encontrador = encadenable({
+        matchEntireCell: () => encontrador,
+        matchCase: () => encontrador,
+        findNext: () => donde
+          ? encadenable({ getRow: () => donde.f, getColumn: () => donde.c })
+          : null
+      });
+      return encontrador;
     }
   });
 
   const alto = () => filas.length;
   const ancho = () => filas.reduce((m, f) => Math.max(m, f.length), 0);
+
+  /* getRange también en notación A1, porque el código la usa: Config se lee
+     con getRange('B10:B12') y se escribe con getRange('B4').
+
+     Antes cualquier cadena devolvía la celda A1, y eso miente en las dos
+     direcciones: una lectura de tres filas devolvía una, y un setValue('B4')
+     escribía en el título de la hoja. Es justo la clase de mentira que hace
+     que una prueba pase con el código roto.
+
+     'B5:D' —una columna entera desde una fila— no casa y cae en A1 como antes.
+     Solo la usa formatoSeguro, que aquí no comprueba nada. */
+  const A1 = /^([A-Z]+)(\d*)(?::([A-Z]+)(\d*))?$/;
+  const columnaDe = letras =>
+    letras.split('').reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0);
+  /* Hasta dónde llega «C:C» o «A5:A». En Sheets es la hoja entera; aquí basta
+     con pasarse de lo que ninguna prueba va a escribir. */
+  const HASTA_EL_FINAL = 1000;
+
+  function rangoA1(texto) {
+    const m = A1.exec(String(texto).trim().toUpperCase().replace(/\$/g, ''));
+    if (!m) return rango(1, 1, 1, 1);
+    const c1 = columnaDe(m[1]);
+    const c2 = m[3] ? columnaDe(m[3]) : c1;
+    const f1 = m[2] ? Number(m[2]) : 1;
+    // Sin número al otro lado —«C:C», «A5:A»— el rango baja hasta el final.
+    const f2 = m[4] ? Number(m[4]) : (m[3] ? HASTA_EL_FINAL : (m[2] ? f1 : HASTA_EL_FINAL));
+    return rango(Math.min(f1, f2), Math.min(c1, c2),
+                 Math.abs(f2 - f1) + 1, Math.abs(c2 - c1) + 1);
+  }
 
   return encadenable({
     /* getRange en sus dos formas: por números y en A1.
@@ -91,13 +180,18 @@ export function hoja(filas) {
        tolerante que el de verdad y dejaba pasar justo el fallo que sale al
        instalar sobre un libro recién vaciado. */
     getRange: (a, b, c, d) => {
-      if (typeof a !== 'number') return rango(1, 1, 1, 1);
+      if (typeof a !== 'number') return rangoA1(a);
       const nFilas = c === undefined ? 1 : c;
       const nCols = d === undefined ? 1 : d;
       if (nFilas < 1) throw new Error('The number of rows in the range must be at least 1.');
       if (nCols < 1) throw new Error('The number of columns in the range must be at least 1.');
       return rango(a, b, nFilas, nCols);
     },
+    /* appendRow escribe en la primera fila libre, y pasa por las mismas reglas
+       que setValues: es como se escribe cada movimiento nuevo. Sin esto el
+       libro se quedaba sin la fila y una prueba sobre lo que se guarda no
+       comprobaba nada. */
+    appendRow: valores => { escribir(alto() + 1, 1, [valores]); return encadenable({}); },
     getLastRow: alto,
     getLastColumn: ancho,
     getMaxRows: () => Math.max(alto(), 1000),
