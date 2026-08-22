@@ -1668,6 +1668,10 @@ function altaMovimientos(movimientos) {
     if (problema) return { ok: false, error: problema };
   }
 
+  // Antes de escribir las filas: si una de ellas estrena cuenta o categoría, la
+  // hoja tiene que conocerla ya cuando se calcule su «se usa en».
+  apuntarNombresNuevos(movimientos);
+
   var escritos = 0, duplicados = 0;
   movimientos.forEach(m => {
     // Un UUID ya visto no es un error: es un reintento de algo guardado. La app
@@ -1679,6 +1683,53 @@ function altaMovimientos(movimientos) {
   });
 
   return { ok: true, escritos: escritos, duplicados: duplicados };
+}
+
+/**
+ * Apunta en Listas las cuentas y categorías que traiga un lote y no estuvieran.
+ *
+ * Un nombre que la hoja no conoce llega por dos caminos, y los dos son
+ * normales: alguien se inventa una cuenta al vuelo, o el ajuste de «la cuenta
+ * de siempre» de un teléfono se quedó apuntando a una que se quitó de Listas.
+ *
+ * Escribir ese nombre suelto —lo que se hacía antes— no da ningún error y sale
+ * caro. Una cuenta que no está en ninguna lista tampoco está en la de crédito,
+ * y `seUsaEn` pregunta justo por esa: sus compras se imputan al mes de la fecha
+ * en vez de al mes que las paga, que es la regla de la que cuelga todo el
+ * cálculo del mes. En la app, además, no se marcaba ningún cajetín, así que no
+ * había forma de ver qué se estaba guardando.
+ *
+ * Se compara sin distinguir mayúsculas, igual que hace la pantalla de Cuentas
+ * al añadir a mano: «efectivo» y «Efectivo» son la misma para quien los lee, y
+ * dejar las dos en la hoja parte los totales en dos sin avisar.
+ */
+function apuntarNombresNuevos(movimientos) {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const listas = leerListasExistentes(libro);
+  const igual = (a, b) =>
+    String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  var nuevos = false;
+
+  movimientos.forEach(m => {
+    const cuenta = String(m.cuenta || '').trim();
+    if (cuenta && !listas.cuentas.some(c => igual(c, cuenta))) {
+      listas.cuentas.push(cuenta);
+      nuevos = true;
+    }
+    const categoria = String(m.categoria || '').trim();
+    if (categoria && !listas.categorias.some(c => igual(c.nombre, categoria))) {
+      listas.categorias.push({
+        nombre: categoria,
+        tipo: m.tipo === 'Ingreso' ? 'Ingreso' : 'Gasto',
+        reparto: m.reparto === 'Común' ? 'Común' : 'Personal'
+      });
+      nuevos = true;
+    }
+  });
+
+  // Reescribir Listas es una vuelta entera al servicio de Sheets, y lo normal
+  // es que no haya nada nuevo que apuntar.
+  if (nuevos) escribirListas(libro, listas);
 }
 
 function escribirFilaMovimiento(m) {

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las dieciséis pruebas, cada una con el modo de servidor que necesita.
+# Las dieciocho pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -71,7 +71,12 @@ echo
 echo "════════ instalar-el-libro ════════"
 node pruebas/instalar-el-libro.mjs || { echo "!!! instalar-el-libro falló"; fallos=$((fallos + 1)); }
 
+echo
+echo "════════ listas-que-crecen ════════"
+node pruebas/listas-que-crecen.mjs || { echo "!!! listas-que-crecen falló"; fallos=$((fallos + 1)); }
+
 corre botones
+corre ajuste-huerfano
 corre cola-y-avisos --rechaza
 corre calendario-chileno
 corre mes-recien-empezado

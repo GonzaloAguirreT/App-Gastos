@@ -456,7 +456,13 @@ const ESTADO = (() => {
   async function iniciar() {
     ajustes = await NUCLEO.leerAjustes();
     const guardado = await NUCLEO.leerMes();
-    if (guardado && guardado.datos) datos = fusionar(guardado.datos);
+    if (guardado && guardado.datos) {
+      datos = fusionar(guardado.datos);
+      // La copia de IndexedDB vino de la hoja, así que sus listas mandan tanto
+      // como las de una lectura recién hecha: con la app abierta sin cobertura
+      // se sigue viendo marcada una cuenta que existe.
+      await sanearAjustes();
+    }
     await contarCola();
     emitir();
   }
@@ -489,6 +495,35 @@ const ESTADO = (() => {
     return salida;
   }
 
+  /**
+   * Devuelve a la realidad los ajustes que señalan a algo que ya no existe.
+   *
+   * La cuenta de siempre y quién anota aquí son de este teléfono, pero apuntan
+   * por nombre a cosas que viven en Listas, y esas se pueden quitar desde
+   * Ajustes o desde el otro teléfono. El nombre viejo no se queda vacío, así
+   * que el `|| datos.cuentas[0]` que usan las pantallas no lo sustituía por
+   * nada: en Anotar no salía marcado ningún cajetín, y el gasto llegaba a la
+   * hoja con una cuenta que no existía en ninguna lista. Sin ningún error, y
+   * con la peor consecuencia posible: una cuenta que no está en la lista
+   * tampoco está en la de crédito, así que sus compras se imputaban al mes de
+   * la fecha en vez de al mes que las paga.
+   *
+   * Un ajuste que ya no señala a nada se trata como si no estuviera.
+   *
+   * Se llama solo con datos venidos de la hoja. Con la semilla de config.js
+   * borraría un ajuste bueno por no aparecer en una lista de ejemplo.
+   */
+  function sanearAjustes() {
+    const cambios = {};
+    if (ajustes.cuenta && datos.cuentas.indexOf(ajustes.cuenta) === -1) {
+      cambios.cuenta = datos.cuentas[0];
+    }
+    if (ajustes.persona && !datos.personas.some(p => p.nombre === ajustes.persona)) {
+      cambios.persona = datos.personas[0].nombre;
+    }
+    return Object.keys(cambios).length ? guardarAjustes(cambios) : null;
+  }
+
   /** Trae el mes de la hoja. Si falla, se sigue con lo que había: la app tiene
    *  que servir sin cobertura, y quedarse en blanco por un fallo de red sería
    *  peor que enseñar los números de ayer. */
@@ -500,6 +535,7 @@ const ESTADO = (() => {
       const respuesta = await NUCLEO.consultarMes();
       datos = fusionar(respuesta.datos || respuesta);
       await NUCLEO.guardarMes(datos);
+      await sanearAjustes();
       enLinea = true;
       ultimoFallo = '';
       return true;
