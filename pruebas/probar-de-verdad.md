@@ -373,6 +373,30 @@ navegador.
 
 ## Lo que está abierto ahora mismo
 
+- **La fila «Total» de Cierres puede estar dejando de contar los meses nuevos.**
+  Sin comprobar: es un razonamiento, no una observación, y hace falta la hoja de
+  verdad para cerrarlo.
+
+  `escribirCierres` deja los datos en `FILA_DATOS..FILA_DATOS+TOPE_CIERRES-1` y
+  la fila de resumen dos por debajo, sumando `SUM(B5:B16)`. Pero `cerrarMes` no
+  escribe en un hueco: hace `insertRowBefore(FILA_DATOS)` para que el mes
+  recién cerrado quede arriba. Y cuando se inserta una fila JUSTO ANTES del
+  primer renglón de un rango, Sheets desplaza el rango en vez de estirarlo:
+  `SUM(B5:B16)` pasa a `SUM(B6:B17)` y la fila nueva se queda fuera. Si es así,
+  el Total de Cierres no incluye el mes más reciente, y con cada cierre se
+  queda una fila más atrás.
+
+  No lo nota nadie: la app no lee esa fila —`leerTablaExistente` solo trae las
+  de datos—, así que el número equivocado solo se ve mirando la hoja.
+
+  **Cómo comprobarlo**: cerrar un mes desde la app y mirar la fórmula de la
+  celda B de la fila «Total» en Cierres. Si dice `SUM(B6:B17)`, está confirmado.
+  El arnés no sirve: el libro de mentira de `backend.mjs` guarda las fórmulas
+  como texto y no desplaza rangos al insertar, así que diría que todo va bien.
+
+  Por lo mismo, `vestir-hoja.gs` viste esa fila por su posición de instalación,
+  que deja de ser la suya en cuanto se cierra el primer mes.
+
 - ~~**Cuatro apuntes sin enviar** en el teléfono de Gonzalo~~. Cerrado: al
   abrir la app con cobertura la cola se vació sola y no dejó ninguno. No hay
   registro de lo que eran, así que no se pudo diagnosticar más.

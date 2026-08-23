@@ -2257,11 +2257,20 @@ function recalcularSeUsaEn(libro, listas) {
  *     guardado. Con un peso en cualquiera de las dos columnas NO se toca y se
  *     avisa: puede ser una meta de verdad con un nombre desafortunado.
  *
- * Y no se borra ninguna fila con deleteRow. Las dos tablas tienen geometría
- * fija —diez metas, doce cierres, y una fila de resumen dos por debajo que suma
- * exactamente ese bloque—, así que quitar una fila encoge el bloque y deja el
- * SUM contando de menos, sin dar ningún error. Se reescribe el bloque entero
- * con los supervivientes arriba, que es lo que ya hace guardarMetas.
+ * Ninguna de las dos borra filas, y por motivos distintos.
+ *
+ * Metas tiene geometría fija: guardarMetas escribe siempre TOPE_METAS filas
+ * rellenando con vacíos, y dos por debajo están «Total» y «SIN ASIGNAR» sumando
+ * exactamente ese bloque. Quitar una fila lo encoge y deja el SUM contando de
+ * menos, sin dar ningún error. Por eso aquí basta con volver a llamarla.
+ *
+ * Cierres NO la tiene: cerrarMes hace insertRowBefore(FILA_DATOS) para que el
+ * mes recién cerrado quede arriba, y reabrirMes borra su fila, así que el bloque
+ * se mueve con cada cierre. Se reescribe la ventana FILA_DATOS..TOPE_CIERRES
+ * entera —supervivientes arriba, vacíos debajo— y no se toca ninguna fila: así
+ * las fórmulas por fila de las columnas 5, 6 y 7 siguen pegadas a la suya.
+ * Blanquear la cola no es opcional: escribir solo las filas vivas deja la última
+ * repetida, porque debajo se queda lo que había.
  */
 function limpiarFilasDeResumen() {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
