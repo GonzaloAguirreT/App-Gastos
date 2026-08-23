@@ -450,6 +450,19 @@ navegador.
   tiene meta— y ahora existe además como meta. `Reparto` se salva porque
   `escribirReparto` no escribe fila de resumen.
 
+  **Cerrado en las dos mitades.** La fábrica la cerró el tope de
+  `leerTablaExistente`; lo que ya estaba escrito lo quita
+  `limpiarFilasDeResumen()`, que se ejecuta a mano desde el editor y **no borra
+  filas**: reescribe el bloque entero con los supervivientes arriba, porque las
+  dos tablas tienen geometría fija y una fila de resumen que suma justo ese
+  bloque. Lo vigila `pruebas/limpiar-fantasmas.mjs`, y lo que esa prueba mide no
+  es que borre —eso es lo fácil— sino que **no se lleve nada más**: el libro de
+  pruebas trae fantasmas mezclados con metas y cierres de verdad, y una meta
+  llamada «Total» con dinero dentro que hay que respetar.
+
+  En el libro de Gonzalo habían llegado a cuatro metas y dos cierres, todos a
+  $0: se quitaron el 2026-08-23.
+
   El arreglo previsible es leer solo las filas de datos —pasarle a
   `leerTablaExistente` el tope de la tabla, `TOPE_METAS` y `TOPE_CIERRES`— en
   vez de llegar hasta `getLastRow()`. La prueba se puede escribir en Node tal
