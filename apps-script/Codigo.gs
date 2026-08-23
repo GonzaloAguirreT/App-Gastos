@@ -2235,6 +2235,83 @@ function recalcularSeUsaEn(libro, listas) {
   return { cambios: cambios, intocables: intocables };
 }
 
+/**
+ * Borra de Metas y Cierres las filas de resumen que se colaron como datos.
+ *
+ * Se ejecuta A MANO desde el editor, igual que vaciar() y recalcularSeUsaEn():
+ * ninguna acción del backend llega hasta aquí.
+ *
+ * De dónde salen esas filas está contado en leerTablaExistente. Hasta que esa
+ * lectura llevó tope, instalar() se tragaba las filas «Total» y «SIN ASIGNAR»
+ * que viven debajo de cada tabla y las reescribía arriba convertidas en metas y
+ * en meses cerrados de verdad. Y crecía cada vez. El tope cerró la fábrica,
+ * pero lo que ya se escribió sigue en el libro y se ve en Ahorro: metas sin
+ * nombre a $0 y meses cerrados sin mes.
+ *
+ * Se reconocen por lo que son y no por cómo se llaman:
+ *
+ *   · un cierre de verdad SIEMPRE tiene un mes yyyy-mm —lo valida cerrarMes—,
+ *     así que una fila cuyo mes no lo sea no es un cierre;
+ *   · una meta fantasma se llama «Total» o «SIN ASIGNAR» —los dos rótulos
+ *     literales que escribe escribirMetas— y no tiene ni objetivo ni nada
+ *     guardado. Con un peso en cualquiera de las dos columnas NO se toca y se
+ *     avisa: puede ser una meta de verdad con un nombre desafortunado.
+ *
+ * Y no se borra ninguna fila con deleteRow. Las dos tablas tienen geometría
+ * fija —diez metas, doce cierres, y una fila de resumen dos por debajo que suma
+ * exactamente ese bloque—, así que quitar una fila encoge el bloque y deja el
+ * SUM contando de menos, sin dar ningún error. Se reescribe el bloque entero
+ * con los supervivientes arriba, que es lo que ya hace guardarMetas.
+ */
+function limpiarFilasDeResumen() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const esRotulo = n => n === 'Total' || n === 'SIN ASIGNAR';
+  const quitados = { metas: [], cierres: [], respetados: [] };
+
+  /* --- Metas: guardarMetas ya reescribe el bloque entero y respeta las
+         fórmulas, así que basta con darle la lista sin los rótulos. --- */
+  const buenas = [];
+  leerTablaExistente(libro, HOJA_METAS, 8, TOPE_METAS).forEach(f => {
+    const nombre = String(f[0]).trim();
+    const conNumeros = (Number(f[1]) || 0) !== 0 || (Number(f[2]) || 0) !== 0;
+    if (esRotulo(nombre) && !conNumeros) { quitados.metas.push(nombre); return; }
+    if (esRotulo(nombre)) quitados.respetados.push(nombre + ' (tiene números)');
+    buenas.push({ nombre: nombre, objetivo: f[1], activa: f[6] !== false, notas: f[7] });
+  });
+  if (quitados.metas.length) guardarMetas(buenas);
+
+  /* --- Cierres: aquí hay que reescribir el bloque a mano. Las columnas 5, 6 y
+         7 son fórmulas por fila y se dejan en paz: cada una se refiere a SU
+         fila y sigue valiendo cuando debajo queda vacío. --- */
+  const hoja = libro.getSheetByName(HOJA_CIERRES);
+  if (hoja) {
+    const bloque = hoja.getRange(FILA_DATOS, 1, TOPE_CIERRES, 8).getValues();
+    const conMes = f => f[0] !== '' && f[0] !== null;
+    const valido = f => /^\d{4}-\d{2}$/.test(mesDeCelda(f[0]));
+    bloque.forEach(f => { if (conMes(f) && !valido(f)) quitados.cierres.push(String(f[0])); });
+
+    if (quitados.cierres.length) {
+      const vivos = bloque.filter(f => conMes(f) && valido(f));
+      const filas = [], sellos = [];
+      for (var i = 0; i < TOPE_CIERRES; i++) {
+        const c = vivos[i];
+        filas.push(c ? [c[0], c[1], c[2], c[3]] : ['', '', '', '']);
+        sellos.push([c ? c[7] : '']);
+      }
+      hoja.getRange(FILA_DATOS, 1, TOPE_CIERRES, 4).setValues(filas);
+      hoja.getRange(FILA_DATOS, 8, TOPE_CIERRES, 1).setValues(sellos);
+    }
+  }
+
+  /* console.log y no Ui.alert: esto se ejecuta desde el editor con la hoja
+     cerrada, y un diálogo ahí no lo cierra nadie. */
+  console.log('limpiarFilasDeResumen · metas: '
+    + (quitados.metas.join(', ') || 'ninguna')
+    + ' · cierres: ' + (quitados.cierres.join(', ') || 'ninguno')
+    + (quitados.respetados.length ? ' · respetados: ' + quitados.respetados.join(', ') : ''));
+  return quitados;
+}
+
 /* ========================================================================
    Disparador diario
    ======================================================================== */

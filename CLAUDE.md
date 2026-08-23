@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las veinticuatro, cada una con su servidor
+sh pruebas/todas.sh                  # las veinticinco, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -39,6 +39,7 @@ node pruebas/la-baja-que-no-encuentra.mjs      # una baja que no borra lo dice
 node pruebas/categorias-de-ingreso.mjs         # sin ellas no se puede anotar un ingreso
 node pruebas/corte-que-no-reescribe.mjs        # cambiar el corte no reescribe el pasado
 node pruebas/editar-no-refactura.mjs           # ni corregir una errata cambia de factura
+node pruebas/limpiar-fantasmas.mjs             # quitar los fantasmas no se lleva lo bueno
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
@@ -156,6 +157,14 @@ Reglas del transporte, todas por un motivo: `Content-Type: text/plain` (Apps
 Script no contesta al preflight de CORS), **las lecturas también van por POST**
 (el `doGet` redirige a `script.googleusercontent.com` y ese salto se lleva las
 cabeceras CORS), y deduplicación por `uuid` contra la hoja `_uuids`.
+
+`limpiarFilasDeResumen()` también se ejecuta a mano. Quita de Metas y Cierres
+las filas de resumen —«Total», «SIN ASIGNAR»— que `instalar()` se tragó como
+datos antes de que `leerTablaExistente` llevara tope. Desde la app no hay forma:
+`reabrirMes` exige un mes `yyyy-mm` y «Total» no lo es. Reescribe el bloque
+entero en vez de borrar filas, porque las dos tablas tienen geometría fija y una
+fila de resumen que suma justo ese bloque: encogerlo deja el `SUM` contando de
+menos **sin dar ningún error**. Lo vigila `pruebas/limpiar-fantasmas.mjs`.
 
 `vaciar()` se ejecuta a mano desde el editor, igual que `instalar()`, y ninguna
 acción del backend llega hasta ella: nada que se pueda tocar desde el teléfono
