@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las veinticinco pruebas, cada una con el modo de servidor que necesita.
+# Las veintisiete pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -95,6 +95,10 @@ echo
 echo "════════ limpiar-fantasmas ════════"
 node pruebas/limpiar-fantasmas.mjs || { echo "!!! limpiar-fantasmas falló"; fallos=$((fallos + 1)); }
 
+echo
+echo "════════ listas-sin-ventana ════════"
+node pruebas/listas-sin-ventana.mjs || { echo "!!! listas-sin-ventana falló"; fallos=$((fallos + 1)); }
+
 corre botones
 corre ajuste-huerfano
 corre categorias-de-ingreso
@@ -109,6 +113,8 @@ corre meses-navegables --mes-viejo
 corre mes-como-fecha --mes-como-fecha
 corre escribir-meta
 corre no-saltar-arriba
+corre no-anotar-dos-veces
+corre lectura-rota --listas-rotas
 corre vaciar-telefono --rechaza
 
 echo

@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las veinticinco, cada una con su servidor
+sh pruebas/todas.sh                  # las veintisiete, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -40,8 +40,11 @@ node pruebas/categorias-de-ingreso.mjs         # sin ellas no se puede anotar un
 node pruebas/corte-que-no-reescribe.mjs        # cambiar el corte no reescribe el pasado
 node pruebas/editar-no-refactura.mjs           # ni corregir una errata cambia de factura
 node pruebas/limpiar-fantasmas.mjs             # quitar los fantasmas no se lleva lo bueno
+node pruebas/listas-sin-ventana.mjs            # escribir Listas no deja el libro sin ellas
+node pruebas/no-anotar-dos-veces.mjs           # dos toques en Guardar anotan una vez
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
+node pruebas/lectura-rota.mjs               # con --listas-rotas: una lectura sin listas
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
 ```
 
@@ -123,6 +126,14 @@ servidor falso tuvo que cambiar con ellas.
 **El techo del mes es lo que entra**, no un presupuesto escrito a mano. `Config!B4`
 es el *ahorro esperado*: el colchón que se aparta antes de repartir, del que sale
 el tope proporcional de cada persona.
+
+**Un botón que escribe necesita cerrojo.** Dos toques seguidos en Guardar
+anotaban el gasto dos veces: cada toque hace su propio uuid, así que la
+deduplicación del backend los ve como dos apuntes distintos —y hace bien: dos
+cafés del mismo importe el mismo día son dos cafés—. Quien sabe que es el mismo
+toque repetido es la pantalla, y `confirmar` lo para con `guardando`. Importa más
+de lo que parece porque el botón queda debajo del teclado del sistema en cuanto
+hay un campo con el foco. Lo vigila `pruebas/no-anotar-dos-veces.mjs`.
 
 ## La cola
 
@@ -209,6 +220,22 @@ los nombres de verdad. Los lectores preguntan a la cabecera (`columnasPor`, y
 `columnasDeListas` para Listas, que tiene dos columnas ACTIVA). Lo vigila
 `pruebas/libro-sin-migrar.mjs`, que ejecuta el backend en Node contra libros de
 las dos formas.
+
+**Leer no espera a escribir, y por ahí se perdían las listas.** `doPost`
+contesta a `mes` **antes** de tomar el cerrojo, a propósito: leer es lo más
+frecuente y no tiene por qué hacer cola. El precio es que una lectura puede caer
+en mitad de una escritura. Con `escribirListas` usando `hojaLimpia` —que borra la
+hoja y la recrea— había un instante sin hoja Listas, y la lectura volvía con las
+listas vacías o, peor, con la semilla que `leerListasExistentes` pone cuando no
+encuentra nada. De veinte lecturas disparadas durante cuatro escrituras: ocho
+vacías, siete con la semilla, cinco buenas. La app se creía esa lectura y
+escribía la semilla encima de las listas de verdad al siguiente ajuste.
+
+Por eso **`escribirListas` escribe encima de la hoja que ya está** y limpia a mano
+lo que sobre por debajo, y por eso **`fusionar` prefiere lo que ya tenía a la
+semilla**. Cualquier otra escritura que borre una hoja que la app lee tiene el
+mismo problema. Lo vigilan `pruebas/listas-sin-ventana.mjs` y
+`pruebas/lectura-rota.mjs`.
 
 **Apps Script agrupa las escrituras.** Una excepción salta en el siguiente
 `flush()`, lejos de su causa, y un `try/catch` alrededor de la llamada no la

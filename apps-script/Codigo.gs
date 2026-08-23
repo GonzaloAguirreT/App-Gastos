@@ -754,8 +754,32 @@ function leerTablaExistente(libro, nombre, ancho, cuantas) {
 
 /* ---------------------------------------------------------------- escribir */
 
+/**
+ * Escribe las tres listas SOBRE la hoja que ya está, sin borrarla.
+ *
+ * Esto usaba `hojaLimpia`, que borra la hoja y la recrea. Entre las dos cosas
+ * el libro se queda un instante sin hoja Listas, y la lectura del mes NO pasa
+ * por el cerrojo —`doPost` contesta a `mes` antes de pedirlo—, así que
+ * cualquier lectura que caiga en esa ventana vuelve con las listas vacías.
+ *
+ * Lo que pasa después no da ningún error y cuesta los datos: la app trata una
+ * lista vacía como «no hay listas», se queda con la semilla de config.js —para
+ * no dejarte sin poder anotar— y en el siguiente ajuste que toques escribe esa
+ * semilla ENCIMA de vuestras categorías y vuestras cuentas.
+ *
+ * Medido contra la hoja de verdad: veinte lecturas disparadas durante cuatro
+ * escrituras de Listas volvieron 8 vacías, 7 con la semilla y 5 correctas. Y le
+ * pasó al libro de Gonzalo: quedó con las 18 categorías de ejemplo y las
+ * cuentas renombradas a las de la semilla.
+ *
+ * Escribiendo encima, una lectura ve lo de antes o lo de después, nunca un
+ * libro sin listas. El precio es que hay que limpiar a mano lo que sobre por
+ * debajo, que es lo que `hojaLimpia` hacía gratis: una lista que se acorta
+ * dejaría sus filas viejas ahí puestas.
+ */
 function escribirListas(libro, listas) {
-  const hoja = hojaLimpia(libro, HOJA_LISTAS);
+  var hoja = libro.getSheetByName(HOJA_LISTAS);
+  if (!hoja) hoja = libro.insertSheet(HOJA_LISTAS, libro.getNumSheets());
   titular(hoja, 'Listas',
     'La app lee estas listas. Los textos deben coincidir palabra por palabra con los de Movimientos.');
   hoja.getRange(FILA_CABECERA, 1, 1, 10).setValues([CABECERAS_LISTAS]).setFontWeight('bold');
@@ -763,9 +787,15 @@ function escribirListas(libro, listas) {
   const credito = listas.credito || [];
   const apagadas = (listas.inactivas || {}).cuentas || [];
   const apagadasCat = (listas.inactivas || {}).categorias || [];
+  /* El bloque llega hasta donde llegaba lo que había, aunque ahora sobre. Las
+     filas de más se escriben vacías EN LA MISMA escritura, y no se limpian
+     aparte: un `clearContent` después del `setValues` abre su propia ventana
+     —más pequeña, pero de la misma clase— en la que una lectura ve las listas
+     nuevas y además las viejas colgando por debajo. */
   const filas = [];
+  const habia = Math.max(0, hoja.getLastRow() - FILA_CABECERA);
   const cuantas = Math.max(listas.personas.length, listas.cuentas.length,
-                           listas.categorias.length, TOPE_CATEGORIAS);
+                           listas.categorias.length, TOPE_CATEGORIAS, habia);
   for (var i = 0; i < cuantas; i++) {
     const p = listas.personas[i];
     const c = listas.categorias[i];
@@ -783,7 +813,12 @@ function escribirListas(libro, listas) {
       c ? apagadasCat.indexOf(c.nombre) === -1 : ''
     ]);
   }
+  /* Una sola escritura para todo el bloque, huecos incluidos: es lo que hace
+     que una lectura vea las listas de antes o las de después, y nunca media
+     cosa. Lo que sobra de una lista que se ha acortado se va en esta misma
+     línea, escrito como vacío. */
   hoja.getRange(FILA_DATOS, 1, filas.length, 10).setValues(filas);
+
   // Casillas de verdad: «es crédito» se marca con el dedo desde la hoja igual
   // que desde la app, y una casilla no se puede escribir mal.
   hoja.getRange(FILA_DATOS, 5, filas.length, 1).insertCheckboxes();
