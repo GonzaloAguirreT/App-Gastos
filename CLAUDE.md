@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las veintitrés, cada una con su servidor
+sh pruebas/todas.sh                  # las veinticuatro, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -38,6 +38,7 @@ node pruebas/texto-que-empieza-por-igual.mjs   # un nombre con «=» es un nombr
 node pruebas/la-baja-que-no-encuentra.mjs      # una baja que no borra lo dice
 node pruebas/categorias-de-ingreso.mjs         # sin ellas no se puede anotar un ingreso
 node pruebas/corte-que-no-reescribe.mjs        # cambiar el corte no reescribe el pasado
+node pruebas/editar-no-refactura.mjs           # ni corregir una errata cambia de factura
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/vaciar-telefono.mjs            # vaciar el teléfono no borra la conexión
@@ -105,10 +106,18 @@ la columna. Si de verdad hay que reescribir el pasado —una cuenta que llevaba
 meses sin estar marcada como de crédito— está `recalcularSeUsaEn`, que se
 ejecuta a mano desde el editor y nunca toca un mes cerrado.
 
+Editar tiene la misma regla, y por ahí se coló el pasado una segunda vez.
+`editarMovimiento` rehacía «Se usa en» en CADA edición, con el corte de hoy: una
+falta corregida en la descripción de una compra de hace meses la mandaba a otra
+factura, y devolver el corte a su sitio ya no la traía de vuelta. Solo cuatro
+campos pueden mover un movimiento de factura —`fecha`, `tipo`, `cuenta` y
+`persona`—; si el cambio no toca ninguno, la columna no se escribe. Lo vigila
+`pruebas/editar-no-refactura.mjs`.
+
 Las dos mitades van juntas: arreglar solo la app o solo el backend deja a una
-diciendo un mes y a la otra diciendo otro, que es peor que el fallo. Lo vigila
-`pruebas/corte-que-no-reescribe.mjs`, y el servidor falso tuvo que cambiar con
-ellas.
+diciendo un mes y a la otra diciendo otro, que es peor que el fallo. Lo vigilan
+`pruebas/corte-que-no-reescribe.mjs` y `pruebas/editar-no-refactura.mjs`, y el
+servidor falso tuvo que cambiar con ellas.
 
 **El techo del mes es lo que entra**, no un presupuesto escrito a mano. `Config!B4`
 es el *ahorro esperado*: el colchón que se aparta antes de repartir, del que sale

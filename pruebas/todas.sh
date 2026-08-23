@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las veintitrés pruebas, cada una con el modo de servidor que necesita.
+# Las veinticuatro pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -86,6 +86,10 @@ node pruebas/texto-que-empieza-por-igual.mjs || { echo "!!! texto-que-empieza-po
 echo
 echo "════════ la-baja-que-no-encuentra ════════"
 node pruebas/la-baja-que-no-encuentra.mjs || { echo "!!! la-baja-que-no-encuentra falló"; fallos=$((fallos + 1)); }
+
+echo
+echo "════════ editar-no-refactura ════════"
+node pruebas/editar-no-refactura.mjs || { echo "!!! editar-no-refactura falló"; fallos=$((fallos + 1)); }
 
 corre botones
 corre ajuste-huerfano

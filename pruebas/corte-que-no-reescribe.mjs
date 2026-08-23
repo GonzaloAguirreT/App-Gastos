@@ -130,6 +130,48 @@ ok(despues && nuevo && despues.paraMes !== nuevo.paraMes,
    'dos gastos del mismo día caen en meses distintos, y está bien: '
    + despues.paraMes + ' y ' + nuevo.paraMes);
 
+/* Y la otra puerta por la que se colaba el pasado: editar. La app tiene que
+   decidir lo mismo que el backend en el momento de editar, no siete segundos
+   después, o la pantalla enseña un mes y la hoja otro. El caso completo, con
+   la reserva del ingreso, lo cubre editar-no-refactura contra el backend. */
+console.log('\nY corregirle una falta a la compra vieja tampoco la mueve');
+await p.evaluate(async () => {
+  const m = ESTADO.estado().datos.movimientos.find(x => x.importe === 4444);
+  await ESTADO.editarMovimiento(m.uuid, { descripcion: 'con tarjeta el 10 (corregido)' });
+});
+const corregido = await p.evaluate(() =>
+  (ESTADO.estado().datos.movimientos || []).find(m => m.importe === 4444));
+ok(corregido && corregido.descripcion === 'con tarjeta el 10 (corregido)',
+   'la descripción cambia');
+ok(corregido && corregido.paraMes === mesSiguiente,
+   'y en la app sigue facturada en ' + mesSiguiente + ': ' + (corregido && corregido.paraMes));
+
+await esperaCola();
+await p.evaluate(() => ESTADO.sincronizar());
+await p.waitForTimeout(600);
+const guardado = await p.evaluate(() =>
+  (ESTADO.estado().datos.movimientos || []).find(m => m.importe === 4444));
+ok(guardado && guardado.paraMes === mesSiguiente,
+   'y la hoja dice lo mismo tras guardar: ' + (guardado && guardado.paraMes));
+
+console.log('\nPero pasarla de la tarjeta al efectivo sí la baja a su mes');
+await p.evaluate(async () => {
+  const m = ESTADO.estado().datos.movimientos.find(x => x.importe === 4444);
+  await ESTADO.editarMovimiento(m.uuid, { cuenta: 'Efectivo' });
+});
+const aEfectivo = await p.evaluate(() =>
+  (ESTADO.estado().datos.movimientos || []).find(m => m.importe === 4444));
+ok(aEfectivo && aEfectivo.paraMes === mesDelGasto,
+   'la app la manda ya a ' + mesDelGasto + ': ' + (aEfectivo && aEfectivo.paraMes));
+
+await esperaCola();
+await p.evaluate(() => ESTADO.sincronizar());
+await p.waitForTimeout(600);
+const enLaHoja = await p.evaluate(() =>
+  (ESTADO.estado().datos.movimientos || []).find(m => m.importe === 4444));
+ok(enLaHoja && enLaHoja.paraMes === mesDelGasto,
+   'y la hoja también: ' + (enLaHoja && enLaHoja.paraMes));
+
 ok(errores.length === 0, 'sin errores en consola' + (errores.length ? ': ' + errores[0] : ''));
 
 await b.close();

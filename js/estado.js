@@ -157,20 +157,21 @@ const ESTADO = (() => {
   /**
    * El mes que paga un movimiento.
    *
-   * Un GASTO se calcula siempre con la regla, aquí y ahora. Es una función de
-   * la fecha, la cuenta y el día de cobro de esa persona, y las tres viven en
-   * la hoja, que es la misma para los dos teléfonos. Recalcularlo es lo que
-   * hace que cambiar un día de cobro en Ajustes mueva de mes las compras que ya
-   * estaban anotadas: leer el `paraMes` guardado dejaría la pantalla enseñando
-   * el reparto de antes del cambio, y el número no volvería a cuadrar hasta que
-   * la hoja reescribiera la columna.
+   * Lo que ya está escrito manda, y para un gasto también. El mes que paga una
+   * compra lo fija el backend al escribir la fila, y desde ese momento esa
+   * compra está facturada: es la única forma de que la factura de septiembre no
+   * pueda cambiar en diciembre.
    *
-   * Un INGRESO no lleva regla que valga: su mes lo eligió un dedo en «Este
-   * dinero se usa en», así que manda lo que venga escrito.
+   * La regla —antes del día de cobro, este mes; desde ese día, el siguiente—
+   * solo se aplica cuando no hay nada escrito, que es el rato entre tocar
+   * Guardar y que la fila llegue a la hoja. Así el saldo se pinta sin esperar y
+   * enseña el mismo número que va a quedar escrito.
    *
-   * Quien escribe la columna de la hoja sigue siendo el backend —es el único
-   * sitio donde el cálculo es idéntico para los dos teléfonos—; esto es lo que
-   * la app enseña mientras tanto.
+   * Un INGRESO nunca llevó regla: su mes lo eligió un dedo en «Este dinero se
+   * usa en», y esa elección viaja en `paraMes` como la de todos los demás.
+   *
+   * Quien escribe la columna de la hoja sigue siendo el backend, que es el
+   * único sitio donde el cálculo es idéntico para los dos teléfonos.
    */
   function mesImputado(m) {
     const mes = FMT.mesDe(m.fecha);
@@ -653,12 +654,35 @@ const ESTADO = (() => {
   async function editarMovimiento(uuidMov, cambios) {
     const m = datos.movimientos.find(x => x.uuid === uuidMov);
     if (!m) return;
+    /* Si un ingreso estaba reservado para el mes siguiente hay que saberlo
+       ANTES de aplicar los cambios: esa elección es relativa a su fecha, y en
+       cuanto la fecha cambia ya no se puede deducir de la fila nueva. */
+    const reservado = m.tipo === 'Ingreso'
+      && FMT.aMes(m.paraMes) === FMT.mesMas(FMT.mesDe(m.fecha), 1);
+    const cambiaElMes = ['fecha', 'tipo', 'cuenta', 'persona']
+      .some(clave => cambios[clave] !== undefined);
+
     Object.assign(m, cambios);
     if (cambios.categoria) m.reparto = repartoDe(cambios.categoria);
-    /* El mes que lo paga no se toca aquí. Cambiar la cuenta o el dueño lo
-       cambia —una compra del 20 pasada de efectivo a la tarjeta se va a la
-       factura del mes siguiente— pero de un gasto lo recalcula mesImputado en
-       cada lectura, y en la hoja lo reescribe el backend al guardar. */
+
+    /* El mes que lo paga se rehace aquí solo si el cambio lo toca, que es lo
+       mismo que hace el backend al reescribir la fila. Las dos mitades tienen
+       que decidir igual: si una refactura y la otra no, la pantalla enseña un
+       mes y la hoja dice otro hasta la siguiente lectura.
+
+       Y si el cambio no lo toca —una falta en la descripción, el importe— el
+       mes escrito se queda como está. Una compra ya facturada no cambia de
+       factura por una errata, ni aunque el día de corte sea otro desde hace
+       meses. */
+    if (cambiaElMes) {
+      if (m.tipo === 'Ingreso') {
+        m.paraMes = reservado ? FMT.mesMas(FMT.mesDe(m.fecha), 1) : FMT.mesDe(m.fecha);
+      } else {
+        // Sin `paraMes` delante, mesImputado vuelve a aplicar la regla.
+        delete m.paraMes;
+        m.paraMes = mesImputado(m);
+      }
+    }
     await encolar('movimiento-edita', { uuid: uuid(), objetivo: uuidMov, cambios: Object.assign({}, cambios, { reparto: m.reparto }) });
   }
 
