@@ -480,17 +480,65 @@ const ESTADO = (() => {
     emitir();
   }
 
-  /** Lo que llega de la hoja manda, pero si una lista viene vacía nos quedamos
-   *  con la semilla: una app sin categorías no deja anotar nada, y eso es peor
-   *  que una lista desactualizada. */
+  /**
+   * Lo que llega de la hoja manda, salvo en una lista que venga vacía.
+   *
+   * Ahí manda lo que ya teníamos, y solo si tampoco hay nada se coge la semilla
+   * de config.js —que es el caso de la primera vez que se abre la app—.
+   *
+   * El orden importa y costó los datos de una hoja. Una lista vacía casi nunca
+   * significa «no hay listas»: significa que la lectura pilló la hoja Listas a
+   * medio reescribir. El backend la borraba y la recreaba, y las lecturas no
+   * pasan por el cerrojo, así que había una ventana de verdad —de veinte
+   * lecturas disparadas durante cuatro escrituras, ocho volvieron sin nada—.
+   * Cogiendo la semilla, la app se quedaba con las categorías de ejemplo Y las
+   * escribía encima de las de verdad en el siguiente ajuste que tocaras.
+   *
+   * La ventana la cerró `escribirListas`, que ya no borra la hoja. Esto es la
+   * otra mitad: aunque una lectura vuelva vacía por cualquier otro motivo
+   * —otra versión del backend, un libro a medio instalar—, lo que la app tiene
+   * en la mano no se pierde.
+   *
+   * Hay UN caso en que una lista vacía es legítima, y aquí se ignora a
+   * propósito: desmarcar en la hoja la casilla ACTIVA de todas las cuentas o de
+   * todas las categorías. `leerLibro` filtra por ahí y devuelve la lista vacía
+   * sin que nada esté roto. Se ignora porque una app sin ninguna cuenta o sin
+   * ninguna categoría no deja anotar nada —no es un estado en el que quepa
+   * quedarse—, y porque de las dos causas posibles la lectura rota es
+   * incomparablemente más frecuente que apagarlo todo a mano. Quien lo haya
+   * hecho a propósito lo deshace volviendo a marcar la casilla.
+   */
   function fusionar(nuevos) {
-    const base = clonar(datosVacios);
-    const salida = Object.assign(base, nuevos);
-    if (!salida.personas || !salida.personas.length) salida.personas = base.personas;
-    if (!salida.cuentas || !salida.cuentas.length) salida.cuentas = base.cuentas;
-    if (!salida.categorias || !salida.categorias.length) salida.categorias = base.categorias;
-    salida.credito = salida.credito || [];
-    salida.config = Object.assign({}, base.config, nuevos.config || {});
+    /* La semilla se copia APARTE y no se toca. Esto era
+       `Object.assign(base, nuevos)`, que muta `base`: después de esa línea
+       `base.categorias` ya era la lista que acababa de llegar, así que el
+       respaldo «si viene vacía, la semilla» se devolvía a sí mismo y no hacía
+       nada. Una lectura sin listas dejaba la app con CERO categorías —sin poder
+       anotar— en vez de con las de ejemplo que decía el comentario. */
+    const semilla = clonar(datosVacios);
+    const previos = datos || {};
+    const salida = Object.assign({}, semilla, nuevos);
+    /* De dónde sale cada lista: de lo que acaba de llegar, de lo que ya
+       teníamos, o de la semilla. Se decide una vez y se nombra, porque el
+       crédito tiene que salir del MISMO sitio que las cuentas. */
+    const deDonde = (llega, teniamos) =>
+      (llega && llega.length) ? 'hoja' : (teniamos && teniamos.length) ? 'antes' : 'ejemplo';
+    const coger = (fuente, llega, teniamos, deEjemplo) =>
+      fuente === 'hoja' ? llega : fuente === 'antes' ? teniamos : deEjemplo;
+
+    salida.personas = coger(deDonde(salida.personas, previos.personas),
+                            salida.personas, previos.personas, semilla.personas);
+    salida.categorias = coger(deDonde(salida.categorias, previos.categorias),
+                              salida.categorias, previos.categorias, semilla.categorias);
+
+    /* El crédito viaja con las cuentas. Si nos quedamos con las cuentas de
+       antes y con el crédito de la lectura rota, una tarjeta dejaría de aplazar
+       el cargo y sus compras se imputarían al mes en que se hicieron, no al que
+       las paga: el mes entero descuadra sin que salte nada. */
+    const fuenteCuentas = deDonde(salida.cuentas, previos.cuentas);
+    salida.credito = coger(fuenteCuentas, salida.credito, previos.credito, semilla.credito) || [];
+    salida.cuentas = coger(fuenteCuentas, salida.cuentas, previos.cuentas, semilla.cuentas);
+    salida.config = Object.assign({}, semilla.config, nuevos.config || {});
 
     /* Config!B4 dejó de ser «el plan del mes» y pasó a ser el ahorro esperado.
        Una hoja con el backend viejo sigue mandando `plan` y `limite`, y el
@@ -499,7 +547,7 @@ const ESTADO = (() => {
        no querías tocar, así que es lo que hereda el ahorro esperado; el plan
        no hereda nada porque ahora el techo lo calcula la app. */
     if (salida.config.ahorroEsperado == null) {
-      salida.config.ahorroEsperado = Number(salida.config.limite) || base.config.ahorroEsperado;
+      salida.config.ahorroEsperado = Number(salida.config.limite) || semilla.config.ahorroEsperado;
     }
     /* El mes de un cierre viene de una celda, y Sheets convierte "2026-08" en
        una fecha de verdad al guardarla. Se normaliza al entrar para que ninguna

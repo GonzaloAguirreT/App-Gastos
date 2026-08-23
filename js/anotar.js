@@ -28,6 +28,10 @@ const ANOTAR = (() => {
   let cada = 1;
   let dia = 10;
   let cuotas = 0;
+  /* Hay un guardado en marcha. Dos toques seguidos en Guardar anotaban el gasto
+     dos veces: cada toque genera su propio uuid, así que la deduplicación del
+     backend los ve como dos apuntes distintos y escribe los dos. */
+  let guardando = false;
   /* En qué mes se usa un ingreso: el que lo cobra o el siguiente. En Chile un
      sueldo pagado el 30 se gasta el mes que viene y uno pagado el 5, ese mismo.
      Solo aparece en los ingresos: un gasto sale el día que sale. */
@@ -386,9 +390,32 @@ const ANOTAR = (() => {
     VISTA.ir(volverA);
   }
 
+  /**
+   * Guardar lo que haya en pantalla, sea lo que sea el modo.
+   *
+   * El cerrojo `guardando` no es paranoia: el botón queda debajo del teclado del
+   * sistema cuando hay un campo con el foco, así que el segundo toque se da sin
+   * verlo. Y no lo para nadie más: cada toque hace su propio uuid, la
+   * deduplicación del backend los ve como dos apuntes distintos y escribe los
+   * dos. Comprobado en el teléfono: dos toques, dos movimientos de $7.777 en la
+   * hoja y dos registros en la cola.
+   *
+   * Se suelta en el `finally` y no al final: si el guardado revienta, el botón
+   * tiene que volver a funcionar o el apunte se queda sin poder escribirse.
+   */
   async function confirmar() {
     const n = numero();
     if (!n) return;
+    if (guardando) return;
+    guardando = true;
+    try {
+      await guardarLoTecleado(n);
+    } finally {
+      guardando = false;
+    }
+  }
+
+  async function guardarLoTecleado(n) {
     const { ajustes, datos } = ESTADO.estado();
     VISTA.vibrar();
 

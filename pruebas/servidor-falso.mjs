@@ -32,6 +32,19 @@ const MES_COMO_FECHA = process.argv.includes('--mes-como-fecha');
 /* Un mes pasado con gastos que nunca se cerró. Sus movimientos siguen en la
    hoja y el backend los manda, así que la app tiene que poder llegar a él. */
 const MES_VIEJO = process.argv.includes('--mes-viejo');
+/* Deja que la prueba pida «que la siguiente lectura vuelva sin listas», que es
+   lo que pasaba de verdad cuando una lectura caía mientras el backend borraba y
+   recreaba la hoja Listas.
+
+   Se arma a la orden y no por número de lectura. Contar lecturas ata la prueba a
+   cuántas veces sincroniza la app al arrancar y a qué había en el libro antes:
+   así escrita, pasaba sola y fallaba dentro de todas.sh sin que nada hubiera
+   cambiado. */
+const LISTAS_ROTAS = process.argv.includes('--listas-rotas');
+let romperLaSiguiente = false;
+/* Lo que ya se ha escrito, para no escribirlo dos veces. El backend lo lleva en
+   la hoja `_uuids`; aquí basta con un conjunto. */
+const uuidsVistos = new Set();
 const PUERTO = 8300;
 
 const hoy = () => new Date().toISOString().slice(0, 10);
@@ -141,8 +154,20 @@ function seUsaEn(m) {
 function despachar(p) {
   const d = p.datos || {};
   switch (p.accion) {
-    case 'mes':
+    /* Solo con --listas-rotas: arma la siguiente lectura para que vuelva sin
+       listas. Esta acción no existe en el backend de verdad. */
+    case 'romper-listas':
+      romperLaSiguiente = LISTAS_ROTAS;
+      return { ok: true, armado: romperLaSiguiente };
+
+    case 'mes': {
+      if (romperLaSiguiente) {
+        romperLaSiguiente = false;
+        return { ok: true, datos: Object.assign({}, libro,
+          { personas: [], cuentas: [], credito: [], categorias: [] }) };
+      }
       return { ok: true, datos: libro };
+    }
 
     case 'movimientos':
       (p.movimientos || []).forEach(m => {
@@ -251,12 +276,25 @@ function despachar(p) {
       return { ok: true, escritos: antes - libro.cierres.length };
     }
 
-    case 'reparto':
-      (d.lineas || []).forEach(l => {
-        const m = libro.metas.find(x => x.nombre === l.meta);
-        if (m) m.guardado += Number(l.monto) || 0;
+    /* `asignaciones`, que es lo que manda la app y lo que lee el backend de
+       verdad. Esto esperaba `lineas`, un nombre que no usa nadie, así que el
+       reparto no se ejercía de punta a punta: el bucle no encontraba nada, el
+       servidor contestaba ok y ninguna prueba se enteraba. Salió al escribir la
+       prueba del doble toque, que medía lo guardado en la meta y siempre veía
+       el mismo número.
+
+       Y se deduplica por uuid, como el backend: sin eso un reintento de la cola
+       sumaría el reparto dos veces y la prueba diría que el fallo sigue vivo
+       cuando lo que falla es la imitación. */
+    case 'reparto': {
+      if (d.uuid && uuidsVistos.has(d.uuid)) return { ok: true, escritos: 0, duplicados: 1 };
+      if (d.uuid) uuidsVistos.add(d.uuid);
+      (d.asignaciones || []).forEach(a => {
+        const m = libro.metas.find(x => x.nombre === a.meta);
+        if (m) m.guardado = (Number(m.guardado) || 0) + (Number(a.monto) || 0);
       });
-      return { ok: true, metas: libro.metas };
+      return { ok: true, escritos: (d.asignaciones || []).length, metas: libro.metas };
+    }
 
     case 'metas':
       /* Se descartan las metas sin nombre, igual que el backend de verdad.

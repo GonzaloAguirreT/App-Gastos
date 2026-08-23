@@ -17,6 +17,14 @@ const AHORRO = (() => {
   let asignado = {};      // nombre de meta → monto de este reparto
   let porRepartir = 0;
   let mesDelReparto = '';
+  /* Hay un reparto saliendo. Sin esto, dos toques en «Guardar reparto» escriben
+     las mismas asignaciones dos veces: `asignado` no se limpia hasta después
+     del await, y cada orden lleva su propio uuid, así que el backend las ve
+     como dos repartos distintos. Duele más que un gasto duplicado: la meta
+     recibe el doble y desde la app no hay forma de quitar una línea de Reparto
+     —no existe esa acción, y reabrir el mes no las toca—, hay que borrarla a
+     mano en la hoja. */
+  let repartiendo = false;
 
   /* ------------------------------------------------------------- ahorro */
 
@@ -333,13 +341,19 @@ const AHORRO = (() => {
   }
 
   async function confirmar() {
-    const asignaciones = Object.keys(asignado)
-      .filter(nombre => asignado[nombre] > 0)
-      .map(nombre => ({ meta: nombre, monto: asignado[nombre] }));
-    if (asignaciones.length) await ESTADO.repartir(mesDelReparto || ESTADO.mesEnCurso(), asignaciones);
-    asignado = {};
-    porRepartir = 0;
-    VISTA.ir('ahorro');
+    if (repartiendo) return;
+    repartiendo = true;
+    try {
+      const asignaciones = Object.keys(asignado)
+        .filter(nombre => asignado[nombre] > 0)
+        .map(nombre => ({ meta: nombre, monto: asignado[nombre] }));
+      if (asignaciones.length) await ESTADO.repartir(mesDelReparto || ESTADO.mesEnCurso(), asignaciones);
+      asignado = {};
+      porRepartir = 0;
+      VISTA.ir('ahorro');
+    } finally {
+      repartiendo = false;
+    }
   }
 
   function pintar() {
