@@ -354,6 +354,23 @@ Y la de este archivo: **cuando encuentres un caso donde el servidor falso sea
 más permisivo que Apps Script, arregla el servidor falso además del código.** Es
 lo que convierte un fallo en dos fallos menos.
 
+Con un añadido que ha costado otra vez: **un camino por el que no pasa ninguna
+prueba no está medido, aunque el arnés lo implemente.** El servidor falso
+buscaba el movimiento a editar y a borrar por `d.uuid` —que es el uuid de la
+ORDEN, y no coincide nunca con el de ninguna fila—, así que las dos acciones
+contestaban siempre «No existe ese movimiento». Llevaba así desde que se
+escribió y no lo notó nadie, porque ninguna prueba editaba ni borraba desde la
+app. Una imitación que nadie ejerce no es una red: es decoración.
+
+Va con la lección del «=»: cuando una prueba nueva y un arreglo nuevo salen de
+la misma cabeza en el mismo rato, lo que se está midiendo puede ser la
+suposición y no el comportamiento. El fallo del ingreso que perdía su reserva
+—`String(celdaDeFecha).slice(0, 7)` da «Tue Aug»— **no se puede ver contra el
+servidor falso**, que guarda esa columna como texto: solo aparece contra el
+backend de verdad, donde la celda es un `Date`. Por eso
+`editar-no-refactura.mjs` es una prueba de Node sobre `Codigo.gs` y no una de
+navegador.
+
 ## Lo que está abierto ahora mismo
 
 - ~~**Cuatro apuntes sin enviar** en el teléfono de Gonzalo~~. Cerrado: al

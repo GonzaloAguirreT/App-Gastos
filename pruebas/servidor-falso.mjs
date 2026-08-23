@@ -152,16 +152,34 @@ function despachar(p) {
       });
       return { ok: true, escritos: (p.movimientos || []).length };
 
+    /* El movimiento se busca por `objetivo`, que es lo que manda la app: `uuid`
+       es el de la ORDEN, y no coincide nunca con el de ninguna fila. Buscando
+       por él, editar y borrar contestaban siempre «No existe ese movimiento» y
+       ninguna prueba se enteró, porque ninguna pasaba por aquí. */
     case 'movimiento-edita': {
-      const i = buscar(libro.movimientos, d.uuid);
+      const i = buscar(libro.movimientos, d.objetivo);
       if (i === -1) return { ok: false, error: 'No existe ese movimiento' };
-      const m = Object.assign({}, libro.movimientos[i], d.cambios || d);
-      libro.movimientos[i] = Object.assign(m, { paraMes: seUsaEn(m) });
+      const previo = libro.movimientos[i];
+      const cambios = d.cambios || {};
+      /* Igual que el backend: el mes que lo paga solo se rehace si el cambio
+         toca algo de lo que depende. Corregir una descripción no refactura una
+         compra de hace meses. */
+      const reservado = previo.tipo === 'Ingreso'
+        && previo.paraMes === mesSiguiente(mesDe(previo.fecha));
+      const m = Object.assign({}, previo, cambios);
+      const cambiaElMes = ['fecha', 'tipo', 'cuenta', 'persona']
+        .some(clave => cambios[clave] !== undefined);
+      if (cambiaElMes) {
+        m.paraMes = m.tipo === 'Ingreso'
+          ? (reservado ? mesSiguiente(mesDe(m.fecha)) : mesDe(m.fecha))
+          : seUsaEn(m);
+      }
+      libro.movimientos[i] = m;
       return { ok: true };
     }
 
     case 'movimiento-baja': {
-      const i = buscar(libro.movimientos, d.uuid);
+      const i = buscar(libro.movimientos, d.objetivo);
       if (i === -1) return { ok: false, error: 'No existe ese movimiento' };
       libro.movimientos.splice(i, 1);
       return { ok: true };

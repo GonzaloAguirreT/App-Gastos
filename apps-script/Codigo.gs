@@ -1788,29 +1788,51 @@ function editarMovimiento(datos) {
   if (!fila) return { ok: true, escritos: 0, aviso: 'No se encontró el movimiento' };
 
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_MOVIMIENTOS);
+  const cambios = datos.cambios || {};
+
+  /* Solo cuatro campos pueden mover de factura un movimiento: la fecha, el
+     tipo, la cuenta y el dueño. Cambiar la cuenta o el dueño sí la mueve —una
+     compra del día 20 pasada de efectivo a la tarjeta se va al mes siguiente—,
+     pero corregir una falta en la descripción no, y el importe tampoco.
+
+     Recalcular siempre reabría por otra puerta lo que se cerró al dejar de
+     reescribir esta columna desde Ajustes: con el corte ya cambiado, corregir
+     una errata en una compra de hace meses la mandaba a otra factura, y
+     devolver el corte a su sitio no la traía de vuelta. */
+  const cambiaElMes = ['fecha', 'tipo', 'cuenta', 'persona']
+    .some(clave => cambios[clave] !== undefined);
+
+  /* Si va a cambiar, la fila hay que leerla ANTES de tocarla: de ahí sale si un
+     ingreso estaba reservado para el mes siguiente. Esa reserva la eligió un
+     dedo y es relativa a SU fecha, así que en cuanto la fecha cambia ya no hay
+     forma de deducirla de la fila nueva. */
+  var reservado = false;
+  if (cambiaElMes) {
+    const previa = hoja.getRange(fila, 1, 1, 11).getValues()[0];
+    const fechaPrevia = previa[0] instanceof Date ? iso(previa[0]) : String(previa[0]);
+    reservado = String(previa[8] || '') === mesMas(fechaPrevia.slice(0, 7), 1);
+  }
+
   const columnas = { fecha: 1, tipo: 2, categoria: 3, descripcion: 4, importe: 5,
                      cuenta: 6, persona: 7, reparto: 8 };
-  Object.keys(datos.cambios || {}).forEach(clave => {
+  Object.keys(cambios).forEach(clave => {
     if (!columnas[clave]) return;
     // La fecha viaja como yyyy-mm-dd y tiene que entrar como fecha de verdad,
     // o la celda se queda con un texto que ningún SUMIFS sabe comparar.
-    const valor = clave === 'fecha' ? fechaDesdeISO(datos.cambios[clave]) : datos.cambios[clave];
+    const valor = clave === 'fecha' ? fechaDesdeISO(cambios[clave]) : cambios[clave];
     hoja.getRange(fila, columnas[clave]).setValue(valor);
   });
 
-  /* Cambiar la cuenta o el dueño cambia el mes que la paga: pasar una compra
-     del día 20 de efectivo a la tarjeta la manda a la factura del mes
-     siguiente. Se recalcula desde la fila ya escrita, no desde lo que mandó la
-     app, para que valga también cuando el cambio venía solo del importe. */
-  const actual = hoja.getRange(fila, 1, 1, 11).getValues()[0];
-  hoja.getRange(fila, 9).setValue(seUsaEn({
-    fecha: actual[0] instanceof Date ? iso(actual[0]) : String(actual[0]),
-    tipo: actual[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
-    cuenta: String(actual[5] || ''),
-    persona: String(actual[6] || ''),
-    // Un ingreso ya tenía su mes elegido a mano: se respeta el que hay escrito.
-    usaEn: String(actual[8] || '') === mesMas(String(actual[0]).slice(0, 7), 1) ? 'siguiente' : 'mismo'
-  }));
+  if (cambiaElMes) {
+    const actual = hoja.getRange(fila, 1, 1, 11).getValues()[0];
+    hoja.getRange(fila, 9).setValue(seUsaEn({
+      fecha: actual[0] instanceof Date ? iso(actual[0]) : String(actual[0]),
+      tipo: actual[1] === 'Ingreso' ? 'Ingreso' : 'Gasto',
+      cuenta: String(actual[5] || ''),
+      persona: String(actual[6] || ''),
+      usaEn: reservado ? 'siguiente' : 'mismo'
+    }));
+  }
   return { ok: true, escritos: 1 };
 }
 
