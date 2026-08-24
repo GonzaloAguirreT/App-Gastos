@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_nombre">Gastos · widget</string>
+    <string name="config_titulo">Conexión del widget</string>
+    <string name="widget_descripcion">Saldo disponible del mes</string>
+
+    <string name="campo_app">Dirección de la app</string>
+    <string name="campo_endpoint">Endpoint del Apps Script (acaba en /exec)</string>
+    <string name="campo_token">Token</string>
+    <string name="guardar">Guardar</string>
+
+    <string name="ayuda">Los mismos dos datos que ya están en Ajustes → Conexión,
+        dentro de la app. El widget tiene su propio almacén y no puede leer los
+        de Chrome, así que hay que pegarlos otra vez. No salen de este teléfono.</string>
+
+    <string name="falta">Hay que pegar el endpoint y el token</string>
+</resources>

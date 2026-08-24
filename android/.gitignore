@@ -1,0 +1,14 @@
+# Lo que genera Android Studio al compilar. Nada de esto va al repositorio.
+build/
+.gradle/
+.idea/
+*.iml
+captures/
+
+# La ruta del SDK en ESTE ordenador. La escribe Android Studio sola al abrir el
+# proyecto, y es distinta en cada máquina: versionarla rompe la del siguiente.
+local.properties
+
+# Las claves de firma, por si algún día se firma un APK de release. Nunca.
+*.jks
+*.keystore

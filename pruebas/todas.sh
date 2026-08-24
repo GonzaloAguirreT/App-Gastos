@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Las veintisiete pruebas, cada una con el modo de servidor que necesita.
+# Las veintiocho pruebas, cada una con el modo de servidor que necesita.
 #
 #   sh pruebas/todas.sh
 #
@@ -114,6 +114,7 @@ corre mes-como-fecha --mes-como-fecha
 corre escribir-meta
 corre no-saltar-arriba
 corre no-anotar-dos-veces
+corre widget-4x2
 corre lectura-rota --listas-rotas
 corre vaciar-telefono --rechaza
 

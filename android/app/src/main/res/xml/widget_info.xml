@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  El 4×2. Las medidas salen del documento de diseño: 250×110 dp de mínimo para
+  que Android lo coloque en cuatro columnas por dos filas, y las celdas exactas
+  para Android 12 en adelante, que ya sabe contarlas.
+
+  updatePeriodMillis va a media hora, que es el mínimo que respeta Android: por
+  debajo lo redondea él y se queda igual. No es para ver el gasto recién
+  anotado —para eso está abrir la app— sino para que el día del mes y los fijos
+  que caen de madrugada no se queden viejos si nadie la abre en dos días.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:configure="cl.gastos.widget.ConfigActivity"
+    android:initialLayout="@layout/widget" />

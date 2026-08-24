@@ -18,7 +18,7 @@ hace falta. Las skills de `ponytail` (en `.claude/skills/`) están para eso.
 ```sh
 python3 -m http.server 8000          # servir la app sin backend
 
-sh pruebas/todas.sh                  # las veintisiete, cada una con su servidor
+sh pruebas/todas.sh                  # las veintiocho, cada una con su servidor
 
 node pruebas/servidor-falso.mjs &    # backend de mentira + la app, en el 8300
 node pruebas/calendario-chileno.mjs  # la regla de la tarjeta y los topes
@@ -42,6 +42,7 @@ node pruebas/editar-no-refactura.mjs           # ni corregir una errata cambia d
 node pruebas/limpiar-fantasmas.mjs             # quitar los fantasmas no se lleva lo bueno
 node pruebas/listas-sin-ventana.mjs            # escribir Listas no deja el libro sin ellas
 node pruebas/no-anotar-dos-veces.mjs           # dos toques en Guardar anotan una vez
+node pruebas/widget-4x2.mjs                    # el widget dice lo mismo que la pantalla Mes
 
 node pruebas/servidor-falso.mjs --rechaza   # simula un despliegue viejo
 node pruebas/lectura-rota.mjs               # con --listas-rotas: una lectura sin listas
@@ -77,6 +78,7 @@ añadirlo ahí *y* a la lista `ESENCIALES` de `sw.js`.
 | `ESTADO` | `estado.js` | El modelo y todo el cálculo del mes. |
 | `MES`, `FIJOS`, `AHORRO`, `ANOTAR`, `AJUSTES` | una pantalla, un archivo | |
 | `APP` | `app.js` | Arranque y pegamento. Sin lógica de negocio. |
+| `WIDGET` | `widget.js` | El cartel 4×2 del escritorio. No es una pantalla. |
 
 Tres cosas que hay que tener en la cabeza:
 
@@ -146,6 +148,28 @@ Sync.
 
 Las filas de un mismo grupo viajan en la misma petición: medio reparto escrito
 descuadraría el ahorro.
+
+## El widget del escritorio
+
+`widget.html` no es una pantalla de la app: es un cartel de 336 × 172 dp que
+carga una `WebView` escondida dentro de la app Android de `android/`, la cual
+espera a que el título diga «listo», hace una captura y la cuelga del
+escritorio. Una PWA no puede poner un widget; hace falta una app instalada.
+
+**Lo que importa de este montaje es dónde NO está la lógica.** El widget llama a
+`ESTADO.resumen()`, el mismo de la pantalla Mes. Escribir esas cuentas en Kotlin
+dejaba tres sitios decidiendo de qué mes es una compra —la app, el backend y el
+widget— y aquí ya ha costado dos veces tener solo dos que no coincidían. Por eso
+`estado.js` no puede tocar el DOM: es lo que permite cargarlo sin arrastrar
+`vista.js` ni las pantallas.
+
+Solo hay una línea duplicada a propósito, el rebajado de las tarjetas, porque
+vive en `vista.js` y ahí no se puede llegar. `pruebas/widget-4x2.mjs` compara las
+dos y falla si alguien toca una sola.
+
+El widget **no** va en `ESENCIALES` de `sw.js`: lo carga otra WebView, con su
+propio almacén, y quiere ir a la red en cada refresco. Su modo sin conexión sale
+del mes cacheado en IndexedDB, no de la caché del service worker.
 
 ## El backend
 
@@ -299,7 +323,7 @@ Pages sirve desde `main`, así que una rama con el arreglo es un arreglo que no
 existe. Y no hay que preguntar cada vez — es la única forma de que lo que se
 acaba de arreglar se pueda probar en el teléfono.
 
-Tocar la app es tocar `index.html`, `config.js`, `css/` o `js/`. Un cambio que
+Tocar la app es tocar `index.html`, `widget.html`, `config.js`, `css/` o `js/`. Un cambio que
 solo toca `apps-script/` no necesita fusión para probarse —eso se pega a mano en
 el editor— pero se fusiona igual para que el repositorio y el editor digan lo
 mismo.
