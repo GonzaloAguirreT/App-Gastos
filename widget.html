@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gastos — widget</title>
+
+<!--
+  El cartel del widget 4×2. No es una pantalla de la app: la carga una WebView
+  escondida dentro de la app Android de `android/`, que espera a que el título
+  ponga «listo», hace una captura y la cuelga del escritorio.
+
+  Abrirla en el navegador funciona igual y es como se prueba:
+
+    node pruebas/servidor-falso.mjs &
+    node pruebas/widget-4x2.mjs
+
+  Los datos van en el fragmento —`#endpoint=…&token=…&tema=oscuro`— para que el
+  token no viaje en ninguna petición. El detalle está en `js/widget.js`.
+
+  El orden de los <script> es el de dependencia, igual que en index.html:
+  config → FMT → NUCLEO → ESTADO → WIDGET. `vista.js` y las pantallas no están
+  porque aquí no hay ninguna, y `estado.js` no toca el DOM ni una vez — que es
+  justo lo que permite reusar su `resumen()` sin arrastrar la app entera.
+
+  `estilos.css` se carga solo por sus variables: la paleta, las dos familias y
+  `--rebaja`. Cambiar un color de la app cambia el del widget en el mismo
+  commit, que es la única forma de que no se separen.
+-->
+
+<link rel="stylesheet" href="css/fuentes.css">
+<link rel="stylesheet" href="css/estilos.css">
+<link rel="stylesheet" href="css/widget.css">
+</head>
+<body>
+
+<div class="marco"><div class="widget" id="widget"></div></div>
+
+<script src="config.js"></script>
+<script src="js/formato.js"></script>
+<script src="js/nucleo.js"></script>
+<script src="js/estado.js"></script>
+<script src="js/widget.js"></script>
+
+</body>
+</html>

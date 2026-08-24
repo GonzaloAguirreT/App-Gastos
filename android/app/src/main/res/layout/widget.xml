@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Todo el widget es una imagen: el cartel lo dibuja `widget.html` en una WebView
+  y aquí solo se cuelga el mapa de bits. Por eso no hay ni un TextView.
+
+  `adjustViewBounds` + `fitXY` porque el mapa de bits ya viene con la proporción
+  de la celda; si Android lo recentrara, el redondeo de las esquinas quedaría
+  descuadrado respecto al borde real del widget.
+-->
+<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/imagen"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY"
+    android:adjustViewBounds="true"
+    android:contentDescription="@string/widget_descripcion" />

@@ -22,6 +22,11 @@ const CACHE = 'gastos';
    config.js va primero porque nucleo.js lee CONFIG. */
 importScripts('config.js', 'js/nucleo.js');
 
+/* `widget.html` y sus dos archivos NO están aquí, y es a propósito.
+   Los carga otra WebView —la de la app Android del widget—, que tiene su propio
+   almacén y no comparte nada con esta. Cachearlos aquí guardaría tres archivos
+   que en esta pestaña no se abren nunca. El widget quiere ir a la red en cada
+   refresco, y su modo sin conexión sale del mes guardado en IndexedDB. */
 const ESENCIALES = [
   './',
   './index.html',

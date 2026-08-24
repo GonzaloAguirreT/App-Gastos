@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tres campos y un botón. Sin AppCompat ni Material: para esto sobra con lo que
+  trae Android, y así el proyecto no arrastra ninguna dependencia.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/ayuda"
+            android:textSize="14sp"
+            android:paddingBottom="24dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/campo_app"
+            android:textSize="12sp" />
+        <EditText
+            android:id="@+id/campo_app"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textUri"
+            android:importantForAutofill="no"
+            android:autofillHints=""
+            android:hint="@string/campo_app" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/campo_endpoint"
+            android:textSize="12sp"
+            android:paddingTop="16dp" />
+        <EditText
+            android:id="@+id/campo_endpoint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textUri"
+            android:importantForAutofill="no"
+            android:autofillHints=""
+            android:hint="@string/campo_endpoint" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/campo_token"
+            android:textSize="12sp"
+            android:paddingTop="16dp" />
+        <EditText
+            android:id="@+id/campo_token"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text"
+            android:importantForAutofill="no"
+            android:autofillHints=""
+            android:hint="@string/campo_token" />
+
+        <Button
+            android:id="@+id/guardar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="@string/guardar" />
+
+    </LinearLayout>
+</ScrollView>

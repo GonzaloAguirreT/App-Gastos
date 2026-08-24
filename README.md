@@ -348,6 +348,21 @@ Si `APP.iniciar` encuentra que falta algún hueco del HTML esperado —la app
 sirviendo una mezcla de versiones a mitad de un despliegue—, lo dice en
 pantalla en vez de fallar en silencio.
 
+### El widget del escritorio
+
+`android/` es una app diminuta que enseña el saldo del mes en la pantalla de
+inicio, en una tarjeta de 4×2. Una PWA no puede poner un widget en Android:
+hace falta una app instalada.
+
+No calcula nada. Carga `widget.html` en una `WebView` que no se ve, espera a que
+la página avise de que ya está pintada, le hace una captura y cuelga esa imagen.
+Los números salen de `ESTADO.resumen()`, el mismo de la pantalla Mes, así que el
+widget y la app no pueden decir cosas distintas.
+
+Cómo compilarlo y ponerlo está en `android/LÉEME.md`. En la pantalla de bloqueo
+no se puede: los widgets de bloqueo de Samsung son un conjunto cerrado y una app
+de terceros no puede añadir el suyo.
+
 ---
 
 ## Cambiar cosas
