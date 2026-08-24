@@ -281,10 +281,12 @@ todo el libro aparece corrido un día.
 **Escribe por bloques, no celda a celda.** Cada `getRange().setValue()` cruza al
 servicio de Sheets. `instalar()` pasó de 868 llamadas a 207 así.
 
-**Subir `CACHE` en `sw.js` en cada despliegue** que toque HTML, CSS o JS. Es el
-único mecanismo de actualización que hay: los archivos entran todos juntos o
-ninguno, para que nunca convivan dos versiones. El precio es que hay que abrir
-la app **dos veces** tras desplegar.
+**El service worker va a la red primero**, y solo cae a la caché sin conexión.
+No hace falta subir ningún número en `sw.js` ni abrir la app dos veces: en
+cuanto hay red, cada carga trae lo que está desplegado ahora mismo y deja su
+copia guardada de paso. `APP.iniciar` sigue vigilando que no falte ningún hueco
+del HTML —la mezcla de versiones que antes evitaba la caché fija— y lo dice en
+pantalla en vez de fallar en silencio si alguna vez pasa.
 
 ## Al terminar un cambio
 
@@ -292,10 +294,10 @@ Ejecuta `sh pruebas/todas.sh` y ten en cuenta que `main` se fusiona en aplastado
 si una rama sobrevive a su PR, hay que rehacerla sobre `origin/main` con
 `cherry-pick` en vez de fusionar.
 
-**Si el cambio toca la app, sube `CACHE` en `sw.js` y FUSIONA EL PR.** Sin
-fusionar no llega a nadie: Pages sirve desde `main`, así que una rama con el
-arreglo es un arreglo que no existe. Y no hay que preguntar cada vez — es la
-única forma de que lo que se acaba de arreglar se pueda probar en el teléfono.
+**Si el cambio toca la app, FUSIONA EL PR.** Sin fusionar no llega a nadie:
+Pages sirve desde `main`, así que una rama con el arreglo es un arreglo que no
+existe. Y no hay que preguntar cada vez — es la única forma de que lo que se
+acaba de arreglar se pueda probar en el teléfono.
 
 Tocar la app es tocar `index.html`, `config.js`, `css/` o `js/`. Un cambio que
 solo toca `apps-script/` no necesita fusión para probarse —eso se pega a mano en

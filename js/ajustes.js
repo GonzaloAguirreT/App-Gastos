@@ -119,8 +119,7 @@ const AJUSTES = (() => {
             estilo: { color: pendientes ? 'var(--acc)' : 'var(--mut)' }
           }, pendientes ? 'ver ›' : 'todo al día ›'),
             () => { VISTA.ir('cola'); pintarCola(); }),
-          fila('Repetir onboarding', '3 pasos ›', () => abrirOnboarding()),
-          fila('Versión', APP.versionServida() || '—', null)
+          fila('Repetir onboarding', '3 pasos ›', () => abrirOnboarding())
         ]),
 
         seccion('Cierre del mes'),

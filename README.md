@@ -337,16 +337,16 @@ la cola. Mientras el aviso está en pantalla, la hoja todavía no se ha enterado
 
 ### El service worker
 
-`sw.js` cachea el esqueleto entero de una vez. `CACHE` **hay que subirlo en cada
-despliegue** que toque el HTML, el CSS o el JS: es el único mecanismo de
-actualización que hay.
+`sw.js` cachea el esqueleto entero de una vez en el `install`, con `cache:
+'reload'` para saltarse la caché HTTP del navegador. Pero al servir, va a la
+red primero: cada carga pide los archivos de verdad y deja su copia guardada
+de paso, y solo cae a lo cacheado sin conexión. No hace falta subir ningún
+número ni abrir la app dos veces — en cuanto hay red se sirve lo que está
+desplegado ahora mismo.
 
-Todos los archivos entran juntos en el `install`, con `cache: 'reload'` para
-saltarse la caché HTTP del navegador. O tienes la versión entera vieja, o la
-entera nueva; nunca una mezcla. El precio es que tras un despliegue hay que
-abrir la app dos veces: la primera la descarga, la segunda ya la sirve.
-
-La versión que está sirviendo se ve en **Ajustes → Versión**.
+Si `APP.iniciar` encuentra que falta algún hueco del HTML esperado —la app
+sirviendo una mezcla de versiones a mitad de un despliegue—, lo dice en
+pantalla en vez de fallar en silencio.
 
 ---
 
