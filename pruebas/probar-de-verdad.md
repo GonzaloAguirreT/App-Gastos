@@ -345,8 +345,9 @@ Están en `CLAUDE.md`, pero estas tres son las que más se olvidan:
    código de ahora y pase con el arreglo. Compruébalo en las dos direcciones,
    siempre — más de una vez ha resultado que la prueba no medía lo que decía.
 2. **Si el cambio toca la app** (`index.html`, `config.js`, `css/`, `js/`),
-   sube `CACHE` en `sw.js` **y fusiona el PR**. Sin fusionar no llega a nadie:
-   Pages sirve desde `main`.
+   **fusiona el PR**. Sin fusionar no llega a nadie: Pages sirve desde `main`.
+   El service worker va a la red primero, así que no hace falta subir ningún
+   número en `sw.js`.
 3. `main` se fusiona en aplastado. Si una rama sobrevive a su PR, hay que
    rehacerla sobre `origin/main` con `cherry-pick`, no fusionar.
 

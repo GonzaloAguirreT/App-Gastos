@@ -28,8 +28,8 @@ const APP = (() => {
     caja.hidden = false;
     caja.innerHTML =
       '<h2 class="titulo">La app está a medias entre dos versiones</h2>' +
-      '<p class="nota">Cierra la app del todo y vuelve a abrirla. Si sigue igual, ábrela dos ' +
-      'veces seguidas: la primera se descarga la versión nueva y la segunda ya la sirve.</p>' +
+      '<p class="nota">Cierra la app del todo y vuelve a abrirla con conexión: el service ' +
+      'worker pide los archivos a la red en cada carga, así que se pone al día solo.</p>' +
       '<p class="nota">Faltan: ' + ids.join(', ') + '</p>';
     document.querySelector('.app').style.display = 'none';
   }
@@ -163,25 +163,9 @@ const APP = (() => {
          anotado sin cobertura llegue a la hoja sin acordarse de abrir la app. */
       if (registro.sync) registro.sync.register('enviar-cola').catch(() => {});
     }).catch(() => { /* sin service worker la app funciona, solo que sin caché */ });
-
-    /* La versión que sirve el service worker, para poder mirar el móvil y
-       saber si tiene la última o una cacheada de hace tres despliegues. Ha
-       ahorrado ya varios diagnósticos a ciegas. */
-    navigator.serviceWorker.addEventListener('message', evento => {
-      if (evento.data && evento.data.version) {
-        version = evento.data.version;
-        AJUSTES.pintar();
-      }
-    });
-    navigator.serviceWorker.ready.then(registro => {
-      if (registro.active) registro.active.postMessage('version');
-    });
   }
-
-  let version = '';
-  function versionServida() { return version; }
 
   document.addEventListener('DOMContentLoaded', iniciar);
 
-  return { vaciarCola, pintarTodo, versionServida };
+  return { vaciarCola, pintarTodo };
 })();
