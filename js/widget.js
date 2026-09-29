@@ -128,8 +128,12 @@ const WIDGET = (() => {
        dato que parece fresco y no lo es. */
     const cabecera = nodo('div', 'w-cabecera');
     cabecera.appendChild(nodo('span', 'w-titulo', 'Saldo disponible'));
-    cabecera.appendChild(nodo('span', 'w-dia',
-      viejo ? 'ACTUALIZADO AYER' : 'DÍA ' + dia + ' DE ' + total));
+    /* El estado vacío no trae día: se llega a él también cuando `ESTADO`
+       ha reventado, y pedirle la fecha otra vez sería volver a tropezar. */
+    if (!vacio) {
+      cabecera.appendChild(nodo('span', 'w-dia',
+        viejo ? 'ACTUALIZADO AYER' : 'DÍA ' + dia + ' DE ' + total));
+    }
     caja.appendChild(cabecera);
 
     if (vacio) {
