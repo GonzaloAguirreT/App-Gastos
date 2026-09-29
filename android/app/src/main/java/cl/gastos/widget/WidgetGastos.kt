@@ -45,13 +45,26 @@ class WidgetGastos : AppWidgetProvider() {
 
     companion object {
 
-        /** Vuelve a pintar todos los widgets puestos. La usa ConfigActivity. */
+        /**
+         * Vuelve a pintar todos los widgets puestos. La usa ConfigActivity.
+         *
+         * Por un aviso a este mismo receptor y no llamando a `refrescar` aquí:
+         * ConfigActivity se cierra en cuanto guarda, la app pasa a segundo plano
+         * y a los cuatro segundos Samsung congela el proceso y le corta la red.
+         * La consulta a la hoja tarda cinco, así que se cortaba a medias
+         * —`ERR_CONNECTION_ABORTED` en la redirección de Google— y el widget
+         * pintaba el mes guardado. Por el receptor pasa por `goAsync`, que es lo
+         * que le dice a Android que el proceso sigue trabajando.
+         */
         fun refrescarTodos(contexto: Context) {
-            val gestor = AppWidgetManager.getInstance(contexto)
-            val ids = gestor.getAppWidgetIds(
+            val ids = AppWidgetManager.getInstance(contexto).getAppWidgetIds(
                 android.content.ComponentName(contexto, WidgetGastos::class.java)
             )
-            ids.forEach { refrescar(contexto, gestor, it) }
+            contexto.sendBroadcast(
+                Intent(contexto, WidgetGastos::class.java)
+                    .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+            )
         }
 
         fun refrescar(contexto: Context, gestor: AppWidgetManager, id: Int, hecho: () -> Unit = {}) {
