@@ -267,14 +267,26 @@ const WIDGET = (() => {
    * un puente: `onReceivedTitle` llega sola. El puente se usa además si está,
    * porque el título puede llegar antes de que el navegador haya pintado el
    * fotograma y el puente se llama después de dos `requestAnimationFrame`.
+   *
+   * Y con un temporizador de reserva, porque en la WebView de Android no hay
+   * pantalla que marque el paso de los fotogramas: en el S24 los dos
+   * `requestAnimationFrame` llegaban a veces al instante y a veces diez
+   * segundos tarde, y el widget se quedaba enseñando el número de antes hasta
+   * el plazo de 20 s. Si el aviso adelantado pilla la página sin pintar, la app
+   * Android ve la captura vacía y la repite.
    */
   function avisarDeQueEstá() {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    let avisado = false;
+    const avisar = () => {
+      if (avisado) return;
+      avisado = true;
       document.title = 'listo';
       if (window.Android && typeof window.Android.listo === 'function') {
         window.Android.listo();
       }
-    }));
+    };
+    requestAnimationFrame(() => requestAnimationFrame(avisar));
+    setTimeout(avisar, 500);
   }
 
   document.addEventListener('DOMContentLoaded', pintar);
