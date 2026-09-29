@@ -160,7 +160,10 @@ Esa `WebView` no se pega a ninguna ventana, y eso tiene tres consecuencias que
 ya salieron en un S24: `View.post` sobre ella no se ejecuta nunca (por eso
 `Pintor` usa su propio `Handler`), el título «listo» llega antes de que el
 fotograma esté pintado (por eso se captura solo por el puente), y sin
-`goAsync()` en el receptor Samsung congela el proceso mientras la página carga.
+`goAsync()` en el receptor Samsung congela el proceso mientras la página carga
+—y le corta la red: la consulta a la hoja moría con `ERR_CONNECTION_ABORTED`
+y el widget pintaba sin avisar el mes guardado—. Por eso todo refresco, también
+el de «Conexión del widget» al guardar, pasa por el receptor.
 Y Android manda el tamaño en píxeles de pantalla: `widget.js` lo divide por
 `devicePixelRatio`, que la prueba mide a densidad 3.
 
