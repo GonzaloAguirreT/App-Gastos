@@ -9,7 +9,6 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
 import android.webkit.WebView
 
 /**
@@ -51,7 +50,13 @@ object Pintor {
 
     @SuppressLint("SetJavaScriptEnabled")
     fun pintar(contexto: Context, url: String, ancho: Int, alto: Int, entregar: (Bitmap?) -> Unit) {
-        Handler(Looper.getMainLooper()).post {
+        /* Todo por el hilo principal con un Handler propio, nunca con
+           `web.post`: esta WebView no se pega a ninguna ventana, y `View.post`
+           en una vista sin ventana no se ejecuta — se queda en una cola que
+           solo se vacía al pegarla. La página decía «listo» y la captura no
+           llegaba nunca: el widget salía en blanco. */
+        val principal = Handler(Looper.getMainLooper())
+        principal.post {
             val web = WebView(contexto.applicationContext)
             var entregado = false
 
@@ -63,7 +68,7 @@ object Pintor {
                 entregar(bmp)
                 // Fuera de la devolución de llamada en curso: destruir una
                 // WebView desde dentro de uno de sus propios avisos se cae.
-                Handler(Looper.getMainLooper()).post { web.destroy() }
+                principal.post { web.destroy() }
             }
 
             fun capturar() {
@@ -75,7 +80,7 @@ object Pintor {
                     )
                     web.layout(0, 0, ancho, alto)
                     web.draw(Canvas(b))
-                    b
+                    if (enBlanco(b)) null else b
                 } catch (e: Throwable) {
                     null
                 }
@@ -95,13 +100,13 @@ object Pintor {
                fondo de la WebView fuera blanco, saldrían cuatro picos blancos
                en las cuatro esquinas del widget. */
             web.setBackgroundColor(Color.TRANSPARENT)
-            web.addJavascriptInterface(Aviso { web.post { capturar() } }, "Android")
+            web.addJavascriptInterface(Aviso { principal.post { capturar() } }, "Android")
 
-            web.webChromeClient = object : WebChromeClient() {
-                override fun onReceivedTitle(vista: WebView?, titulo: String?) {
-                    if (titulo == "listo") web.post { capturar() }
-                }
-            }
+            /* Solo el puente, no el título. En la WebView el título «listo» llega
+               antes de que se pinte el fotograma —el navegador lo cambia al
+               momento, el dibujo va después—, y capturar por ahí daba de vez en
+               cuando un mapa de bits vacío que tapaba al bueno. El puente se
+               llama tras dos `requestAnimationFrame`, con el fotograma ya hecho. */
 
             /* Hay que medirla y colocarla ANTES de cargar: una WebView que nunca
                ha tenido tamaño no dispara el diseño de la página, y `widget.js`
@@ -118,10 +123,25 @@ object Pintor {
                llegar a decir «listo» nunca, y un widget que se queda esperando
                deja el anterior colgado hasta la siguiente actualización. A los
                veinte segundos se captura lo que haya. */
-            Handler(Looper.getMainLooper()).postDelayed({
+            principal.postDelayed({
                 if (!entregado) capturar()
             }, 20_000)
         }
+    }
+
+    /**
+     * ¿Salió la captura sin nada dibujado?
+     *
+     * Un mapa de bits todo transparente no es un widget vacío: es una captura
+     * hecha antes de tiempo. Colgarlo borraría el último dibujo bueno, así que
+     * `colgar` recibe null y deja el que había. Basta mirar una rejilla: el
+     * cartel tiene fondo opaco de lado a lado.
+     */
+    private fun enBlanco(b: Bitmap): Boolean {
+        for (y in 1..7) for (x in 1..7) {
+            if (Color.alpha(b.getPixel(b.width * x / 8, b.height * y / 8)) != 0) return false
+        }
+        return true
     }
 
     /** El tamaño de dibujo, recortado para que quepa por el binder. */

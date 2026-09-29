@@ -74,14 +74,21 @@ miente sin avisar es peor que uno vacío.
 
 ## Si sale en blanco
 
-Casi seguro es el tamaño del mapa de bits. `RemoteViews` cruza al proceso del
-launcher por binder y por ahí no cabe cualquier cosa; pasado el límite no da un
-error claro, deja el widget en blanco. Está recortado en `Pintor.TOPE_PX`, y ese
-es el número que hay que bajar. Es lo único de todo esto que no se ha podido
-probar contra un teléfono de verdad.
+En el primer teléfono de verdad (un S24) salió en blanco por tres motivos que
+ya están arreglados y explicados en `Pintor.kt` y `WidgetGastos.kt`: la captura
+se pedía con `web.post`, que en una vista sin ventana no se ejecuta nunca; el
+título «listo» llegaba antes que el dibujo; y sin `goAsync()` Samsung congelaba
+el proceso a media carga. Una captura toda transparente ya no se cuelga: se
+queda el dibujo anterior.
+
+Si vuelve a pasar, lo siguiente es el tamaño del mapa de bits. `RemoteViews`
+cruza al proceso del launcher por binder y por ahí no cabe cualquier cosa;
+pasado el límite no da un error claro, deja el widget en blanco. Está recortado
+en `Pintor.TOPE_PX`, y ese es el número que hay que bajar. En el S24, a 770×493,
+cabe.
 
 Lo segundo más probable, si sale el cartel pero sin datos: el endpoint o el
-token mal pegados. Se corrigen abriendo *Gastos · widget* desde el cajón de
+token mal pegados. Se corrigen abriendo *Conexión del widget* desde el cajón de
 apps, sin tener que quitar el widget.
 
 ## Lo que no se puede hacer

@@ -19,7 +19,18 @@ import android.widget.RemoteViews
 class WidgetGastos : AppWidgetProvider() {
 
     override fun onUpdate(contexto: Context, gestor: AppWidgetManager, ids: IntArray) {
-        ids.forEach { refrescar(contexto, gestor, it) }
+        mientrasPinta(ids.size) { hecho -> ids.forEach { refrescar(contexto, gestor, it, hecho) } }
+    }
+
+    /* Sin `goAsync` el receptor acaba al volver de `onUpdate`, con la página aún
+       cargando, y Android da el proceso por ocioso: Samsung lo congela en ese
+       instante y ni la captura ni el plazo de seguridad llegan a ejecutarse.
+       Así el proceso sigue vivo hasta que el último widget tiene su dibujo. */
+    private fun mientrasPinta(cuantos: Int, trabajo: (hecho: () -> Unit) -> Unit) {
+        val pendiente = goAsync()
+        var faltan = cuantos
+        if (faltan == 0) { pendiente.finish(); return }
+        trabajo { if (--faltan == 0) pendiente.finish() }
     }
 
     /** Al estirarlo o encogerlo hay que volver a dibujar: cambia el lienzo. */
@@ -29,7 +40,7 @@ class WidgetGastos : AppWidgetProvider() {
         id: Int,
         opciones: Bundle
     ) {
-        refrescar(contexto, gestor, id)
+        mientrasPinta(1) { hecho -> refrescar(contexto, gestor, id, hecho) }
     }
 
     companion object {
@@ -43,7 +54,7 @@ class WidgetGastos : AppWidgetProvider() {
             ids.forEach { refrescar(contexto, gestor, it) }
         }
 
-        fun refrescar(contexto: Context, gestor: AppWidgetManager, id: Int) {
+        fun refrescar(contexto: Context, gestor: AppWidgetManager, id: Int, hecho: () -> Unit = {}) {
             val ajustes = Ajustes(contexto)
 
             /* Sin conexión pegada no hay nada que pedir. Se deja el widget con
@@ -51,6 +62,7 @@ class WidgetGastos : AppWidgetProvider() {
                único útil que puede hacer en ese estado. */
             if (!ajustes.configurado()) {
                 colgar(contexto, gestor, id, null, aConfigurar(contexto))
+                hecho()
                 return
             }
 
@@ -65,7 +77,10 @@ class WidgetGastos : AppWidgetProvider() {
             val url = ajustes.urlDelCartel(ancho, alto, oscuro, radio)
 
             Pintor.pintar(contexto, url, ancho, alto) { mapa ->
-                colgar(contexto, gestor, id, mapa, abrirLaApp(contexto, ajustes.appUrl))
+                /* Sin dibujo no se toca lo que hay: mejor el cartel de hace
+                   media hora que un rectángulo vacío. */
+                if (mapa != null) colgar(contexto, gestor, id, mapa, abrirLaApp(contexto, ajustes.appUrl))
+                hecho()
             }
         }
 
