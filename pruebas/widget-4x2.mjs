@@ -239,8 +239,11 @@ await pv.waitForFunction(() => document.title === 'listo');
 const vacio = await pv.evaluate(() => ({
   monto: document.querySelector('.w-monto').textContent,
   aviso: document.querySelector('.w-vacio') ? document.querySelector('.w-vacio').textContent : '',
-  hayBarra: Boolean(document.querySelector('.w-barra'))
+  hayBarra: Boolean(document.querySelector('.w-barra')),
+  cabecera: document.querySelector('.w-cabecera').textContent
 }));
+ok(!vacio.cabecera.includes('undefined'),
+   'la cabecera no dice «DÍA undefined»: ' + vacio.cabecera);
 ok(vacio.monto === '—', 'sin datos sale un guion y no un $0: ' + vacio.monto);
 ok(vacio.aviso === 'Abre la app para empezar', 'y dice qué hacer: ' + vacio.aviso);
 ok(!vacio.hayBarra, 'sin barra, que no tendría nada que medir');
