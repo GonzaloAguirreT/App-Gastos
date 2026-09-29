@@ -249,6 +249,24 @@ ok(vacio.aviso === 'Abre la app para empezar', 'y dice qué hacer: ' + vacio.avi
 ok(!vacio.hayBarra, 'sin barra, que no tendría nada que medir');
 await virgen.close();
 
+console.log('\nEn un teléfono de verdad, con tres píxeles por píxel');
+
+/* Android manda el tamaño en píxeles de pantalla, y en su WebView un píxel de
+   CSS son `devicePixelRatio` de ellos. Con ratio 1, como todo lo de arriba,
+   las dos cosas coinciden y el fallo no se ve: en el S24 el cartel salía el
+   triple de grande y la captura solo cogía «SALDO DISPONI». */
+const denso = await b.newContext({ viewport: { width: 400, height: 300 }, deviceScaleFactor: 3 });
+const pd = await denso.newPage();
+await pd.goto(B + '/widget.html#ancho=1008&alto=516', { waitUntil: 'networkidle' });
+await pd.waitForFunction(() => document.title === 'listo');
+const medidas = await pd.evaluate(() => {
+  const r = document.getElementById('widget').getBoundingClientRect();
+  return { ancho: Math.round(r.width), alto: Math.round(r.height) };
+});
+ok(medidas.ancho === 336 && medidas.alto === 172,
+   'a densidad 3, 1008×516 píxeles son 336×172 de CSS: ' + medidas.ancho + '×' + medidas.alto);
+await denso.close();
+
 /* --------------------------------------------- pero con caché sí dice algo */
 
 console.log('\nY uno que sí habló, pero ahora no tiene red');

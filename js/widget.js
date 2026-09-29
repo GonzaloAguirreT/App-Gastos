@@ -183,17 +183,25 @@ const WIDGET = (() => {
 
   /** El marco al tamaño de verdad, y la caja de dentro escalada hasta llenarlo. */
   function ajustar(o) {
-    const escala = o.ancho / ANCHO;
+    /* Android manda píxeles de pantalla, y en su WebView un píxel de CSS son
+       `devicePixelRatio` de ellos —tres, más o menos, en un móvil de ahora—.
+       Tomarlos como píxeles de CSS dibujaba el cartel el triple de grande y la
+       captura solo se llevaba la esquina de arriba. En un navegador de
+       escritorio el ratio es 1 y esto no cambia nada. */
+    const dpr = window.devicePixelRatio || 1;
+    const ancho = o.ancho / dpr;
+    const alto = o.alto / dpr;
+    const escala = ancho / ANCHO;
     const marco = document.querySelector('.marco');
     const caja = document.getElementById('widget');
-    marco.style.width = o.ancho + 'px';
-    marco.style.height = o.alto + 'px';
+    marco.style.width = ancho + 'px';
+    marco.style.height = alto + 'px';
     /* El alto se reparte en vez de dejar una franja vacía: si alguien estira el
        widget a lo alto, el `space-between` separa encabezado, cifra y leyenda en
        lugar de dejar la caja flotando arriba. */
-    caja.style.height = (o.alto / escala) + 'px';
+    caja.style.height = (alto / escala) + 'px';
     caja.style.transform = 'scale(' + escala + ')';
-    caja.style.setProperty('--radio', (o.radio / escala) + 'px');
+    caja.style.setProperty('--radio', (o.radio / dpr / escala) + 'px');
   }
 
   /* ------------------------------------------------------------- arranque */

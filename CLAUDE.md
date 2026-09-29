@@ -153,8 +153,16 @@ descuadraría el ahorro.
 
 `widget.html` no es una pantalla de la app: es un cartel de 336 × 172 dp que
 carga una `WebView` escondida dentro de la app Android de `android/`, la cual
-espera a que el título diga «listo», hace una captura y la cuelga del
-escritorio. Una PWA no puede poner un widget; hace falta una app instalada.
+espera a que la página llame a `Android.listo()`, hace una captura y la cuelga
+del escritorio. Una PWA no puede poner un widget; hace falta una app instalada.
+
+Esa `WebView` no se pega a ninguna ventana, y eso tiene tres consecuencias que
+ya salieron en un S24: `View.post` sobre ella no se ejecuta nunca (por eso
+`Pintor` usa su propio `Handler`), el título «listo» llega antes de que el
+fotograma esté pintado (por eso se captura solo por el puente), y sin
+`goAsync()` en el receptor Samsung congela el proceso mientras la página carga.
+Y Android manda el tamaño en píxeles de pantalla: `widget.js` lo divide por
+`devicePixelRatio`, que la prueba mide a densidad 3.
 
 **Lo que importa de este montaje es dónde NO está la lógica.** El widget llama a
 `ESTADO.resumen()`, el mismo de la pantalla Mes. Escribir esas cuentas en Kotlin
