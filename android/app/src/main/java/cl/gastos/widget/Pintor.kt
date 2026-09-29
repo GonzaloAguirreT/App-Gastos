@@ -36,6 +36,9 @@ object Pintor {
      */
     private const val TOPE_PX = 380_000
 
+    /** Capturas vacías que se aguantan antes de rendirse: unos tres segundos. */
+    private const val REINTENTOS = 10
+
     /**
      * La página avisa de que ya está pintada llamando a `Android.listo()`.
      *
@@ -71,7 +74,12 @@ object Pintor {
                 principal.post { web.destroy() }
             }
 
-            fun capturar() {
+            /* Si sale vacía es que el aviso llegó antes que el dibujo —la página
+               avisa a los 500 ms aunque el fotograma no haya llegado—, así que se
+               repite unas cuantas veces antes de rendirse. `ultima` es la del
+               plazo de seguridad: esa se entrega como salga. */
+            fun capturar(intento: Int = 0, ultima: Boolean = false) {
+                if (entregado) return
                 val bmp = try {
                     val b = Bitmap.createBitmap(ancho, alto, Bitmap.Config.ARGB_8888)
                     web.measure(
@@ -83,6 +91,10 @@ object Pintor {
                     if (enBlanco(b)) null else b
                 } catch (e: Throwable) {
                     null
+                }
+                if (bmp == null && !ultima && intento < REINTENTOS) {
+                    principal.postDelayed({ capturar(intento + 1) }, 300)
+                    return
                 }
                 terminar(bmp)
             }
@@ -124,7 +136,7 @@ object Pintor {
                deja el anterior colgado hasta la siguiente actualización. A los
                veinte segundos se captura lo que haya. */
             principal.postDelayed({
-                if (!entregado) capturar()
+                if (!entregado) capturar(ultima = true)
             }, 20_000)
         }
     }
